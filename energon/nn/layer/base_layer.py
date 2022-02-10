@@ -6,6 +6,7 @@ import torch.nn as nn
 from energon.context import ParallelMode
 from energon.core import global_context as gpc
 
+__all__ = ['ParallelLayer']
 
 class ParallelLayer(nn.Module):
 

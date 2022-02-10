@@ -1,4 +1,5 @@
 from .parallel_1d import *
+from .base_layer import *
 # from .parallel_2d import *
 # from .parallel_2p5d import *
 # from .parallel_3d import *

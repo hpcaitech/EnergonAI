@@ -24,7 +24,7 @@ from ._utils import (gather_forward_split_backward, get_parallel_input, reduce_g
                      split_forward_gather_backward)
 
 
-@LAYERS.register_module
+
 class Linear1D(torch.nn.Module):
     """
     Linear layer for 1D parallelism
@@ -86,7 +86,7 @@ class Linear1D(torch.nn.Module):
         return self.layer(input_)
 
 
-@LAYERS.register_module
+
 class Classifier1D(ParallelLayer):
     """RowLinear with given weight
     Classifier of 1D parallelism
@@ -167,7 +167,7 @@ class Classifier1D(ParallelLayer):
         return output
 
 
-@LAYERS.register_module
+
 class Linear1D_Col(ParallelLayer):
     """Linear layer with column parallelism.
 
@@ -260,7 +260,7 @@ class Linear1D_Col(ParallelLayer):
             return output
 
 
-@LAYERS.register_module
+
 class Linear1D_Row(ParallelLayer):
     """ Linear layer with row parallelism 
 
@@ -347,7 +347,7 @@ class Linear1D_Row(ParallelLayer):
             return output, self.bias
 
 
-@LAYERS.register_module
+
 class MixedFusedLayerNorm1D(torch.nn.Module):
     r"""
     Layer Normalization for 1D parallelism
@@ -380,7 +380,7 @@ class MixedFusedLayerNorm1D(torch.nn.Module):
         return FusedLayerNormAffineFunction1D.apply(input, self.weight, self.bias, self.normalized_shape, self.eps)
 
 
-@LAYERS.register_module
+
 class Embedding1D(ParallelLayer):
     """
     Embedding for 1D parallelism
@@ -446,7 +446,7 @@ class Embedding1D(ParallelLayer):
         return output
 
 
-@LAYERS.register_module
+
 class Dropout1D(ParallelLayer):
     """
     Dropout layer of 1D parallelism

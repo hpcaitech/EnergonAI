@@ -1,28 +1,12 @@
 import os
-import torch 
-from torch import nn
+import torch
 import torch.multiprocessing as mp
 from functools import partial
-from energon.nn import Linear1D_Col, Linear1D_Row
 from energon.engine import InferenceEngine
 
-# import pytest
-# torchrun --nproc_per_node=4 test_engine_tp_pp_switch.py
-
-class BertMLP_1D(nn.Module):
-    def __init__(self, hidden_size):
-        super().__init__()
-        self.layer_0 = Linear1D_Col(hidden_size, 4*hidden_size)
-        # self.layer_1 = Linear1D_Row(4*hidden_size, hidden_size, parallel_input=True)
-
-        # self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        # dropout ignored
-    
-    def forward(self, input_tensor):
-        hidden_states = self.layer_0(input_tensor)
-        # hidden_states = self.layer_1(hidden_states)
-        # hidden_states = self.LayerNorm(hidden_states+input_tensor)        
-        return hidden_states
+import sys
+sys.path.append('/home/lcdjs/ColossalAI-Inference-tmp/model/gpt')
+from model.pipeline_gpt1d import GPT2_small_pipeline_1D, GPT2_exlarge_pipeline_1D, GPT3_pipeline_1D
 
 def check_engine_tp_pp_switch(rank, world_size):
     os.environ['RANK'] = str(rank)
@@ -31,22 +15,26 @@ def check_engine_tp_pp_switch(rank, world_size):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '29500'
 
-    config = {'hidden_size':768}
+    config = {'num_chunks':1, 'checkpoint':False, 'dtype':torch.float, 'embed_split_hidden':False}
 
-    engine = InferenceEngine(BertMLP_1D, config, pp_init_size = 2, tp_init_size = 2) # the model cannot support pipeline parallel now
+    input_ids = torch.randint(1, 10, (4, 1024), dtype=torch.int64)
+    attention_mask = torch.randint(0, 1, (4, 1, 1024), dtype=torch.int64)
+    hidden_states = None
+    sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
 
-    input = torch.randn(768).cuda()
+    engine = InferenceEngine(GPT2_small_pipeline_1D, config, sample, pp_init_size = 4, tp_init_size = 1)
 
-    output_2_2 = engine(input)
-    assert output_2_2.size(dim=-1) == 1536, "init wrong."
+    
+
+    output_2_2 = engine.run()
+    
     
     # print(output.size())
     # print(output.device)
 
     engine.switch(4,1)
 
-    output_4_1 = engine(input)
-    assert output_4_1.size(dim=-1) == 3072, "switch wrong."
+    output_4_1 = engine.run()
 
     # print(output.size())
     # print(output.device)

@@ -10,12 +10,14 @@ from energon.initialize import launch_from_torch
 
 from energon.utils import ensure_directory_exists
 from energon.logging import get_dist_logger
+from energon.nn import PipelineCommWrapper
 
 
 class InferenceEngine(Module):
     def __init__(self, 
                 model_class,
                 model_config,
+                samples,
                 pp_init_size: int = -1,
                 tp_init_size: int = -1,
                 dtype=None,
@@ -31,14 +33,17 @@ class InferenceEngine(Module):
         
         self._model_class = model_class
         self._model_config = model_config
+        self._samples = samples
         self._pp_size = pp_init_size
         self._tp_size = tp_init_size
         self._dtype = dtype
         self._checkpoint = checkpoint
-        
+        self._model = None
         
         self._init_dist()
-        self._model = self._model_class(**self._model_config).cuda()
+        self._set_sample_device()
+        self._init_model()
+        
 
         if self._checkpoint:
             # self._save_parameter()
@@ -47,11 +52,21 @@ class InferenceEngine(Module):
         if self._dtype:
             self._dtype_convert()
         
-        self._model.eval()
+        
     
     def _init_dist(self):
         launch_from_torch(tp_size = self._tp_size, pp_size = self._pp_size)
     
+    def _set_sample_device(self):        
+        for k, v in self._samples.items():
+            if v is not None:
+                self._samples[k] = v.cuda() 
+    
+    def _init_model(self):
+        model = self._model_class(**self._model_config).cuda()
+        model.eval()
+        self._model = PipelineCommWrapper(model = model, sample = self._samples, dtype=self._dtype)
+
     def _reinit_dist(self):
         gpc.destroy_vice_groups()
         config = dict(parallel = dict(pipeline=dict(size=self._pp_size),tensor=dict(size=self._tp_size, mode='1d')))
@@ -65,7 +80,7 @@ class InferenceEngine(Module):
     
     def _reload_model(self):
         del self._model
-        self._model = self._model_class(**self._model_config).cuda()
+        self._init_model()
 
     def _get_ranks_name(self):
         # tensor parallel
@@ -141,8 +156,11 @@ class InferenceEngine(Module):
         self._reinit_dist()
         self._reload_model()
         
-    def forward(self, *inputs):
-        output = self._model(*inputs)
+    def run(self):
+        output = None
+        with torch.inference_mode():
+            output = self._model.run()        
+        # if gpc.is_last_rank(ParallelMode.PIPELINE):
         return output
 
     

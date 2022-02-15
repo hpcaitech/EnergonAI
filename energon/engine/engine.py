@@ -49,10 +49,6 @@ class InferenceEngine(Module):
             # self._save_parameter()
             self._load_parameter()
         
-        if self._dtype:
-            self._dtype_convert()
-        
-        
     
     def _init_dist(self):
         launch_from_torch(tp_size = self._tp_size, pp_size = self._pp_size)
@@ -63,7 +59,13 @@ class InferenceEngine(Module):
                 self._samples[k] = v.cuda() 
     
     def _init_model(self):
-        model = self._model_class(**self._model_config).cuda()
+        """
+        TODO(dujiangsu) support other dtype 
+        """  
+        if self._dtype == torch.half:
+            model = self._model_class(**self._model_config).cuda().half()
+        else:
+            model = self._model_class(**self._model_config).cuda()
         model.eval()
         self._model = PipelineCommWrapper(model = model, sample = self._samples, dtype=self._dtype)
 
@@ -96,7 +98,7 @@ class InferenceEngine(Module):
         ranks_name = f'tp{tp_local_rank}-pp{pp_local_rank}'
         return ranks_name
 
-    def _dtype_convert(self):     
+    def dtype_convert(self):     
         """
         TODO(dujiangsu) support other dtype 
         """  

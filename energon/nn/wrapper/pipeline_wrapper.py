@@ -70,7 +70,18 @@ class PipelineCommWrapper:
             send_tensor_meta(output)
             send_forward(output)
 
-    def run(self):            
+    def run(self): 
+        if gpc.is_initialized(ParallelMode.PIPELINE):
+            self.pipeline_run()
+        else:
+            self.no_pipeline_run()
+
+
+    def no_pipeline_run(self):
+        output = self.model(**self.sample)
+        return output
+
+    def pipeline_run(self):
         if gpc.is_first_rank(ParallelMode.PIPELINE):
             output = self.model(**self.sample)
             send_forward(output)

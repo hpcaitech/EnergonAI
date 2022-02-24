@@ -29,15 +29,11 @@
 #include <stdlib.h>
 #include "fastertransformer/utils/nvtx_utils.h"
 
-/*
-
-*/
-
 namespace fastertransformer
 {
 
 template <OperationType OpType_>
-class STPGPTLayer
+class DecodingGpt
 {
 private:
     typedef DecoderTransformerTraits<OpType_> Traits_;
@@ -53,7 +49,7 @@ private:
     const cudaDataType_t CType_ = Traits_::CType;
     std::map<std::string, cublasLtMatmulAlgo_info> cublasAlgoMap_;
 
-    // DataType_ *embedding_kernel_padded_; // ?
+    DataType_ *embedding_kernel_padded_;
 
     OpenDecoder<OpType_> *decoder_;
     DataType_ **K_cache_;
@@ -83,20 +79,18 @@ private:
     bool *h_finished_buf_;
     
 public:
-    STPGPTLayer(const IAllocator &allocator, const int batch_size,
+    DecodingGpt(const IAllocator &allocator, const int batch_size,
                  const int seq_len,
                  const int head_num, const int size_per_head,
-                //  const int vocab_size,
-                //  const int decoder_layers,
-                //  const int start_id, const int end_id,
+                 const int vocab_size, const int decoder_layers,
+                 const int start_id, const int end_id,
                  const int candidate_num = 1,
                  const float probability_threshold = 0.0,
                  const float temperature = 1.0,
                  const int tensor_para_size = 1,
                  const int layer_para_size = 1,
                  const bool is_fuse_QKV = true,
-                 const float repetition_penalty = 1.0
-                 ) : allocator_(allocator)
+                 const float repetition_penalty = 1.0) : allocator_(allocator)
     {
 #ifndef NDEBUG
         PRINT_FUNC_NAME_();
@@ -104,17 +98,17 @@ public:
         assert(temperature != 0.0);
         assert(repetition_penalty > 0.0);
         assert(candidate_num > 0 || probability_threshold > 0.0);
-        // assert(decoder_layers % layer_para_size == 0);
+        assert(decoder_layers % layer_para_size == 0);
 
         args_.batch_size_ = batch_size;
         args_.seq_len_ = seq_len;
         args_.head_num_ = head_num;
         args_.size_per_head_ = size_per_head;
         args_.hidden_units_ = head_num * size_per_head;
-        // args_.decoder_layers_ = decoder_layers;
-        // args_.vocab_size_ = vocab_size;
-        // args_.start_id_ = start_id;
-        // args_.end_id_ = end_id;
+        args_.decoder_layers_ = decoder_layers;
+        args_.vocab_size_ = vocab_size;
+        args_.start_id_ = start_id;
+        args_.end_id_ = end_id;
         args_.candidate_num_ = candidate_num;
         args_.probability_threshold_ = probability_threshold;
         args_.temperature_ = temperature;
@@ -123,31 +117,30 @@ public:
         K_cache_ = new DataType_ *[1];
         V_cache_ = new DataType_ *[1];
 
-        // why new a single decoder
         decoder_ = new OpenDecoder<OpType_>(args_.head_num_, size_per_head, 0 /* memory_hidden_units */, is_fuse_QKV);
         decoder_->set_max_batch_size(args_.batch_size_);
 
-        // args_.vocab_size_padded_ = div_up(args_.vocab_size_, 64) * 64; //按64的倍数填充
+        args_.vocab_size_padded_ = div_up(args_.vocab_size_, 64) * 64;
 
         size_t from_tensor_size = args_.batch_size_ * args_.hidden_units_;                    // type T
         size_t decoder_workspace_size = (size_t)decoder_->getWorkspaceSize();                                             // type T
         size_t decoder_normed_result_buffer_size = args_.batch_size_ * args_.hidden_units_;   // type T
         // cache costs lots of memory, so we only store part of them when we use multi-gpu for inference
         size_t cache_size = args_.batch_size_ * args_.seq_len_ * args_.hidden_units_ / tensor_para_size;         // type T
-        // size_t logits_buf_size = args_.batch_size_ * args_.vocab_size_padded_; // type T
+        size_t logits_buf_size = args_.batch_size_ * args_.vocab_size_padded_; // type T
 
-        // size_t topp_id_vals_buf_size = args_.batch_size_ * args_.vocab_size_padded_; // type int
+        size_t topp_id_vals_buf_size = args_.batch_size_ * args_.vocab_size_padded_; // type int
         size_t topp_offset_buf_size = args_.batch_size_ + 1;
         size_t begin_topp_offset_buf_size = topp_offset_buf_size;
         size_t curandState_size = args_.batch_size_;
         size_t finished_buf_size = args_.batch_size_;
 
         const int MEM_C = 128;
-        // size_t embedding_kernel_transposed_padded_size = args_.hidden_units_ * args_.vocab_size_padded_;
-        // embedding_kernel_transposed_padded_size = div_up(embedding_kernel_transposed_padded_size, MEM_C) * MEM_C; //按128mem_c填充
+        size_t embedding_kernel_transposed_padded_size = args_.hidden_units_ * args_.vocab_size_padded_;
+        embedding_kernel_transposed_padded_size = div_up(embedding_kernel_transposed_padded_size, MEM_C) * MEM_C;
 
         // prevent memory misalinged address
-        // logits_buf_size = (size_t)(ceil(logits_buf_size / 4.)) * 4;  // ceil ; floor()
+        logits_buf_size = (size_t)(ceil(logits_buf_size / 4.)) * 4;
         
         topp_id_vals_buf_size = (size_t)(ceil(topp_id_vals_buf_size / 4.)) * 4;
         topp_offset_buf_size = (size_t)(ceil(topp_offset_buf_size / 4.)) * 4;
@@ -878,7 +871,7 @@ public:
         }
     } // end of forward
 
-    virtual ~STPGPTLayer()
+    virtual ~DecodingGpt()
     {
         delete[] K_cache_;
         delete[] V_cache_;

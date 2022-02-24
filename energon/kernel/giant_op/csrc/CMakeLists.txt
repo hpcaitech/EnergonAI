@@ -23,7 +23,7 @@ include_directories(${TORCH_INCLUDE_DIRS})
 include_directories(${PY_INCLUDE_DIR})
 
 set(SOURCES 
-    fastertransformer/th_op/FusedGPTLayer_wrapper.cc
+    fastertransformer/th_op/decoder.cc
 )
 
 
@@ -55,6 +55,7 @@ endif()
 add_definitions("-DBUILD_GPT")
 add_definitions("-DBUILD_PYT")
 add_definitions("-DTORCH_CUDA")
+add_definitions("-DUSE_C10D_NCCL")
 
 if (${CUDA_VERSION} GREATER_EQUAL 11.0)
   message(STATUS "Add DCUDA11_MODE")

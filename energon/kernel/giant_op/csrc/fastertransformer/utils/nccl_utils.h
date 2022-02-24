@@ -22,6 +22,11 @@
 #include <iostream>
 #include "fastertransformer/utils/common.h"
 
+#include <c10/util/intrusive_ptr.h>
+#include <c10d/Types.hpp>
+#include <c10d/NCCLUtils.hpp>
+#include <c10d/ProcessGroupNCCL.hpp>
+
 #ifdef BUILD_GPT
 #include "nccl.h"
 #include "mpi.h"

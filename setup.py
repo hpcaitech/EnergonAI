@@ -84,7 +84,7 @@ ext_modules = []
 # and
 # https://github.com/NVIDIA/apex/issues/456
 # https://github.com/pytorch/pytorch/commit/eb7b39e02f7d75c26d8a795ea8c7fd911334da7e#diff-4632522f237f1e4e728cb824300403ac
-version_dependent_macros = ['-DVERSION_GE_1_1', '-DVERSION_GE_1_3', '-DVERSION_GE_1_5']
+version_dependent_macros = ['-DVERSION_GE_1_1', '-DVERSION_GE_1_3', '-DVERSION_GE_1_5', '-DUSE_C10D_NCCL']
 
 if "--cuda_ext" in sys.argv:
     sys.argv.remove("--cuda_ext")
@@ -99,7 +99,7 @@ if "--cuda_ext" in sys.argv:
             return CUDAExtension(name=name,
                                  sources=[os.path.join('energon/kernel/cuda_native/csrc', path) for path in sources],
                                  include_dirs=[os.path.join(
-                                     this_dir, 'energon/kernel/cuda_native/csrc/kernels/include')],
+                                     this_dir, 'energon/kernel/cuda_native/csrc/kernels/include'), '/opt/lcsoftware/spack/opt/spack/linux-ubuntu20.04-zen2/gcc-9.3.0/nccl-2.9.6-1-ysovaavjkgjez2fwms4dkvatu5yrxbec/include'],
                                  extra_compile_args={'cxx': ['-O3'] + version_dependent_macros,
                                                      'nvcc': append_nvcc_threads(['-O3',
                                                                                   '--use_fast_math'] + version_dependent_macros + extra_cuda_flags)})
@@ -143,7 +143,8 @@ if "--cuda_ext" in sys.argv:
                             '-U__CUDA_NO_HALF_OPERATORS__',
                             '-U__CUDA_NO_HALF_CONVERSIONS__',
                             '-U__CUDA_NO_HALF2_OPERATORS__',
-                            '-DTHRUST_IGNORE_CUB_VERSION_CHECK']
+                            '-DTHRUST_IGNORE_CUB_VERSION_CHECK'
+                            ]
 
         # ext_modules.append(cuda_ext_helper('colossal_multihead_attention',
         #                                    ['multihead_attention_1d.cpp',
@@ -158,6 +159,11 @@ if "--cuda_ext" in sys.argv:
 
         ext_modules.append(cuda_ext_helper('energon_transpose_pad',
                                             ['transpose_pad_fusion_wrapper.cpp', 'transpose_pad_fusion_kernel.cu'],
+                                            extra_cuda_flags + cc_flag))
+
+
+        ext_modules.append(cuda_ext_helper('energon_nccl',
+                                            ['get_ncclid.cpp'],
                                             extra_cuda_flags + cc_flag))
 
 

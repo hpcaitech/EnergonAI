@@ -25,17 +25,20 @@ def main():
     
     dtype=torch.float
     if args.fp16:
+        # print("FP16")
         dtype=torch.half
 
     config = {'num_chunks':1, 'checkpoint':False, 'dtype':dtype, 'embed_split_hidden':False}
 
 
-    input_ids = torch.randint(1, 10, (1, 2048), dtype=torch.int64)
-    attention_mask = torch.randint(0, 1, (1, 1, 2048), dtype=torch.int64)
+    input_ids = torch.randint(1, 10, (1, 512), dtype=torch.int64)
+    attention_mask = torch.randint(0, 1, (1, 1, 512), dtype=torch.int64)
     hidden_states = None
     sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
 
-    engine = InferenceEngine(GPT3_pipeline_1D, config, sample, pp_init_size = args.pipe_para_size, tp_init_size = args.tensor_para_size, dtype = torch.half)
+    # print(MODEL_CLASSES[args.model_name])
+
+    engine = InferenceEngine(MODEL_CLASSES[args.model_name], config, sample, pp_init_size = args.pipe_para_size, tp_init_size = args.tensor_para_size, dtype = torch.half)
 
 
 
@@ -79,14 +82,14 @@ def main():
     latency_elapsed = timer('latency-time').elapsed()
 
     logger.info(f'Throughput, '
-                f'Pipeline Rank/ Tensor Rank: {pp}/{gpc.get_world_size(ParallelMode.PARALLEL_1D)},'
-                f'Time: {itr/evaluate_elapsed}')
+                f'Pipeline Rank/ Tensor Rank: {args.pipe_para_size}/{gpc.get_world_size(ParallelMode.PARALLEL_1D)},'
+                f'Time: {args.iteration/evaluate_elapsed}')
     logger.info(f'Latency, '
-                f'Pipeline Rank/ Tensor Rank: {pp}/{gpc.get_world_size(ParallelMode.PARALLEL_1D)},'
-                f'Time: {latency_elapsed/itr}')
+                f'Pipeline Rank/ Tensor Rank: {args.pipe_para_size}/{gpc.get_world_size(ParallelMode.PARALLEL_1D)},'
+                f'Time: {latency_elapsed/args.iteration}')
 
     logger.info(f'max memory allocated, '
-                f'Pipeline Rank/ Tensor Rank: {pp}/{gpc.get_world_size(ParallelMode.PARALLEL_1D)},'
+                f'Pipeline Rank/ Tensor Rank: {args.pipe_para_size}/{gpc.get_world_size(ParallelMode.PARALLEL_1D)},'
                 f'memory: {torch.cuda.max_memory_allocated()/1e9} GB')
 
 

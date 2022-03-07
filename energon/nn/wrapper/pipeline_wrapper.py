@@ -50,25 +50,25 @@ class PipelineCommWrapper:
                 self.sample[param] = self.input_tensors
 
     def _init_tensor_meta(self):
-
-        if gpc.is_first_rank(ParallelMode.PIPELINE):
-            # print(*self.sample)
-            # print(type(self.sample[0]))
-            output = self.model(**self.sample)
-            send_tensor_meta(output)
-            send_forward(output)
-        elif gpc.is_last_rank(ParallelMode.PIPELINE):
-            self.recv_tensor_shape = recv_tensor_meta(self.recv_tensor_shape)
-            self.input_tensors = recv_forward(self.recv_tensor_shape, dtype=self.dtype) # only a tensor now
-            self._build_samples()
-            output = self.model(**self.sample)      
-        else:
-            self.recv_tensor_shape = recv_tensor_meta(self.recv_tensor_shape)
-            self.input_tensors = recv_forward(self.recv_tensor_shape, dtype=self.dtype) # only a tensor now
-            self._build_samples()
-            output = self.model(**self.sample)
-            send_tensor_meta(output)
-            send_forward(output)
+        with torch.inference_mode():
+            if gpc.is_first_rank(ParallelMode.PIPELINE):
+                # print(*self.sample)
+                # print(type(self.sample[0]))
+                output = self.model(**self.sample)
+                send_tensor_meta(output)
+                send_forward(output)
+            elif gpc.is_last_rank(ParallelMode.PIPELINE):
+                self.recv_tensor_shape = recv_tensor_meta(self.recv_tensor_shape)
+                self.input_tensors = recv_forward(self.recv_tensor_shape, dtype=self.dtype) # only a tensor now
+                self._build_samples()
+                output = self.model(**self.sample)      
+            else:
+                self.recv_tensor_shape = recv_tensor_meta(self.recv_tensor_shape)
+                self.input_tensors = recv_forward(self.recv_tensor_shape, dtype=self.dtype) # only a tensor now
+                self._build_samples()
+                output = self.model(**self.sample)
+                send_tensor_meta(output)
+                send_forward(output)
 
     def run(self): 
         if gpc.is_initialized(ParallelMode.PIPELINE):
@@ -82,21 +82,22 @@ class PipelineCommWrapper:
         return output
 
     def pipeline_run(self):
-        if gpc.is_first_rank(ParallelMode.PIPELINE):
-            output = self.model(**self.sample)
-            send_forward(output)
-            return None
-        elif gpc.is_last_rank(ParallelMode.PIPELINE):
-            self.input_tensors = recv_forward(self.recv_tensor_shape, dtype=self.dtype) # only a tensor now
-            self._build_samples()
-            output = self.model(**self.sample)
-            return output       
-        else:
-            self.input_tensors = recv_forward(self.recv_tensor_shape, dtype=self.dtype) # only a tensor now
-            self._build_samples()
-            output = self.model(**self.sample)
-            send_forward(output)
-            return None
+        with torch.inference_mode():
+            if gpc.is_first_rank(ParallelMode.PIPELINE):
+                output = self.model(**self.sample)
+                send_forward(output)
+                return None
+            elif gpc.is_last_rank(ParallelMode.PIPELINE):
+                self.input_tensors = recv_forward(self.recv_tensor_shape, dtype=self.dtype) # only a tensor now
+                self._build_samples()
+                output = self.model(**self.sample)
+                return output       
+            else:
+                self.input_tensors = recv_forward(self.recv_tensor_shape, dtype=self.dtype) # only a tensor now
+                self._build_samples()
+                output = self.model(**self.sample)
+                send_forward(output)
+                return None
 
     # def _init_group(self):
     #     world_size = gpc.get_world_size(ParallelMode.GLOBAL)

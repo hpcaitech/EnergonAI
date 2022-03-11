@@ -8,7 +8,11 @@ from torch.utils.cpp_extension import BuildExtension, CUDAExtension, CUDA_HOME
 
 # ninja build does not work unless include_dirs are abs path
 this_dir = os.path.dirname(os.path.abspath(__file__))
+build_cuda_ext = True
 
+if '--no_cuda_ext' in sys.argv:
+    sys.argv.remove('--no_cuda_ext')
+    build_cuda_ext = False
 
 def get_cuda_bare_metal_version(cuda_dir):
     raw_output = subprocess.check_output([cuda_dir + "/bin/nvcc", "-V"], universal_newlines=True)
@@ -86,9 +90,7 @@ ext_modules = []
 # https://github.com/pytorch/pytorch/commit/eb7b39e02f7d75c26d8a795ea8c7fd911334da7e#diff-4632522f237f1e4e728cb824300403ac
 version_dependent_macros = ['-DVERSION_GE_1_1', '-DVERSION_GE_1_3', '-DVERSION_GE_1_5', '-DUSE_C10D_NCCL']
 
-if "--cuda_ext" in sys.argv:
-    sys.argv.remove("--cuda_ext")
-
+if build_cuda_ext:
     if CUDA_HOME is None:
         raise RuntimeError(
             "--cuda_ext was requested, but nvcc was not found.  Are you sure your environment has nvcc available?  If you're installing within a container from https://hub.docker.com/r/pytorch/pytorch, only images whose names contain 'devel' will provide nvcc.")
@@ -104,40 +106,11 @@ if "--cuda_ext" in sys.argv:
                                                      'nvcc': append_nvcc_threads(['-O3',
                                                                                   '--use_fast_math'] + version_dependent_macros + extra_cuda_flags)})
 
-        # ext_modules.append(cuda_ext_helper('colossal_C',
-        #                                    ['colossal_C_frontend.cpp',
-        #                                     'multi_tensor_sgd_kernel.cu',
-        #                                     'multi_tensor_scale_kernel.cu',
-        #                                     'multi_tensor_adam.cu',
-        #                                     'multi_tensor_l2norm_kernel.cu',
-        #                                     'multi_tensor_lamb.cu'],
-        #                                    ['-lineinfo']))
-
         cc_flag = ['-gencode', 'arch=compute_70,code=sm_70']
         _, bare_metal_major, _ = get_cuda_bare_metal_version(CUDA_HOME)
         if int(bare_metal_major) >= 11:
             cc_flag.append('-gencode')
             cc_flag.append('arch=compute_80,code=sm_80')
-
-        # extra_cuda_flags = ['-U__CUDA_NO_HALF_OPERATORS__',
-        #                     '-U__CUDA_NO_HALF_CONVERSIONS__',
-        #                     '--expt-relaxed-constexpr',
-        #                     '--expt-extended-lambda']
-
-        # ext_modules.append(cuda_ext_helper('colossal_scaled_upper_triang_masked_softmax',
-        #                                    ['scaled_upper_triang_masked_softmax.cpp',
-        #                                     'scaled_upper_triang_masked_softmax_cuda.cu'],
-        #                                    extra_cuda_flags + cc_flag))
-
-        # ext_modules.append(cuda_ext_helper('colossal_scaled_masked_softmax',
-        #                                    ['scaled_masked_softmax.cpp', 'scaled_masked_softmax_cuda.cu'],
-        #                                    extra_cuda_flags + cc_flag))
-
-        # extra_cuda_flags = ['-maxrregcount=50']
-
-        # ext_modules.append(cuda_ext_helper('colossal_layer_norm_cuda',
-        #                                    ['layer_norm_cuda.cpp', 'layer_norm_cuda_kernel.cu'],
-        #                                    extra_cuda_flags + cc_flag))
 
         extra_cuda_flags = ['-std=c++14',
                             '-U__CUDA_NO_HALF_OPERATORS__',
@@ -146,28 +119,13 @@ if "--cuda_ext" in sys.argv:
                             '-DTHRUST_IGNORE_CUB_VERSION_CHECK'
                             ]
 
-        # ext_modules.append(cuda_ext_helper('colossal_multihead_attention',
-        #                                    ['multihead_attention_1d.cpp',
-        #                                     'kernels/cublas_wrappers.cu',
-        #                                     'kernels/transform_kernels.cu',
-        #                                     'kernels/dropout_kernels.cu',
-        #                                     'kernels/normalize_kernels.cu',
-        #                                     'kernels/softmax_kernels.cu',
-        #                                     'kernels/general_kernels.cu',
-        #                                     'kernels/cuda_util.cu'],
-        #                                    extra_cuda_flags + cc_flag))
-
         ext_modules.append(cuda_ext_helper('energon_transpose_pad',
                                             ['transpose_pad_fusion_wrapper.cpp', 'transpose_pad_fusion_kernel.cu'],
                                             extra_cuda_flags + cc_flag))
 
-
         ext_modules.append(cuda_ext_helper('energon_nccl',
                                             ['get_ncclid.cpp'],
                                             extra_cuda_flags + cc_flag))
-
-
-install_requires = fetch_requirements('requirements.txt')
 
 setup(
     name='energon',
@@ -181,8 +139,8 @@ setup(
                                     'scripts',
                                     'requirements',
                                     '*.egg-info',)),
-    description='',
+    description='Large-scale Model Inference',
     ext_modules=ext_modules,
     cmdclass={'build_ext': BuildExtension} if ext_modules else {},
-    install_requires=install_requires,
+    install_requires=fetch_requirements('requirements.txt'),
 )

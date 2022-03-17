@@ -1,1 +1,1 @@
-from .engine import InferenceEngine
+from .engine import InferenceEngine, launch_rpc

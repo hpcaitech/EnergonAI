@@ -107,11 +107,11 @@ class PipelineGPT1D(GenericPipelineGPT):
                                   layer_norm_epsilon=layer_norm_epsilon, apply_post_layer_norm=apply_post_layer_norm)
             for _ in range(num_layers)
         ])
-        if last:
-            norm = nn.LayerNorm(hidden_size, eps=layer_norm_epsilon)
-            head = head_cls(vocab_size=vocab_size,
-                            embed_dim=hidden_size,
-                            dtype=dtype)
+        # if last:
+        #     norm = nn.LayerNorm(hidden_size, eps=layer_norm_epsilon)
+        #     head = head_cls(vocab_size=vocab_size,
+        #                     embed_dim=hidden_size,
+        #                     dtype=dtype)
         super().__init__(embedding=embedding, blocks=blocks, norm=norm, head=head)
 
 

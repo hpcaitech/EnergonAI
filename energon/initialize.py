@@ -101,3 +101,31 @@ def launch_from_torch(tp_size = 1,
            verbose=verbose,
            tp_size=tp_size,
            pp_size=pp_size)
+
+def launch_from_multiprocess(tp_size: int = 1,
+                            pp_size:int = 1,
+                            backend: str = 'nccl',
+                            seed: int = 1024,
+                            verbose: bool = True,
+                            rank: int = 0,
+                            local_rank: int = 0,
+                            world_size:int = 1,
+                            host: str = '127.0.0.1',
+                            port: int = 29500
+                            ):
+    """A wrapper for colossalai.launch for using multiprocessing.
+    As it is essential to provide a single entrance of input&&output in the triton,
+    here we provide the multiprocess launch.
+    TODO: only support the single node condition now. 
+    """
+
+    launch(local_rank=local_rank,
+           rank=rank,
+           world_size=world_size,
+           host=host,
+           port=port,
+           backend=backend,
+           seed=seed,
+           verbose=verbose,
+           tp_size=tp_size,
+           pp_size=pp_size)

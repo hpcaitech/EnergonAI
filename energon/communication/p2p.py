@@ -75,14 +75,14 @@ def _communicate(tensor_send_next=None,
         assert recv_prev_shape is not None
         recv_prev_chunk_shape, recv_prev_split = _get_tensor_shape(recv_prev_shape, scatter_gather_tensors)
         tensor_recv_prev = torch.empty(recv_prev_chunk_shape,
-                                       requires_grad=True,
+                                       requires_grad=False,
                                        device=get_current_device(),
                                        dtype=dtype)
     if recv_next:
         assert recv_next_shape is not None
         recv_next_chunk_shape, recv_next_split = _get_tensor_shape(recv_next_shape, scatter_gather_tensors)
         tensor_recv_next = torch.empty(recv_next_chunk_shape,
-                                       requires_grad=True,
+                                       requires_grad=False,
                                        device=get_current_device(),
                                        dtype=dtype)
 

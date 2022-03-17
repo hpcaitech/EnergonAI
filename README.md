@@ -3,9 +3,9 @@ Temporary repo for large-scale model inference.
 
 
 ### Install
-python setup.py install --cuda_ext
+python setup.py install
 
-python setup.py develop --cuda_ext
+python setup.py develop
 
 ### Overview
 

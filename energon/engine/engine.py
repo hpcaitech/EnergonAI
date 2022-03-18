@@ -50,7 +50,7 @@ def launch_rpc(tp_size: int = 1,
 
     processes = []
     for rank in range(world_size-1):
-        p = mp.Process(target=process_func, args=(tp_size, pp_size, backend, seed, verbose, rank+1, rank+1, world_size, 'localhost', 29500))
+        p = mp.Process(target=process_func, args=(tp_size, pp_size, backend, seed, verbose, rank+1, rank+1, world_size, host, port))
         p.start()
         processes.append(p)
 

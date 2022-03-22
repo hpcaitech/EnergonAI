@@ -1,13 +1,15 @@
 import time
 import torch
 import argparse
-
-from model.pipeline_gpt1d import GPT2_small_pipeline_1D, GPT2_exlarge_pipeline_1D, GPT3_pipeline_1D
+# from model 
+from pipeline_gpt1d import GPT2_small_pipeline_1D, GPT2_exlarge_pipeline_1D, GPT3_pipeline_1D
 from energon.engine import InferenceEngine
 from energon.logging import get_dist_logger
 from energon.core import global_context as gpc
 from energon.context import ParallelMode
 from energon.utils import get_timers
+
+
 
 
 MODEL_CLASSES = {
@@ -40,13 +42,13 @@ def main():
 
     # print(MODEL_CLASSES[args.model_name])
 
-    engine = InferenceEngine(MODEL_CLASSES[args.model_name], model_config, max_batch_size = 32,  tp_init_size = args.tensor_para_size, pp_init_size = args.pipe_para_size, dtype = torch.half)
+    engine = InferenceEngine(MODEL_CLASSES[args.model_name], model_config, max_batch_size = 32, tp_init_size = args.tensor_para_size, pp_init_size = args.pipe_para_size, dtype = torch.half)
     
     output = engine.run(sample)
     
     print(output.to_here())
-    engine.clear()
 
+# from model.pipeline_gpt1d import GPT2_small_pipeline_1D, GPT2_exlarge_pipeline_1D, GPT3_pipeline_1D
     # prof = torch.profiler.profile(
     #             schedule=torch.profiler.schedule(wait=1,
     #                                              warmup=1,

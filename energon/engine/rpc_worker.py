@@ -2,7 +2,7 @@ import os
 import torch
 import inspect
 import torch.distributed.rpc as rpc
-
+import sys
 from energon.core import global_context as gpc
 from energon.context import ParallelMode
 from .rpc_utils import remote_cls_method, sync_cls_method, async_cls_method
@@ -26,17 +26,17 @@ class RPCWorker:
         self.rank = gpc.get_local_rank(ParallelMode.GLOBAL)
         
         torch.cuda.set_device(f'cuda:{gpc.get_local_rank(ParallelMode.GLOBAL)}')    
+        
         self._init_self()
 
     def _init_self(self):
         print("[INFO] init model in rank {}".format(self.rank))
-        
-        # print(self.model_class)
+
         if self.dtype == torch.half:
             self.model = self.model_class(**self.model_config).cuda().half()
         else:
             self.model = self.model_class(**self.model_config).cuda()      
-
+        # print("Pass")
         self.model.eval()
         self.model = GPTPipelineCommWrapper(model = self.model, max_batch_size = self.max_batch_size, dtype=self.dtype)  
     

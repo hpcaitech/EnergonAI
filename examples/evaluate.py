@@ -1,8 +1,11 @@
 import time
 import torch
 import argparse
+import requests
+import threading
+from concurrent import futures
 # from model 
-from pipeline_gpt1d import GPT2_small_pipeline_1D, GPT2_exlarge_pipeline_1D, GPT3_pipeline_1D
+from gpt.pipeline_gpt1d import GPT2_small_pipeline_1D, GPT2_exlarge_pipeline_1D, GPT3_pipeline_1D
 from energon.engine import InferenceEngine
 from energon.logging import get_dist_logger
 from energon.core import global_context as gpc
@@ -40,13 +43,29 @@ def main():
     hidden_states = None
     sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
 
-    # print(MODEL_CLASSES[args.model_name])
+    engine = InferenceEngine(MODEL_CLASSES[args.model_name], model_config, max_batch_size = 32, tp_init_size = args.tensor_para_size, pp_init_size = args.pipe_para_size, port = 29501, dtype = torch.half)
+    
 
-    engine = InferenceEngine(MODEL_CLASSES[args.model_name], model_config, max_batch_size = 32, tp_init_size = args.tensor_para_size, pp_init_size = args.pipe_para_size, dtype = torch.half)
+    for i in range(10):
+        output = engine.run(sample)
+        print(output.to_here())
+
     
-    output = engine.run(sample)
+
+    # time.sleep(5)
+
+    # urls = ['http://127.0.0.1:8005/stop',
+    #         'http://127.0.0.1:8006/stop',
+    #         'http://127.0.0.1:8007/stop']
+
+    # with futures.ThreadPoolExecutor(max_workers=3) as executor:
+    #     for url in urls:
+    #         future = executor.submit(requests.get, url)
+        
+
+    engine.clear()
     
-    print(output.to_here())
+    
 
 # from model.pipeline_gpt1d import GPT2_small_pipeline_1D, GPT2_exlarge_pipeline_1D, GPT3_pipeline_1D
     # prof = torch.profiler.profile(

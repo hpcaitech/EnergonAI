@@ -21,10 +21,10 @@ def init(tp_size: int, pp_size: int, backend: str, seed: int, verbose: bool, ran
     launch_from_multiprocess(tp_size, pp_size, backend, seed, verbose, rank, local_rank, world_size, host, port)
     WORKER_NAME = "wok{}"    
     rpc.init_rpc(WORKER_NAME.format(rank), rank=rank, world_size=world_size)        
-
+    rpc.shutdown()
     return {"Start!"}
 
-@app.get("/stop")
-def shutDown():
-    rpc.shutdown()
-    return {"Stop!"}
+# @app.get("/stop")
+# def shutDown():
+#     rpc.shutdown()
+#     return {"Stop!"}

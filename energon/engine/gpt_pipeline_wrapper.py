@@ -124,9 +124,9 @@ class GPTPipelineCommWrapper:
                 # print(self.pipe_meta.get_meta_tensor_shape())
                 # print(self.pipe_meta.get_meta_tensor)
                 self.pipe_meta.store_meta(recv_forward(self.pipe_meta.get_meta_tensor_shape(), dtype=torch.int))
-                # print(self.pipe_meta.get_tensor_shapes())
+                print(self.pipe_meta.get_tensor_shapes())
                 input_tensor = recv_forward(self.pipe_meta.get_tensor_shapes(), dtype=self.dtype)
-                # print(input_tensor.shape)
+                print(input_tensor.shape)
                 self.comm_input[self.comm_name] = input_tensor
                 output = self.model(**self.comm_input, **self.static_input)
                 return output

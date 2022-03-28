@@ -118,6 +118,10 @@ if build_cuda_ext:
                             '-U__CUDA_NO_HALF2_OPERATORS__',
                             '-DTHRUST_IGNORE_CUB_VERSION_CHECK'
                             ]
+        ext_modules.append(cuda_ext_helper('energon_scale_mask',
+                                            ['scale_mask_softmax_kernel.cu', 
+                                            'scale_mask_softmax_wrapper.cpp'],
+                                            extra_cuda_flags + cc_flag))
 
         ext_modules.append(cuda_ext_helper('energon_transpose_pad',
                                             ['transpose_pad_fusion_wrapper.cpp', 'transpose_pad_fusion_kernel.cu'],
@@ -126,6 +130,8 @@ if build_cuda_ext:
         ext_modules.append(cuda_ext_helper('energon_nccl',
                                             ['get_ncclid.cpp'],
                                             extra_cuda_flags + cc_flag))
+
+        
 
 setup(
     name='energon',

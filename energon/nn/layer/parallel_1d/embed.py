@@ -191,14 +191,14 @@ class VocabParallelEmbedding1D(torch.nn.Module):
         init_method: method to initialize weights.
     """
 
-    def __init__(self, num_embeddings, embedding_dim, dtype=None,
+    def __init__(self, num_embeddings, embedding_dim, padding_idx=None, dtype=None,
                  init_method=None):
         super(VocabParallelEmbedding1D, self).__init__()
         # Keep the input dimensions.
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
         # Set the detauls for compatibility.
-        self.padding_idx = None
+        self.padding_idx = padding_idx
         self.max_norm = None
         self.norm_type = 2.
         self.scale_grad_by_freq = False

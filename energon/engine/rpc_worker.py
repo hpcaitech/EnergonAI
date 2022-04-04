@@ -38,17 +38,23 @@ class RPCWorker:
             self.model = self.model_class(**self.model_config).cuda()      
         # print("Pass")
         self.model.eval()
-        self.model = GPTPipelineCommWrapper(model = self.model, max_batch_size = self.max_batch_size, dtype=self.dtype)  
-    
+
+
+        if gpc.is_initialized(ParallelMode.PIPELINE):
+            self.model = GPTPipelineCommWrapper(model = self.model, max_batch_size = self.max_batch_size, dtype=self.dtype)  
+
     def run(self, inputs):
         torch.cuda.set_device(f'cuda:{gpc.get_local_rank(ParallelMode.GLOBAL)}') 
         for k, v in inputs.items():
             if v is not None:
-                inputs[k] = v.cuda() 
+                inputs[k] = v.cuda() #non_blocking=True
 
-        output = self.model.run(inputs)
+        if gpc.is_initialized(ParallelMode.PIPELINE):
+            output = self.model.run(inputs)
+        else:
+            output = self.model(**inputs)
         
         if output is not None:
-            return output.cpu()
+            return output.cpu() #non_blocking=True
         
         return None

@@ -1,3 +1,5 @@
+import random
+import string
 import torch.distributed.rpc as rpc
 from torch.distributed.rpc import RRef, rpc_async, remote
 
@@ -19,3 +21,10 @@ def sync_cls_method(method, rref, *args, **kwargs):
 def async_cls_method(method, rref, *args, **kwargs):
     args = [method, rref] + list(args)
     return rpc.rpc_async(rref.owner(), call_method, args=args, kwargs=kwargs)
+
+def get_random_string(length=16):
+    # choose from all lowercase letter
+    letters = string.ascii_lowercase
+    result_str = ''.join(random.choice(letters) for i in range(length))
+    return result_str
+#     print("Random string of length", length, "is:", result_str)

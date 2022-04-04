@@ -1,4 +1,6 @@
 import inspect
+import threading
+
 import torch
 import torch.nn as nn
 import torch.distributed as dist
@@ -9,6 +11,9 @@ from energon.context import ParallelMode
 from energon.core import global_context as gpc
 
 from .pipeline_meta import PipelineMeta
+# from .pipeline_msg_dict import PipelineMsgDict
+from .pipeline_msg_dict import PipelineMsgQueue
+
 
 # The Wrapper is only for Transformer Model.
 class GPTPipelineCommWrapper:
@@ -26,14 +31,12 @@ class GPTPipelineCommWrapper:
         self.comm_input = dict()
         self.comm_name = None        
 
-        # for init
+        # get the hidden_size
         input_ids = torch.randint(1, 10, (max_batch_size, 512), dtype=torch.int64).cuda()
         attention_mask = torch.randint(0, 1, (max_batch_size, 1, 512), dtype=torch.int64).cuda()
         hidden_states = None
         self.sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
         self._init_input()
-
-        # for meta
         self.tensor_dim = 0
         self.hidden_size = 0
         self.max_batch_size = max_batch_size
@@ -41,8 +44,8 @@ class GPTPipelineCommWrapper:
         if gpc.is_initialized(ParallelMode.PIPELINE) and gpc.get_world_size(ParallelMode.PIPELINE) > 1:
             self._init_tensor_meta()
 
-        self.pipe_meta = PipelineMeta(self.tensor_dim, self.max_batch_size)
-        # print(f'tprank{gpc.get_local_rank(ParallelMode.PARALLEL_1D)}, pprank{gpc.get_local_rank(ParallelMode.PIPELINE)}')
+        self.pipe_msg_queue = PipelineMsgQueue()
+        self.lock = threading.Lock()
 
     def _init_input(self):
 
@@ -82,61 +85,58 @@ class GPTPipelineCommWrapper:
                 send_tensor_meta(output)
                 send_forward(output)
 
+    '''
+    hidden_size : ([32, 512, 1600])
+    For different model type, fill_meta_tensor is different
+    '''
+    def fill_meta_tensor(self, inputs, pipe_meta):
+        pipe_meta.get_meta_tensor()[0] = inputs['input_ids'].shape[0]
+        pipe_meta.get_meta_tensor()[1] = inputs['input_ids'].shape[0]
+        pipe_meta.get_meta_tensor()[2] = inputs['input_ids'].shape[1]
+        pipe_meta.get_meta_tensor()[3] = self.hidden_size
+        pipe_meta.update_meta()
+
     def run(self, inputs): 
-        if gpc.is_initialized(ParallelMode.PIPELINE):
-            return self.pipeline_run(inputs)
-        else:
-            return self.no_pipeline_run(inputs)
+        pipe_meta = PipelineMeta(self.tensor_dim, self.max_batch_size)
+        self.fill_meta_tensor(inputs, pipe_meta)
+        self.pipe_msg_queue.enqueue(inputs, pipe_meta)
 
+        print(self.pipe_msg_queue.pipeline_msg_queue.qsize())
 
-    def no_pipeline_run(self, inputs):
-        output = self.model(**inputs)
-        return output
-    
-    '''
-    Here needs a strategy to flexibly fill meta tensor
-    ([32, 512, 1600])
-    '''
-    def fill_meta_tensor(self, inputs):
-        self.pipe_meta.get_meta_tensor()[0] = inputs['input_ids'].shape[0]
-        self.pipe_meta.get_meta_tensor()[1] = inputs['input_ids'].shape[0]
-        self.pipe_meta.get_meta_tensor()[2] = inputs['input_ids'].shape[1]
-        self.pipe_meta.get_meta_tensor()[3] = self.hidden_size
-        # print(self.hidden_size)
+        # different threads ask for a single lock  how to keep the correctness
+        self.lock.acquire(timeout=5)
 
-        return self.pipe_meta.get_meta_tensor()
-
-    def pipeline_run(self, inputs):
+        sample, pipe_meta = self.pipe_msg_queue.top()
 
         for name in self.static_name:
-            self.static_input[name] = inputs[name]
+            self.static_input[name] = sample[name]
 
         with torch.inference_mode():
 
             if gpc.is_first_rank(ParallelMode.PIPELINE):
-                meta_tensor = self.fill_meta_tensor(inputs)
-                send_forward(meta_tensor)
+
                 output = self.model(**self.comm_input, **self.static_input)
                 send_forward(output)
+                self.lock.release()
                 return None
 
             if gpc.is_last_rank(ParallelMode.PIPELINE):
-                # print(self.pipe_meta.get_meta_tensor_shape())
-                # print(self.pipe_meta.get_meta_tensor)
-                self.pipe_meta.store_meta(recv_forward(self.pipe_meta.get_meta_tensor_shape(), dtype=torch.int))
-                print(self.pipe_meta.get_tensor_shapes())
-                input_tensor = recv_forward(self.pipe_meta.get_tensor_shapes(), dtype=self.dtype)
-                print(input_tensor.shape)
+
+                print(f'get_tensor_shapes:{pipe_meta.get_tensor_shapes()}')
+                input_tensor = recv_forward(pipe_meta.get_tensor_shapes(), dtype=self.dtype)
+                print(f'input_tensor.shape:{input_tensor.shape}')
                 self.comm_input[self.comm_name] = input_tensor
                 output = self.model(**self.comm_input, **self.static_input)
+                self.lock.release()
                 return output
+
             else:
-                meta_tensor = recv_forward(self.pipe_meta.get_meta_tensor_shape(), dtype=torch.int)
-                self.pipe_meta.store_meta(meta_tensor)
-                send_forward(meta_tensor)
-                input_tensor = recv_forward(self.pipe_meta.get_tensor_shapes(), dtype=self.dtype)
+                
+                input_tensor = recv_forward(pipe_meta.get_tensor_shapes(), dtype=self.dtype)
                 self.comm_input[self.comm_name] = input_tensor
                 output = self.model(**self.comm_input, **self.static_input)
                 send_forward(output)
+                self.lock.release()
                 return None
-          
+
+        

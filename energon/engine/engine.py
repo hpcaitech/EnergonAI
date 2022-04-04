@@ -8,7 +8,7 @@ import requests
 
 # pytorch rpc
 import torch.distributed.rpc as rpc
-from .rpc_utils import remote_cls_method, sync_cls_method, async_cls_method
+from .rpc_utils import remote_cls_method, sync_cls_method, async_cls_method #, get_random_string
 from .rpc_worker import RPCWorker
 
 from energon.core import global_context as gpc
@@ -79,8 +79,10 @@ class InferenceEngine(Module):
         
     def run(self, inputs): 
 
+        # key = get_random_string()
         res_rref = 0
         output = None
+
         for rref in self.rrefs:
             output = remote_cls_method(RPCWorker.run, rref, inputs)
         
@@ -88,7 +90,6 @@ class InferenceEngine(Module):
         
 
     def clear(self):
-        
         rpc.shutdown()
 
 

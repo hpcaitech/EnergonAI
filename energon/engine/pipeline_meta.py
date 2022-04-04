@@ -2,6 +2,7 @@ import torch
 from energon.core import global_context as gpc
 from energon.context import ParallelMode
 
+# The class is not multithread safe, there needs a explicite logic for manage multiple calls
 class PipelineMeta:
     def __init__(self, tensor_num_dim: int = -1, max_batch_size: int = -1):
         # Tell pipeline the information of the next batch
@@ -19,6 +20,7 @@ class PipelineMeta:
     # resolve meta from tensor.
     # batchsize | TensorShape | seq_lens
     def store_meta(self, metaTensor):
+        print(f'store_meta is called')
         self.meta_tensor = metaTensor
 
         cur = 0
@@ -35,6 +37,20 @@ class PipelineMeta:
             cur = cur + 1
             self.seq_lens.append(metaTensor[cur].item())
 
+    def update_meta(self):
+        cur = 0
+        self.batch_size = self.meta_tensor[0].item()
+        # print(type(self.batch_size))
+        
+        self.tensor_shapes.clear()
+        for i in range(self.tensor_num_dim):
+            cur = cur + 1
+            self.tensor_shapes.append(self.meta_tensor[cur].item())
+
+        self.seq_lens.clear()
+        for i in range(self.batch_size):
+            cur = cur + 1
+            self.seq_lens.append(self.meta_tensor[cur].item())
 
     def get_tensor_num_dim(self):
         return self.tensor_num_dim

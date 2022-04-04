@@ -140,7 +140,7 @@ setup(
                                     'docker',
                                     'tests',
                                     'docs',
-                                    'examples',
+                                    'example',
                                     'tests',
                                     'scripts',
                                     'requirements',

@@ -1,12 +1,12 @@
 #!/bin/bash
 
-tp_size=2
+tp_size=1
 pp_size=2
 model=gpt2_large
 world_size=`expr $tp_size \* $pp_size`
 server_port_start=8005
 host="localhost"
-port=29500
+port=29499
 CUDA_VISIBLE_DEVICES=4,5,6,7
 
 export PYTHONPATH=/home/lcdjs/ColossalAI-Inference/example
@@ -31,4 +31,5 @@ echo "evoke process: ${i} init rpc"
 done
 
 python3  gpt_inference.py --fp16 --model_name=${model} --tensor_para_size=${tp_size} --pipe_para_size=${pp_size} --port=${port}
+# python3  gpt_inference.py --fp16 --model_name=gpt2_large --tensor_para_size=1 --pipe_para_size=2 --port=29499
 # tritonserver --model-repository /opt/tritonserver/host/python_backend/models

@@ -29,7 +29,7 @@ def main():
     parser.add_argument("--tensor_para_size", type=int, default=1, help="Tensor Parallel Size")
     parser.add_argument("--pipe_para_size", type=int, default=1, help="Pipeline Parallel Size")
     parser.add_argument("--port", type=int, default=29500, help="Port")
-    parser.add_argument("--iteration", type=int, default=10, help="Iteration")
+    parser.add_argument("--iteration", type=int, default=1000, help="Iteration")
     parser.add_argument("--fp16", action="store_true", help="Whether to use 16-bit precision instead of 32-bit")
     parser.add_argument("--model_name", default=None, type=str, required=True, help="Shortcut name selected in the list: " + ", ".join(MODEL_CLASSES.keys()),)
     args = parser.parse_args()
@@ -61,13 +61,50 @@ def main():
     sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
 
     output = engine.run(sample)
-    print(output.to_here())
+    # print(output.to_here())
+    output.to_here()
 
+
+
+    
+   
+    timer = get_timers()
+    # timer('time0').start()    
+    # for i in range(args.iteration):
+    #     output = engine.run(sample)
+    #     print(output.to_here())
+
+
+    # # torch.distributed.barrier()
+    # timer('time0').stop()
+
+    # time0 = timer('time0').elapsed()
+
+    timer('time1').start()
+    
+    for i in range(1, args.iteration):
+        input_ids = torch.randint(1, 10, (i%20+1, 40), dtype=torch.int64)
+        attention_mask = torch.randint(0, 1, (i%20+1, 1, 40), dtype=torch.int64)
+        hidden_states = None
+        sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
+
+        output = engine.run(sample)
+    
+    print(output.to_here())    
+    timer('time1').stop()
+
+    time1 = timer('time1').elapsed()
+    logger = get_dist_logger()
+
+    # logger.info(f'Time0, '
+    #             f'Pipeline Rank/ Tensor Rank: {args.pipe_para_size}/{gpc.get_world_size(ParallelMode.PARALLEL_1D)},'
+    #             f'Time: {time0/args.iteration}')
+    logger.info(f'Time1, '
+                f'Pipeline Rank/ Tensor Rank: {args.pipe_para_size}/{gpc.get_world_size(ParallelMode.PARALLEL_1D)},'
+                f'Time: {time1/args.iteration}')
 
     engine.clear()
-    # model_config = {'num_chunks': 1, 'checkpoint': False, 'dtype': dtype, 'embed_split_hidden': False}
-
-
+                                                          
    
 
     # engine = InferenceEngine(MODEL_CLASSES[args.model_name], model_config, max_batch_size = 32, tp_init_size = args.tensor_para_size, pp_init_size = args.pipe_para_size, port = 29501, dtype = torch.half)

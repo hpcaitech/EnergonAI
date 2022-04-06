@@ -27,7 +27,7 @@ class GPTEmbedding1D(nn.Module):
                  vocab_size: int,
                  max_position_embeddings: int,
                  num_tokentypes: int = 0,
-                 padding_idx: int = None,
+                 padding_idx: int = 0,
                  dtype: dtype = None) -> None:
         super().__init__()
         self.word_embeddings = VocabParallelEmbedding1D(vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype)
@@ -83,13 +83,18 @@ class GPTSelfAttention1D(nn.Module):
 
     def forward(self, x, attention_mask=None):
         qkv = self.query_key_value(x)
+
+        # print(f'qkv {qkv.shape}')
+
         all_head_size = qkv.shape[-1] // 3
-        num_attention_heads = divide(all_head_size, self.attention_head_size)
+        num_attention_heads = divide(all_head_size, self.attention_head_size)  # num_heads
+
         new_qkv_shape = qkv.shape[:-1] + \
             (num_attention_heads, 3 * self.attention_head_size)
         qkv = qkv.view(new_qkv_shape)
         qkv = qkv.permute((0, 2, 1, 3))
         q, k, v = torch.chunk(qkv, 3, dim=-1)
+        # print(f'qkv {qkv.shape}')   # 6 40 128
 
         x = torch.matmul(q, k.transpose(-1, -2))
 
@@ -215,7 +220,7 @@ class GPT1D(nn.Module):
                  mlp_ratio: float = 4.0,
                  layernorm_epsilon: float = 1e-5,
                  activation: Callable = nn.functional.gelu,
-                 padding_idx: int = None,
+                 padding_idx: int = 0,
                  dtype: dtype = None,
                  bias: bool = True,
                  apply_post_layernorm: bool = False,
@@ -275,7 +280,7 @@ class PipelineGPT1D(nn.Module):
                  mlp_ratio: float = 4.0,
                  layernorm_epsilon: float = 1e-5,
                  activation: Callable = nn.functional.gelu,
-                 padding_idx: int = None,
+                 padding_idx: int = 0,
                  dtype: dtype = None,
                  bias: bool = True,
                  apply_post_layernorm: bool = False,

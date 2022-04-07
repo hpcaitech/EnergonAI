@@ -20,7 +20,9 @@ def init(tp_size: int, pp_size: int, backend: str, seed: int, verbose: bool, ran
     os.environ['MASTER_PORT'] = f'{port}'
     launch_from_multiprocess(tp_size, pp_size, backend, seed, verbose, rank, local_rank, world_size, host, port)
     WORKER_NAME = "wok{}"    
-    rpc.init_rpc(WORKER_NAME.format(rank), rank=rank, world_size=world_size)        
+    rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
+            num_worker_threads=16)
+    rpc.init_rpc(WORKER_NAME.format(rank), rank=rank, world_size=world_size, rpc_backend_options=rpc_backend_options)        
     rpc.shutdown()
     return {"Start!"}
 

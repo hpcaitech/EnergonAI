@@ -11,11 +11,11 @@ from energon.context import ParallelMode
 from energon.core import global_context as gpc
 
 from .pipeline_meta import PipelineMeta
-from .pipeline_msg_dict import PipelineMsgDict, CircleInt #PipelineMsgPriorityQueue
+from .pipeline_msg_dict import PipelineMsgDict, CircleInt # PipelineMsgPriorityQueue, 
 
 
 # The Wrapper is only for Transformer Model.
-class GPTPipelineCommWrapper:
+class BertPipelineCommWrapper:
     def __init__(self, 
                  model: nn.Module, 
                  max_batch_size: int = 1,
@@ -32,7 +32,7 @@ class GPTPipelineCommWrapper:
 
         # get the hidden_size
         input_ids = torch.randint(1, 10, (max_batch_size, 512), dtype=torch.int64).cuda()
-        attention_mask = torch.randint(0, 1, (max_batch_size, 1, 512), dtype=torch.int64).cuda()
+        attention_mask = torch.randint(0, 1, (max_batch_size, 1, 512, 512), dtype=torch.int64).cuda()
         hidden_states = None
         self.sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
         self._init_input()
@@ -43,7 +43,7 @@ class GPTPipelineCommWrapper:
         if gpc.is_initialized(ParallelMode.PIPELINE) and gpc.get_world_size(ParallelMode.PIPELINE) > 1:
             self._init_tensor_meta()
 
-        self.pipe_msg_queue = PipelineMsgDict()
+        self.pipe_msg_queue = PipelineMsgDict() #PipelineMsgPriorityQueue()
         self.lock = threading.Lock()
         self.key = CircleInt()
 
@@ -96,14 +96,17 @@ class GPTPipelineCommWrapper:
         pipe_meta.get_meta_tensor()[3] = self.hidden_size
         pipe_meta.update_meta()
 
-    def run(self, key, inputs):
+    def run(self, key, inputs): 
+
         print(f'Rank: {gpc.get_global_rank()}, Priority: {key}')
-        
+
         pipe_meta = PipelineMeta(self.tensor_dim, self.max_batch_size)
         self.fill_meta_tensor(inputs, pipe_meta)
         self.pipe_msg_queue.enqueue(key, inputs, pipe_meta)
-        
+
+        # different threads ask for a single lock  how to keep the correctness
         self.lock.acquire(timeout=3)
+
         sample, pipe_meta = self.pipe_msg_queue.top(self.key.val)
         self.key.addOne()
 

@@ -1,8 +1,7 @@
 import torch
-import time
 import argparse
-
-from gpt.gpt import gpt2_small, gpt2_medium, gpt2_large, gpt2_xl, gpt2_8B, gpt3
+import time
+from bert.bert import bert_small
 from energon.core import global_context as gpc
 from energon.engine import InferenceEngine
 from energon.logging import get_dist_logger
@@ -10,19 +9,8 @@ from energon.context import ParallelMode
 from energon.initialize import launch_from_torch
 from energon.utils import get_timers
 
-
-
-
-
-
-
 MODEL_CLASSES = {
-    "gpt2_small": gpt2_small,
-    "gpt2_medium": gpt2_medium,
-    "gpt2_large": gpt2_large,
-    "gpt2_xl": gpt2_xl,
-    "gpt2_8B": gpt2_8B,
-    "gpt3": gpt3
+    "bert_small": bert_small,
 }
 
 def main():
@@ -49,8 +37,8 @@ def main():
     # print(model)
 
     engine = InferenceEngine(MODEL_CLASSES[args.model_name], 
-                            model_config, 
-                            'gpt',
+                            model_config,
+                            'bert',
                             max_batch_size = 32, 
                             tp_init_size = args.tensor_para_size, 
                             pp_init_size = args.pipe_para_size, 
@@ -58,7 +46,7 @@ def main():
                             dtype = dtype)
 
     input_ids = torch.randint(1, 10, (32, 40), dtype=torch.int64)
-    attention_mask = torch.randint(0, 1, (32, 1, 40), dtype=torch.int64)
+    attention_mask = torch.randint(0, 1, (32, 1, 40, 40), dtype=torch.int64)
     hidden_states = None
     sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
 
@@ -85,11 +73,14 @@ def main():
     timer('time1').start()
     
     for i in range(1, args.iteration):
+        # print(i)
         input_ids = torch.randint(1, 10, (32, i%20+2), dtype=torch.int64)
-        attention_mask = torch.randint(0, 1, (32, 1, i%20+2), dtype=torch.int64)
+        attention_mask = torch.randint(0, 1, (32, 1, i%20+2, i%20+2), dtype=torch.int64)
         hidden_states = None
         sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
         output = engine.run(sample)
+        
+        
     
     print(output.to_here())    
     timer('time1').stop()

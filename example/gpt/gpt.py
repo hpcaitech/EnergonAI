@@ -1,5 +1,6 @@
 import math
 from typing import Callable
+import os
 
 import torch
 from torch import nn as nn, Tensor, dtype
@@ -10,8 +11,10 @@ from energon.core import global_context as gpc
 from energon.logging import get_dist_logger
 from energon.nn.layer.utils import divide, ACT2FN
 from energon.nn import Linear1D_Col, Linear1D_Row, Classifier1D
+from energon.nn import LayerNorm1D
 from energon.nn import VocabParallelEmbedding1D
 from energon.utils import get_current_device
+from energon.utils.checkpointing import load_checkpoint
 
 __all__ = [
     'GPTEmbedding1D'
@@ -158,16 +161,16 @@ class GPTBlock1D(nn.Module):
         super().__init__()
         
         self.apply_post_layernorm = apply_post_layernorm
-        self.norm1 = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
-
+        # self.norm1 = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
+        self.norm1 = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
         self.attn = GPTSelfAttention1D(dim=dim,
                                      num_heads=num_heads,
                                      bias=bias,
                                      fuse_scale_mask_softmax=fuse_scale_mask_softmax,
                                      dtype=dtype)
 
-        self.norm2 = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
-
+        # self.norm2 = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
+        self.norm2 = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
         self.mlp = GPTMLP1D(dim=dim, mlp_ratio=mlp_ratio, activation=activation, dtype=dtype, bias=bias)
 
     def forward(self, x, attention_mask=None):
@@ -245,7 +248,8 @@ class GPT1D(nn.Module):
                 fuse_scale_mask_softmax=fuse_scale_mask_softmax,
             ) for _ in range(depth)
         ])       
-        self.norm = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
+        # self.norm = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
+        self.norm = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
         self.head = GPTLMHead1D(dim=dim,
                               vocab_size=vocab_size,
                               word_embeding_weight=self.embed.word_embedding_weight,
@@ -286,7 +290,7 @@ class PipelineGPT1D(nn.Module):
                  apply_post_layernorm: bool = False,
                  fuse_scale_mask_softmax: bool = False,
                  first: bool = False,
-                 last: bool = False):
+                 last: bool = False, **kwargs):
         super().__init__()
         self.first = first
         self.last = last
@@ -311,7 +315,8 @@ class PipelineGPT1D(nn.Module):
             ) for _ in range(depth)
         ])
         if self.last:
-            self.norm = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
+            # self.norm = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
+            self.norm = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
             self.head = GPTLMHead1D(dim=dim, vocab_size=vocab_size, dtype=dtype)   # word_embeeding_weight=self.embed.word_embedding_weight not in the same process
 
 
@@ -394,6 +399,11 @@ def _create_gpt_pipeline_model(depth=48, num_chunks=1, layer_partitions=None, **
     numel = 0
     for _, param in model.named_parameters(recurse=True):
         numel += param.numel()
+    if "checkpoint" in model_kwargs.keys():
+        if model_kwargs["checkpoint"] is True:
+            assert "checkpoint_path" in model_kwargs.keys(), "You have to specify a file path to use checkpoint loading"
+            assert os.path.exists(model_kwargs["checkpoint_path"]), "Checkpoint file not found"
+            load_checkpoint(model_kwargs["checkpoint_path"], model, **model_kwargs)
     logger.info(f'Rank{rank}/{pipeline_rank} model size = {numel * 2 / 1e9} GB')
     return model
 

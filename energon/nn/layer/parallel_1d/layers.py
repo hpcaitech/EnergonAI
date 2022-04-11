@@ -2,7 +2,9 @@
 # -*- encoding: utf-8 -*-
 
 import math
+import sys
 import numbers
+from collections import OrderedDict
 from contextlib import nullcontext
 from typing import Callable, Tuple
 
@@ -22,7 +24,7 @@ from ..utils import divide, set_tensor_parallel_attribute_by_partition
 from ._operation import FusedLayerNormAffineFunction1D
 from ._utils import (gather_forward_split_backward, get_parallel_input, reduce_grad, reduce_input, set_parallel_input,
                      split_forward_gather_backward)
-
+from energon.utils.checkpointing import partition_tensor_parallel_state_dict, gather_tensor_parallel_state_dict
 
 
 class Linear1D(torch.nn.Module):
@@ -166,6 +168,55 @@ class Classifier1D(ParallelLayer):
             output = output + self.bias
         return output
 
+    def _save_to_state_dict(self, destination, prefix, keep_vars):
+        weight_key = prefix + 'weight'
+        bias_key = prefix + 'bias'
+        local_state = OrderedDict()
+        if self.has_weight:
+            local_state[weight_key] = self.weight
+        if self.bias is not None:
+            local_state[bias_key] = self.bias
+        local_state = gather_tensor_parallel_state_dict(local_state,
+                                                        ParallelMode.PARALLEL_1D,
+                                                        dims={
+                                                            weight_key: -1,
+                                                            bias_key: 0
+                                                        },
+                                                        partition_states={
+                                                            weight_key: True,
+                                                            bias_key: False
+                                                        },
+                                                        keep_vars=keep_vars)
+        destination.update(local_state)
+
+    def _load_from_state_dict(self, state_dict, prefix, *args):
+        local_state = OrderedDict()
+        weight_key = prefix + 'weight'
+        bias_key = prefix + 'bias'
+        if gpc.get_local_rank(ParallelMode.TENSOR) == 0:
+            # weight
+            if self.has_weight:
+                weight = state_dict.pop(weight_key, None)
+                if weight is not None:
+                    local_state[weight_key] = weight
+            # bias
+            if self.bias is not None:
+                bias = state_dict.pop(bias_key, None)
+                if bias is not None:
+                    local_state[bias_key] = bias
+
+        local_state = partition_tensor_parallel_state_dict(local_state,
+                                                           ParallelMode.PARALLEL_1D,
+                                                           dims={
+                                                               weight_key: -1,
+                                                               bias_key: 0
+                                                           },
+                                                           partition_states={
+                                                               weight_key: True,
+                                                               bias_key: False
+                                                           })
+        super()._load_from_state_dict(local_state, prefix, *args)
+
 
 
 class Linear1D_Col(ParallelLayer):
@@ -259,6 +310,52 @@ class Linear1D_Col(ParallelLayer):
         else:
             return output
 
+    def _save_to_state_dict(self, destination, prefix, keep_vars):
+        weight_key = prefix + 'weight'
+        bias_key = prefix + 'bias'
+        local_state = OrderedDict({weight_key: self.weight})
+        if self.bias is not None:
+            local_state[bias_key] = self.bias
+        local_state = gather_tensor_parallel_state_dict(local_state,
+                                                        ParallelMode.PARALLEL_1D,
+                                                        dims={
+                                                            weight_key: 0,
+                                                            bias_key: 0
+                                                        },
+                                                        partition_states={
+                                                            weight_key: True,
+                                                            bias_key: True
+                                                        },
+                                                        keep_vars=keep_vars)
+        destination.update(local_state)
+
+    def _load_from_state_dict(self, state_dict, prefix, *args):
+        local_state = OrderedDict()
+        weight_key = prefix + 'weight'
+        bias_key = prefix + 'bias'
+        if gpc.get_local_rank(ParallelMode.TENSOR) == 0:
+            # weight
+            weight = state_dict.pop(weight_key, None)
+            if weight is not None:
+                local_state[weight_key] = weight
+            # bias
+            if self.bias is not None:
+                bias = state_dict.pop(bias_key, None)
+                if bias is not None:
+                    local_state[bias_key] = bias
+
+        local_state = partition_tensor_parallel_state_dict(local_state,
+                                                           ParallelMode.PARALLEL_1D,
+                                                           dims={
+                                                               weight_key: 0,
+                                                               bias_key: 0
+                                                           },
+                                                           partition_states={
+                                                               weight_key: True,
+                                                               bias_key: True
+                                                           })
+        super()._load_from_state_dict(local_state, prefix, *args)
+
 
 
 class Linear1D_Row(ParallelLayer):
@@ -330,6 +427,52 @@ class Linear1D_Row(ParallelLayer):
         num_partition = gpc.get_world_size(ParallelMode.TENSOR)
         set_tensor_parallel_attribute_by_partition(self.weight, num_partition)
 
+    def _load_from_state_dict(self, state_dict, prefix, *args):
+        local_state = OrderedDict()
+        weight_key = prefix + 'weight'
+        bias_key = prefix + 'bias'
+        if gpc.get_local_rank(ParallelMode.TENSOR) == 0:
+            # weight
+            weight = state_dict.pop(weight_key, None)
+            if weight is not None:
+                local_state[weight_key] = weight
+            # bias
+            if self.bias is not None:
+                bias = state_dict.pop(bias_key, None)
+                if bias is not None:
+                    local_state[bias_key] = bias
+
+        local_state = partition_tensor_parallel_state_dict(local_state,
+                                                           ParallelMode.PARALLEL_1D,
+                                                           dims={
+                                                               weight_key: -1,
+                                                               bias_key: 0
+                                                           },
+                                                           partition_states={
+                                                               weight_key: True,
+                                                               bias_key: False
+                                                           })
+        super()._load_from_state_dict(local_state, prefix, *args)
+
+    def _save_to_state_dict(self, destination, prefix, keep_vars):
+        weight_key = prefix + 'weight'
+        bias_key = prefix + 'bias'
+        local_state = OrderedDict({weight_key: self.weight})
+        if self.bias is not None:
+            local_state[bias_key] = self.bias
+        local_state = gather_tensor_parallel_state_dict(local_state,
+                                                        ParallelMode.PARALLEL_1D,
+                                                        dims={
+                                                            weight_key: -1,
+                                                            bias_key: 0
+                                                        },
+                                                        partition_states={
+                                                            weight_key: True,
+                                                            bias_key: False
+                                                        },
+                                                        keep_vars=keep_vars)
+        destination.update(local_state)
+
     def forward(self, input_: Tensor) -> Tensor:
         # Set up backprop all-reduce.
         if self.parallel_input:
@@ -373,8 +516,55 @@ class MixedFusedLayerNorm1D(torch.nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        init.ones_(self.weight)
-        init.zeros_(self.bias)
+        init.ones_()(self.weight)
+        init.zeros_()(self.bias)
+
+    def _save_to_state_dict(self, destination, prefix, keep_vars):
+        weight_key = prefix + 'weight'
+        bias_key = prefix + 'bias'
+        local_state = OrderedDict({weight_key: self.weight})
+        if self.bias is not None:
+            local_state[bias_key] = self.bias
+        local_state = gather_tensor_parallel_state_dict(local_state,
+                                                        ParallelMode.PARALLEL_1D,
+                                                        dims={
+                                                            weight_key: 0,
+                                                            bias_key: 0
+                                                        },
+                                                        partition_states={
+                                                            weight_key: True,
+                                                            bias_key: True
+                                                        },
+                                                        keep_vars=keep_vars)
+        destination.update(local_state)
+
+    def _load_from_state_dict(self, state_dict, prefix, *args):
+        local_state = OrderedDict()
+        weight_key = prefix + 'weight'
+        bias_key = prefix + 'bias'
+        if gpc.get_local_rank(ParallelMode.TENSOR) == 0:
+            # weight
+            weight = state_dict.pop(weight_key, None)
+            if weight is not None:
+                local_state[weight_key] = weight
+            # bias
+            if self.bias is not None:
+                bias = state_dict.pop(bias_key, None)
+                if bias is not None:
+                    local_state[bias_key] = bias
+
+        local_state = partition_tensor_parallel_state_dict(local_state,
+                                                           ParallelMode.PARALLEL_1D,
+                                                           dims={
+                                                               weight_key: 0,
+                                                               bias_key: 0
+                                                           },
+                                                           partition_states={
+                                                               weight_key: True,
+                                                               bias_key: True
+                                                           })
+        super()._load_from_state_dict(local_state, prefix, *args)
+
 
     def forward(self, input):
         return FusedLayerNormAffineFunction1D.apply(input, self.weight, self.bias, self.normalized_shape, self.eps)
@@ -436,6 +626,31 @@ class Embedding1D(ParallelLayer):
         if self.padding_idx is not None:
             with torch.no_grad():
                 self.weight[self.padding_idx].fill_(0)
+
+    def _load_from_state_dict(self, state_dict, prefix, *args):
+        local_state = OrderedDict()
+        weight_key = prefix + 'weight'
+        if gpc.get_local_rank(ParallelMode.TENSOR) == 0:
+            # weight
+            weight = state_dict.pop(weight_key, None)
+            if weight is not None:
+                local_state[weight_key] = weight
+
+        local_state = partition_tensor_parallel_state_dict(local_state,
+                                                           ParallelMode.PARALLEL_1D,
+                                                           dims={weight_key: -1},
+                                                           partition_states={weight_key: True})
+        super()._load_from_state_dict(local_state, prefix, *args)
+
+    def _save_to_state_dict(self, destination, prefix, keep_vars):
+        weight_key = prefix + 'weight'
+        local_state = OrderedDict({weight_key: self.weight})
+        local_state = gather_tensor_parallel_state_dict(local_state,
+                                                        ParallelMode.PARALLEL_1D,
+                                                        dims={weight_key: -1},
+                                                        partition_states={weight_key: True},
+                                                        keep_vars=keep_vars)
+        destination.update(local_state)
 
     def forward(self, input_: Tensor) -> Tensor:
 

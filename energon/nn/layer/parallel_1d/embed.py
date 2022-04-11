@@ -3,12 +3,13 @@ import torch
 from torch import nn as nn, Tensor, distributed as dist
 from torch.nn import functional as F
 import torch.nn.init as init
-
+from collections import OrderedDict
 from torch.nn.parameter import Parameter
 
 from energon.core import global_context as gpc
 from energon.context import ParallelMode
 from energon.utils import get_current_device
+from energon.utils.checkpointing import partition_tensor_parallel_state_dict, gather_tensor_parallel_state_dict
 from ..base_layer import ParallelLayer
 from .layers import Linear1D_Row
 from energon.nn.layer.utils import divide
@@ -241,6 +242,31 @@ class VocabParallelEmbedding1D(torch.nn.Module):
         # Reduce across all the model parallel GPUs.
         output = output = reduce_input(output_parallel, ParallelMode.PARALLEL_1D)
         return output
+
+    def _load_from_state_dict(self, state_dict, prefix, *args):
+        local_state = OrderedDict()
+        weight_key = prefix + 'weight'
+        if gpc.get_local_rank(ParallelMode.TENSOR) == 0:
+            # weight
+            weight = state_dict.pop(weight_key, None)
+            if weight is not None:
+                local_state[weight_key] = weight
+
+        local_state = partition_tensor_parallel_state_dict(local_state,
+                                                           ParallelMode.PARALLEL_1D,
+                                                           dims={weight_key: -1},
+                                                           partition_states={weight_key: True})
+        super()._load_from_state_dict(local_state, prefix, *args)
+
+    def _save_to_state_dict(self, destination, prefix, keep_vars):
+        weight_key = prefix + 'weight'
+        local_state = OrderedDict({weight_key: self.weight})
+        local_state = gather_tensor_parallel_state_dict(local_state,
+                                                        ParallelMode.PARALLEL_1D,
+                                                        dims={weight_key: -1},
+                                                        partition_states={weight_key: True},
+                                                        keep_vars=keep_vars)
+        destination.update(local_state)
 
 
 

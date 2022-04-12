@@ -5,7 +5,6 @@ import os
 import torch
 from torch import nn as nn, Tensor, dtype
 
-
 from energon.context import ParallelMode
 from energon.core import global_context as gpc
 from energon.logging import get_dist_logger
@@ -13,7 +12,7 @@ from energon.nn.layer.utils import divide, ACT2FN
 from energon.nn import Linear1D_Col, Linear1D_Row, Classifier1D
 from energon.nn import LayerNorm1D
 from energon.nn import VocabParallelEmbedding1D
-from energon.utils import get_current_device
+from energon.utils import get_current_device, is_using_pp
 from energon.utils.checkpointing import load_checkpoint
 
 __all__ = [
@@ -22,6 +21,7 @@ __all__ = [
     'GPTSelfAttention1D',
     'GPTTransformerLayer1D'
 ]
+
 
 class GPTEmbedding1D(nn.Module):
 
@@ -33,10 +33,10 @@ class GPTEmbedding1D(nn.Module):
                  padding_idx: int = 0,
                  dtype: dtype = None) -> None:
         super().__init__()
-        self.word_embeddings = VocabParallelEmbedding1D(vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype)
-        self.position_embeddings = VocabParallelEmbedding1D(max_position_embeddings, embedding_dim, dtype=dtype)
+        self.word_embeddings = VocabParallelEmbedding1D(vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype, skip_tp=True)
+        self.position_embeddings = VocabParallelEmbedding1D(max_position_embeddings, embedding_dim, dtype=dtype, skip_tp=True)
         if num_tokentypes > 0:
-            self.tokentype_embeddings = VocabParallelEmbedding1D(num_tokentypes, embedding_dim, dtype=dtype)
+            self.tokentype_embeddings = VocabParallelEmbedding1D(num_tokentypes, embedding_dim, dtype=dtype, skip_tp=True)
         else:
             self.tokentype_embeddings = None
 
@@ -65,7 +65,7 @@ class GPTSelfAttention1D(nn.Module):
                  fuse_scale_mask_softmax: bool = False,
                  dtype: dtype = None) -> None:
         super().__init__()
-        self.fuse_scale_mask_softmax = fuse_scale_mask_softmax # TODO
+        self.fuse_scale_mask_softmax = fuse_scale_mask_softmax  # TODO
         self.attention_head_size = divide(dim, num_heads)
         self.query_key_value = Linear1D_Col(dim, 3 * dim, bias=bias, dtype=dtype)
 
@@ -93,7 +93,7 @@ class GPTSelfAttention1D(nn.Module):
         num_attention_heads = divide(all_head_size, self.attention_head_size)  # num_heads
 
         new_qkv_shape = qkv.shape[:-1] + \
-            (num_attention_heads, 3 * self.attention_head_size)
+                        (num_attention_heads, 3 * self.attention_head_size)
         qkv = qkv.view(new_qkv_shape)
         qkv = qkv.permute((0, 2, 1, 3))
         q, k, v = torch.chunk(qkv, 3, dim=-1)
@@ -113,7 +113,6 @@ class GPTSelfAttention1D(nn.Module):
             if attention_mask is not None:
                 x = x + attention_mask
             x = self.softmax(x)
-
 
         x = torch.matmul(x, v)
         x = x.transpose(1, 2)
@@ -159,15 +158,15 @@ class GPTBlock1D(nn.Module):
                  apply_post_layernorm: bool = False,
                  fuse_scale_mask_softmax: bool = False):
         super().__init__()
-        
+
         self.apply_post_layernorm = apply_post_layernorm
         # self.norm1 = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
         self.norm1 = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
         self.attn = GPTSelfAttention1D(dim=dim,
-                                     num_heads=num_heads,
-                                     bias=bias,
-                                     fuse_scale_mask_softmax=fuse_scale_mask_softmax,
-                                     dtype=dtype)
+                                       num_heads=num_heads,
+                                       bias=bias,
+                                       fuse_scale_mask_softmax=fuse_scale_mask_softmax,
+                                       dtype=dtype)
 
         # self.norm2 = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
         self.norm2 = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
@@ -211,7 +210,6 @@ class GPTLMHead1D(nn.Module):
         return x
 
 
-
 class GPT1D(nn.Module):
 
     def __init__(self,
@@ -230,30 +228,45 @@ class GPT1D(nn.Module):
                  fuse_scale_mask_softmax: bool = False) -> None:
         super().__init__()
         self.embed = GPTEmbedding1D(embedding_dim=dim,
-                                  vocab_size=vocab_size,
-                                  max_position_embeddings=max_position_embeddings,
-                                  padding_idx=padding_idx,
-                                  dtype=dtype)
-
-        self.blocks = nn.ModuleList([
-            GPTBlock1D(
-                dim=dim,
-                num_heads=num_heads,
-                mlp_ratio=mlp_ratio,
-                activation=activation,
-                layernorm_epsilon=layernorm_epsilon,
-                dtype=dtype,
-                bias=bias,
-                apply_post_layernorm=apply_post_layernorm,
-                fuse_scale_mask_softmax=fuse_scale_mask_softmax,
-            ) for _ in range(depth)
-        ])       
+                                    vocab_size=vocab_size,
+                                    max_position_embeddings=max_position_embeddings,
+                                    padding_idx=padding_idx,
+                                    dtype=dtype)
+        self.blocks = nn.ModuleList()
+        self.pp_rank = gpc.get_local_rank(ParallelMode.PIPELINE)
+        for id_ in range(depth):
+            self.blocks.register_module("blk_{}".format(id_ + self.pp_rank * depth),
+                                        GPTBlock1D(
+                                            dim=dim,
+                                            num_heads=num_heads,
+                                            mlp_ratio=mlp_ratio,
+                                            activation=activation,
+                                            layernorm_epsilon=layernorm_epsilon,
+                                            dtype=dtype,
+                                            bias=bias,
+                                            apply_post_layernorm=apply_post_layernorm,
+                                            fuse_scale_mask_softmax=fuse_scale_mask_softmax,
+                                        )
+                                        )
+        # self.blocks = nn.ModuleList([
+        #     GPTBlock1D(
+        #         dim=dim,
+        #         num_heads=num_heads,
+        #         mlp_ratio=mlp_ratio,
+        #         activation=activation,
+        #         layernorm_epsilon=layernorm_epsilon,
+        #         dtype=dtype,
+        #         bias=bias,
+        #         apply_post_layernorm=apply_post_layernorm,
+        #         fuse_scale_mask_softmax=fuse_scale_mask_softmax,
+        #     ) for _ in range(depth)
+        # ])
         # self.norm = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
         self.norm = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
         self.head = GPTLMHead1D(dim=dim,
-                              vocab_size=vocab_size,
-                              word_embeding_weight=self.embed.word_embedding_weight,
-                              dtype=dtype)
+                                vocab_size=vocab_size,
+                                word_embeding_weight=self.embed.word_embedding_weight,
+                                dtype=dtype)
 
     def forward(self, input_ids, attention_mask=None):
         x = self.embed(input_ids)
@@ -262,7 +275,7 @@ class GPT1D(nn.Module):
             batch_size = input_ids.shape[0]
             attention_mask = attention_mask.view(batch_size, -1)
             attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
-            attention_mask = attention_mask.to(dtype=x.dtype)    # fp16 compatibility
+            attention_mask = attention_mask.to(dtype=x.dtype)  # fp16 compatibility
             attention_mask = (1.0 - attention_mask) * -10000.0
 
         for block in self.blocks:
@@ -276,7 +289,7 @@ class GPT1D(nn.Module):
 class PipelineGPT1D(nn.Module):
 
     def __init__(self,
-                 vocab_size: int = 50304,
+                 vocab_size: int = 50257,
                  max_position_embeddings: int = 1024,
                  dim: int = 768,
                  num_heads: int = 12,
@@ -296,29 +309,44 @@ class PipelineGPT1D(nn.Module):
         self.last = last
         if first:
             self.embed = GPTEmbedding1D(embedding_dim=dim,
-                                      vocab_size=vocab_size,
-                                      max_position_embeddings=max_position_embeddings,
-                                      padding_idx=padding_idx,
-                                      dtype=dtype)
-
-        self.blocks = nn.ModuleList([
-            GPTBlock1D(
-                dim=dim,
-                num_heads=num_heads,
-                mlp_ratio=mlp_ratio,
-                activation=activation,
-                layernorm_epsilon=layernorm_epsilon,
-                dtype=dtype,
-                bias=bias,
-                apply_post_layernorm=apply_post_layernorm,
-                fuse_scale_mask_softmax=fuse_scale_mask_softmax,
-            ) for _ in range(depth)
-        ])
+                                        vocab_size=vocab_size,
+                                        max_position_embeddings=max_position_embeddings,
+                                        padding_idx=padding_idx,
+                                        dtype=dtype)
+        self.blocks = nn.ModuleList()
+        self.pp_rank = gpc.get_local_rank(ParallelMode.PIPELINE) if is_using_pp() else 0
+        for id_ in range(depth):
+            self.blocks.register_module("blk_{}".format(id_ + self.pp_rank * depth),
+                                        GPTBlock1D(
+                                            dim=dim,
+                                            num_heads=num_heads,
+                                            mlp_ratio=mlp_ratio,
+                                            activation=activation,
+                                            layernorm_epsilon=layernorm_epsilon,
+                                            dtype=dtype,
+                                            bias=bias,
+                                            apply_post_layernorm=apply_post_layernorm,
+                                            fuse_scale_mask_softmax=fuse_scale_mask_softmax,
+                                        )
+                                        )
+        # self.blocks = nn.ModuleList([
+        #     GPTBlock1D(
+        #         dim=dim,
+        #         num_heads=num_heads,
+        #         mlp_ratio=mlp_ratio,
+        #         activation=activation,
+        #         layernorm_epsilon=layernorm_epsilon,
+        #         dtype=dtype,
+        #         bias=bias,
+        #         apply_post_layernorm=apply_post_layernorm,
+        #         fuse_scale_mask_softmax=fuse_scale_mask_softmax,
+        #     ) for _ in range(depth)
+        # ])
         if self.last:
             # self.norm = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
             self.norm = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
-            self.head = GPTLMHead1D(dim=dim, vocab_size=vocab_size, dtype=dtype)   # word_embeeding_weight=self.embed.word_embedding_weight not in the same process
-
+            self.head = GPTLMHead1D(dim=dim, vocab_size=vocab_size,
+                                    dtype=dtype)  # word_embeeding_weight=self.embed.word_embedding_weight not in the same process
 
     def forward(self, hidden_states=None, input_ids=None, attention_mask=None):
         if self.first:
@@ -335,7 +363,7 @@ class PipelineGPT1D(nn.Module):
                 batch_size = hidden_states.shape[0]
             attention_mask = attention_mask.view(batch_size, -1)
             attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
-            attention_mask = attention_mask.to(dtype=hidden_states.dtype)    # fp16 compatibility
+            attention_mask = attention_mask.to(dtype=hidden_states.dtype)  # fp16 compatibility
             attention_mask = (1.0 - attention_mask) * -10000.0
 
         for block in self.blocks:
@@ -346,13 +374,14 @@ class PipelineGPT1D(nn.Module):
 
         return hidden_states
 
+
 def partition_uniform(num_items, pipeline_parallel_size, num_chunks):
     assert num_items % num_chunks == 0, \
         "Layer length should be divided by the number of chunks, otherwise parameter method is recomended"
 
     logger = get_dist_logger()
-    parts = [[] for _ in range(pipeline_parallel_size)] # 4
-    partition_items = num_items // num_chunks # 96 // 2
+    parts = [[] for _ in range(pipeline_parallel_size)]  # 4
+    partition_items = num_items // num_chunks  # 96 // 2
     for idx in range(num_chunks):
         base_idx = idx * partition_items
         chunk_size = partition_items // pipeline_parallel_size
@@ -366,6 +395,7 @@ def partition_uniform(num_items, pipeline_parallel_size, num_chunks):
             parts[p].append((st, base_idx))
 
     return parts
+
 
 def _create_gpt_pipeline_model(depth=48, num_chunks=1, layer_partitions=None, **model_kwargs):
     logger = get_dist_logger()
@@ -422,16 +452,17 @@ def gpt2_large(**kwargs):
     model_kwargs = dict(dim=1536, depth=36, num_heads=12, **kwargs)
     return _create_gpt_pipeline_model(**model_kwargs)
 
+
 def gpt2_xl(**kwargs):
     model_kwargs = dict(dim=1600, depth=48, num_heads=16, **kwargs)
     return _create_gpt_pipeline_model(**model_kwargs)
+
 
 def gpt2_8B(**kwargs):
     model_kwargs = dict(dim=3072, depth=72, num_heads=24, **kwargs)
     return _create_gpt_pipeline_model(**model_kwargs)
 
+
 def gpt3(**kwargs):
     model_kwargs = dict(dim=12288, depth=96, num_heads=96, **kwargs)
     return _create_gpt_pipeline_model(**model_kwargs)
-
-

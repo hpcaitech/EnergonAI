@@ -24,7 +24,8 @@ from ..utils import divide, set_tensor_parallel_attribute_by_partition
 from ._operation import FusedLayerNormAffineFunction1D
 from ._utils import (gather_forward_split_backward, get_parallel_input, reduce_grad, reduce_input, set_parallel_input,
                      split_forward_gather_backward)
-from energon.utils.checkpointing import partition_tensor_parallel_state_dict, gather_tensor_parallel_state_dict
+from energon.utils.checkpointing import partition_tensor_parallel_state_dict, gather_tensor_parallel_state_dict, \
+    broadcast_state_dict
 
 
 class Linear1D(torch.nn.Module):
@@ -509,7 +510,7 @@ class MixedFusedLayerNorm1D(torch.nn.Module):
 
         if isinstance(normalized_shape, numbers.Integral):
             normalized_shape = (normalized_shape, )
-        self.normalized_shape = torch.Size(normalized_shape)
+            self.normalized_shape = torch.Size(normalized_shape)
         self.eps = eps
         self.weight = Parameter(torch.Tensor(*normalized_shape))
         self.bias = Parameter(torch.Tensor(*normalized_shape))
@@ -520,23 +521,26 @@ class MixedFusedLayerNorm1D(torch.nn.Module):
         init.zeros_()(self.bias)
 
     def _save_to_state_dict(self, destination, prefix, keep_vars):
-        weight_key = prefix + 'weight'
-        bias_key = prefix + 'bias'
-        local_state = OrderedDict({weight_key: self.weight})
-        if self.bias is not None:
-            local_state[bias_key] = self.bias
-        local_state = gather_tensor_parallel_state_dict(local_state,
-                                                        ParallelMode.PARALLEL_1D,
-                                                        dims={
-                                                            weight_key: 0,
-                                                            bias_key: 0
-                                                        },
-                                                        partition_states={
-                                                            weight_key: True,
-                                                            bias_key: True
-                                                        },
-                                                        keep_vars=keep_vars)
-        destination.update(local_state)
+        if gpc.get_local_rank(ParallelMode.TENSOR) == 0:
+            super()._save_to_state_dict(destination, prefix, keep_vars)
+
+        # weight_key = prefix + 'weight'
+        # bias_key = prefix + 'bias'
+        # local_state = OrderedDict({weight_key: self.weight})
+        # if self.bias is not None:
+        #     local_state[bias_key] = self.bias
+        # local_state = gather_tensor_parallel_state_dict(local_state,
+        #                                                 ParallelMode.PARALLEL_1D,
+        #                                                 dims={
+        #                                                     weight_key: -1,
+        #                                                     bias_key: -1
+        #                                                 },
+        #                                                 partition_states={
+        #                                                     weight_key: True,
+        #                                                     bias_key: True
+        #                                                 },
+        #                                                 keep_vars=keep_vars)
+        # destination.update(local_state)
 
     def _load_from_state_dict(self, state_dict, prefix, *args):
         local_state = OrderedDict()
@@ -548,22 +552,38 @@ class MixedFusedLayerNorm1D(torch.nn.Module):
             if weight is not None:
                 local_state[weight_key] = weight
             # bias
-            if self.bias is not None:
-                bias = state_dict.pop(bias_key, None)
-                if bias is not None:
-                    local_state[bias_key] = bias
+            bias = state_dict.pop(bias_key, None)
+            if bias is not None:
+                local_state[bias_key] = bias
 
-        local_state = partition_tensor_parallel_state_dict(local_state,
-                                                           ParallelMode.PARALLEL_1D,
-                                                           dims={
-                                                               weight_key: 0,
-                                                               bias_key: 0
-                                                           },
-                                                           partition_states={
-                                                               weight_key: True,
-                                                               bias_key: True
-                                                           })
+        local_state = broadcast_state_dict(local_state, ParallelMode.PARALLEL_1D)
         super()._load_from_state_dict(local_state, prefix, *args)
+
+        # local_state = OrderedDict()
+        # weight_key = prefix + 'weight'
+        # bias_key = prefix + 'bias'
+        # if gpc.get_local_rank(ParallelMode.TENSOR) == 0:
+        #     # weight
+        #     weight = state_dict.pop(weight_key, None)
+        #     if weight is not None:
+        #         local_state[weight_key] = weight
+        #     # bias
+        #     if self.bias is not None:
+        #         bias = state_dict.pop(bias_key, None)
+        #         if bias is not None:
+        #             local_state[bias_key] = bias
+        #
+        # local_state = partition_tensor_parallel_state_dict(local_state,
+        #                                                    ParallelMode.PARALLEL_1D,
+        #                                                    dims={
+        #                                                        weight_key: -1,
+        #                                                        bias_key: -1
+        #                                                    },
+        #                                                    partition_states={
+        #                                                        weight_key: True,
+        #                                                        bias_key: True
+        #                                                    })
+        # super()._load_from_state_dict(local_state, prefix, *args)
 
 
     def forward(self, input):

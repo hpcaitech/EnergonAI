@@ -9,6 +9,7 @@ from energon.core import global_context as gpc
 from energon.logging import get_dist_logger
 from energon.nn.layer.utils import divide, ACT2FN
 from energon.nn import Linear1D_Col, Linear1D_Row, Classifier1D
+from energon.nn import LayerNorm1D
 from energon.nn import VocabParallelEmbedding1D
 from energon.utils import get_current_device
 
@@ -36,7 +37,8 @@ class BertEmbedding1D(nn.Module):
         else:
             self.tokentype_embeddings = None
 
-        self.LayerNorm = nn.LayerNorm(embedding_dim, eps=layernorm_epsilon, dtype=dtype)
+        # self.LayerNorm = nn.LayerNorm(embedding_dim, eps=layernorm_epsilon, dtype=dtype)
+        self.LayerNorm = LayerNorm1D(embedding_dim, eps=layernorm_epsilon)
 
     def forward(self, input_ids, position_ids=None, tokentype_ids=None):
         seq_length = input_ids.size(1)
@@ -76,7 +78,8 @@ class BertSelfAttention1D(nn.Module):
             raise NotImplementedError 
         
         self.dense = Linear1D_Row(hidden_size, hidden_size, bias=True, dtype=dtype, parallel_input=True)
-        self.LayerNorm = nn.LayerNorm(hidden_size, eps=layernorm_epsilon)
+        # self.LayerNorm = nn.LayerNorm(hidden_size, eps=layernorm_epsilon)
+        self.LayerNorm = LayerNorm1D(hidden_size, eps=layernorm_epsilon)
 
 
     def forward(self, hidden_states, attention_mask=None):
@@ -128,7 +131,8 @@ class BertMLP1D(nn.Module):
         self.layer_0 = Linear1D_Col(hidden_size, intermediate_dim, bias=bias, dtype=dtype, gather_output=False)
         self.activation = activation
         self.layer_1 = Linear1D_Row(intermediate_dim, hidden_size, bias=bias,dtype=dtype, parallel_input=True)
-        self.LayerNorm = nn.LayerNorm(hidden_size, eps=layernorm_epsilon)
+        # self.LayerNorm = nn.LayerNorm(hidden_size, eps=layernorm_epsilon)
+        self.LayerNorm = LayerNorm1D(hidden_size, eps=layernorm_epsilon)
 
     def forward(self, input_tensor):
         hidden_states = self.layer_0(input_tensor)

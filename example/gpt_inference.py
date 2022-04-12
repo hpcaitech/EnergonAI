@@ -10,12 +10,6 @@ from energon.context import ParallelMode
 from energon.initialize import launch_from_torch
 from energon.utils import get_timers
 
-
-
-
-
-
-
 MODEL_CLASSES = {
     "gpt2_small": gpt2_small,
     "gpt2_medium": gpt2_medium,

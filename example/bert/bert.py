@@ -289,7 +289,7 @@ def _create_bert_pipeline_model(depth=48, num_chunks=1, layer_partitions=None, *
     numel = 0
     for _, param in model.named_parameters(recurse=True):
         numel += param.numel()
-    logger.info(f'Rank{rank}/{pipeline_rank} model size = {numel * 2 / 1e9} GB')
+    logger.info(f'Rank{rank}/{pipeline_rank} model size in FP16 = {numel * 2 / 1e9} GB')
     return model
 
 def bert_small(**kwargs):

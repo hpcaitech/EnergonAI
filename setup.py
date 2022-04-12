@@ -149,4 +149,8 @@ setup(
     ext_modules=ext_modules,
     cmdclass={'build_ext': BuildExtension} if ext_modules else {},
     install_requires=fetch_requirements('requirements.txt'),
+    entry_points='''
+        [console_scripts]
+        energon=energon.cli:typer_click_object
+    '''
 )

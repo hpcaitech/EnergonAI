@@ -14,7 +14,7 @@ export PYTHONPATH=/home/lcdjs/ColossalAI-Inference/example
 for ((i=1; i<${world_size}; i++))  
 do
 server_port=`expr $server_port_start + $i`
-uvicorn server:app --app-dir /home/lcdjs/ColossalAI-Inference/energon/engine/ --port ${server_port} &
+python3 /home/lcdjs/ColossalAI-Inference/energon/engine/server.py --port ${server_port} &
 echo "process: ${i} launches"
 done
 

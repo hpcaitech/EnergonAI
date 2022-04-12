@@ -123,6 +123,10 @@ if build_cuda_ext:
                                             'scale_mask_softmax_wrapper.cpp'],
                                             extra_cuda_flags + cc_flag))
 
+        ext_modules.append(cuda_ext_helper('energon_layer_norm',
+                                            ['layer_norm_cuda_kernel.cu', 'layer_norm_cuda.cpp'],
+                                            extra_cuda_flags + cc_flag))
+
         ext_modules.append(cuda_ext_helper('energon_transpose_pad',
                                             ['transpose_pad_fusion_wrapper.cpp', 'transpose_pad_fusion_kernel.cu'],
                                             extra_cuda_flags + cc_flag))

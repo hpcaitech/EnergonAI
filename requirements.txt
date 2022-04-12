@@ -4,4 +4,4 @@ tqdm
 psutil
 packaging
 fastapi
-uvicorn
+uvicorn==0.14

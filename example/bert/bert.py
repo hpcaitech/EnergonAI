@@ -1,6 +1,7 @@
 import math
 from typing import Callable
 
+import os
 import torch
 from torch import nn as nn, Tensor, dtype
 
@@ -20,6 +21,9 @@ __all__ = [
     'BertTransformerLayer1D'
 ]
 
+from energon.utils.checkpointing import load_checkpoint
+
+
 class BertEmbedding1D(nn.Module):
     def __init__(self,
                  embedding_dim: int, # hidden_size
@@ -30,8 +34,8 @@ class BertEmbedding1D(nn.Module):
                  layernorm_epsilon: float = 1e-5,
                  dtype: dtype = None) -> None:
         super().__init__()
-        self.word_embeddings = VocabParallelEmbedding1D(vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype)
-        self.position_embeddings = VocabParallelEmbedding1D(max_position_embeddings, embedding_dim, dtype=dtype)
+        self.word_embeddings = VocabParallelEmbedding1D(vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype, skip_tp=True)
+        self.position_embeddings = VocabParallelEmbedding1D(max_position_embeddings, embedding_dim, dtype=dtype, skip_tp=True)
         if num_tokentypes > 0:
             self.tokentype_embeddings = VocabParallelEmbedding1D(num_tokentypes, embedding_dim, dtype=dtype)
         else:
@@ -191,7 +195,7 @@ class PipelineBert1D(nn.Module):
                  bias: bool = True,
                  fuse_scale_mask_softmax: bool = False,
                  first: bool = False,
-                 last: bool = False):
+                 last: bool = False, **kwargs):
         super().__init__()
         self.first = first
         self.last = last
@@ -203,19 +207,33 @@ class PipelineBert1D(nn.Module):
                                       padding_idx=padding_idx,
                                       layernorm_epsilon=layernorm_epsilon,
                                       dtype=dtype)
-
-        self.blocks = nn.ModuleList([
-            BertTransformerLayer1D(
-                hidden_size=hidden_size,
-                num_heads=num_heads,
-                mlp_ratio=mlp_ratio,
-                activation=activation,
-                layernorm_epsilon=layernorm_epsilon,
-                dtype=dtype,
-                bias=bias,
-                fuse_scale_mask_softmax=fuse_scale_mask_softmax,
-            ) for _ in range(depth)
-        ])
+        self.blocks = nn.ModuleList()
+        self.pp_rank = gpc.get_local_rank(ParallelMode.PIPELINE)
+        for id_ in range(depth):
+            self.blocks.register_module("blk_{}".format(id_ + self.pp_rank * depth),
+                                        BertTransformerLayer1D(
+                                            hidden_size=hidden_size,
+                                            num_heads=num_heads,
+                                            mlp_ratio=mlp_ratio,
+                                            activation=activation,
+                                            layernorm_epsilon=layernorm_epsilon,
+                                            dtype=dtype,
+                                            bias=bias,
+                                            fuse_scale_mask_softmax=fuse_scale_mask_softmax,
+                                        )
+                                        )
+        # self.blocks = nn.ModuleList([
+        #     BertTransformerLayer1D(
+        #         hidden_size=hidden_size,
+        #         num_heads=num_heads,
+        #         mlp_ratio=mlp_ratio,
+        #         activation=activation,
+        #         layernorm_epsilon=layernorm_epsilon,
+        #         dtype=dtype,
+        #         bias=bias,
+        #         fuse_scale_mask_softmax=fuse_scale_mask_softmax,
+        #     ) for _ in range(depth)
+        # ])
 
         # if self.last:
         #     self.norm = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
@@ -289,6 +307,13 @@ def _create_bert_pipeline_model(depth=48, num_chunks=1, layer_partitions=None, *
     numel = 0
     for _, param in model.named_parameters(recurse=True):
         numel += param.numel()
+
+    if "checkpoint" in model_kwargs.keys():
+        if model_kwargs["checkpoint"] is True:
+            assert "checkpoint_path" in model_kwargs.keys(), "You have to specify a file path to use checkpoint loading"
+            assert os.path.exists(model_kwargs["checkpoint_path"]), "Checkpoint file not found"
+            load_checkpoint(model_kwargs["checkpoint_path"], model, **model_kwargs)
+
     logger.info(f'Rank{rank}/{pipeline_rank} model size in FP16 = {numel * 2 / 1e9} GB')
     return model
 

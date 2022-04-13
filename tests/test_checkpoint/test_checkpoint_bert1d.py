@@ -33,8 +33,19 @@ def check_bert_1d(rank, world_size, port):
     sd1 = m1.state_dict(prefix=state_prefix)
     for name, param in m1.named_parameters(prefix=parameter_prefix):
         print("RANK {}: {}, {}".format(gpc.get_global_rank(), name, param.size()))
-    save_checkpoint("gpt_test.pt", 0, m1, prefix=state_prefix)
+    save_checkpoint("bert_test.pt", 0, m1, prefix=state_prefix)
     print("Rank {} building second GPT".format(gpc.get_global_rank()))
+    m2 = bert_small(checkpoint=True, checkpoint_path="bert_test.pt", prefix=parameter_prefix)
+    sd2 = m2.state_dict(prefix=state_prefix)
+    if is_using_pp() and gpc.get_local_rank(ParallelMode.TENSOR) == 0:
+        sd2 = gather_pipeline_parallel_state_dict(sd2)
+    # print("Rank {} : {}".format(gpc.get_global_rank(), sd2))
+    print("Rank {} gather done".format(gpc.get_global_rank()))
+    # print(f'Rank {gpc.get_global_rank()}:{pprint.pformat(sd2)}')
+    if gpc.get_global_rank() == 0:
+        for k, v in sd1.items():
+            assert k in sd2
+            check_equal(v.to(torch.device("cpu")), sd2[k].to(torch.device("cpu")))
 
 def test_bert():
     world_size = 4

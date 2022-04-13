@@ -4,6 +4,8 @@ import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
 
+from energon.context import ParallelMode
+from energon.core import global_context as gpc
 
 from energon.utils import get_timers
 from example.gpt.gpt import gpt2_small, gpt2_medium, gpt2_large, gpt2_xl, gpt2_8B, gpt3

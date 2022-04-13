@@ -3,12 +3,13 @@ import torch
 from torch import nn as nn, Tensor, distributed as dist
 from torch.nn import functional as F
 import torch.nn.init as init
-
+from collections import OrderedDict
 from torch.nn.parameter import Parameter
 
 from energon.core import global_context as gpc
 from energon.context import ParallelMode
 from energon.utils import get_current_device
+from energon.utils.checkpointing import partition_tensor_parallel_state_dict, gather_tensor_parallel_state_dict
 from ..base_layer import ParallelLayer
 from .layers import Linear1D_Row
 from energon.nn.layer.utils import divide
@@ -36,7 +37,7 @@ class VocabParallelEmbedding(torch.nn.Module):
                  max_sequence_length,
                  embedding_dropout_prob,
                  num_tokentypes=0,
-                 dtype=torch.float):
+                 dtype=torch.float, skip_tp=False):
         super(VocabParallelEmbedding, self).__init__()
 
         self.hidden_size = hidden_size
@@ -44,7 +45,7 @@ class VocabParallelEmbedding(torch.nn.Module):
 
         # Word embeddings (parallel).
         self.word_embeddings = VocabParallelEmbedding1D(
-            vocab_size, self.hidden_size, dtype=dtype)
+            vocab_size, self.hidden_size, dtype=dtype, skip_tp=skip_tp)
         self._word_embeddings_key = 'word_embeddings'
 
         # Position embedding (serial).
@@ -192,7 +193,7 @@ class VocabParallelEmbedding1D(torch.nn.Module):
     """
 
     def __init__(self, num_embeddings, embedding_dim, padding_idx=None, dtype=None,
-                 init_method=None):
+                 init_method=None, skip_tp=False):
         super(VocabParallelEmbedding1D, self).__init__()
         # Keep the input dimensions.
         self.num_embeddings = num_embeddings
@@ -204,12 +205,13 @@ class VocabParallelEmbedding1D(torch.nn.Module):
         self.scale_grad_by_freq = False
         self.sparse = False
         self._weight = None
+        self.skip_tp = skip_tp
         self.tensor_model_parallel_size = gpc.tensor_parallel_size
         # Divide the weight matrix along the vocaburaly dimension.
         self.vocab_start_index, self.vocab_end_index = \
             VocabUtility.vocab_range_from_global_vocab_size(
                 self.num_embeddings, gpc.get_local_rank(ParallelMode.PARALLEL_1D),
-                self.tensor_model_parallel_size)
+                self.tensor_model_parallel_size) if not skip_tp else 0, num_embeddings
         self.num_embeddings_per_partition = self.vocab_end_index - \
             self.vocab_start_index
 
@@ -241,6 +243,32 @@ class VocabParallelEmbedding1D(torch.nn.Module):
         # Reduce across all the model parallel GPUs.
         output = output = reduce_input(output_parallel, ParallelMode.PARALLEL_1D)
         return output
+
+    def _load_from_state_dict(self, state_dict, prefix, *args):
+        local_state = OrderedDict()
+        weight_key = prefix + 'weight'
+        if gpc.get_local_rank(ParallelMode.TENSOR) == 0:
+            # weight
+            weight = state_dict.pop(weight_key, None)
+            if weight is not None:
+                local_state[weight_key] = weight
+        pt_states = {weight_key: True} if not self.skip_tp else {weight_key: False}
+        local_state = partition_tensor_parallel_state_dict(local_state,
+                                                           ParallelMode.PARALLEL_1D,
+                                                           dims={weight_key: -1},
+                                                           partition_states=pt_states)
+        super()._load_from_state_dict(local_state, prefix, *args)
+
+    def _save_to_state_dict(self, destination, prefix, keep_vars):
+        weight_key = prefix + 'weight'
+        pt_states = {weight_key: True} if not self.skip_tp else {weight_key: False}
+        local_state = OrderedDict({weight_key: self.weight})
+        local_state = gather_tensor_parallel_state_dict(local_state,
+                                                        ParallelMode.PARALLEL_1D,
+                                                        dims={weight_key: -1},
+                                                        partition_states=pt_states,
+                                                        keep_vars=keep_vars)
+        destination.update(local_state)
 
 
 

@@ -12,7 +12,7 @@ from energon.nn.layer.utils import divide, ACT2FN
 from energon.nn import Linear1D_Col, Linear1D_Row, Classifier1D
 from energon.nn import LayerNorm1D
 from energon.nn import VocabParallelEmbedding1D
-from energon.utils import get_current_device
+from energon.utils import get_current_device, is_using_pp
 
 __all__ = [
     'BertEmbedding1D'
@@ -208,7 +208,7 @@ class PipelineBert1D(nn.Module):
                                       layernorm_epsilon=layernorm_epsilon,
                                       dtype=dtype)
         self.blocks = nn.ModuleList()
-        self.pp_rank = gpc.get_local_rank(ParallelMode.PIPELINE)
+        self.pp_rank = gpc.get_local_rank(ParallelMode.PIPELINE) if is_using_pp() else 0
         for id_ in range(depth):
             self.blocks.register_module("blk_{}".format(id_ + self.pp_rank * depth),
                                         BertTransformerLayer1D(
@@ -310,8 +310,9 @@ def _create_bert_pipeline_model(depth=48, num_chunks=1, layer_partitions=None, *
 
     if "checkpoint" in model_kwargs.keys():
         if model_kwargs["checkpoint"] is True:
-            assert "checkpoint_path" in model_kwargs.keys(), "You have to specify a file path to use checkpoint loading"
-            assert os.path.exists(model_kwargs["checkpoint_path"]), "Checkpoint file not found"
+            if gpc.get_global_rank() == 0:
+                assert "checkpoint_path" in model_kwargs.keys(), "You have to specify a file path to use checkpoint loading"
+                assert os.path.exists(model_kwargs["checkpoint_path"]), "Checkpoint file not found"
             load_checkpoint(model_kwargs["checkpoint_path"], model, **model_kwargs)
 
     logger.info(f'Rank{rank}/{pipeline_rank} model size in FP16 = {numel * 2 / 1e9} GB')

@@ -27,6 +27,10 @@ $ bash run_gpt.sh
 
 ### Contributing
 
+If interested in making your own contribution to the project, please refer to [Contributing](./CONTRIBUTING.md) for guidance.
+
+Thanks so much to all of our amazing contributors!
+
 ### Technical Overview
 
 <div  align="center">    

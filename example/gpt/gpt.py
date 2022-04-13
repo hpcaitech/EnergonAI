@@ -431,8 +431,10 @@ def _create_gpt_pipeline_model(depth=48, num_chunks=1, layer_partitions=None, **
         numel += param.numel()
     if "checkpoint" in model_kwargs.keys():
         if model_kwargs["checkpoint"] is True:
-            assert "checkpoint_path" in model_kwargs.keys(), "You have to specify a file path to use checkpoint loading"
-            assert os.path.exists(model_kwargs["checkpoint_path"]), "Checkpoint file not found"
+            if gpc.get_global_rank() == 0:
+                assert "checkpoint_path" in model_kwargs.keys(), "You have to specify a file path to use checkpoint loading"
+                print(model_kwargs["checkpoint_path"])
+                assert os.path.exists(model_kwargs["checkpoint_path"]), "Checkpoint file not found"
             load_checkpoint(model_kwargs["checkpoint_path"], model, **model_kwargs)
     logger.info(f'Rank{rank}/{pipeline_rank} model size = {numel * 2 / 1e9} GB')
     return model

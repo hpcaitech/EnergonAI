@@ -1,9 +1,11 @@
 import os
+import uvicorn
 from fastapi import FastAPI
 import torch.distributed.rpc as rpc
 from energon.initialize import launch_from_multiprocess
 
 app = FastAPI() # 创建 api 对象
+
 
 
 @app.get("/") # 根路由
@@ -24,9 +26,18 @@ def init(tp_size: int, pp_size: int, backend: str, seed: int, verbose: bool, ran
             num_worker_threads=16)
     rpc.init_rpc(WORKER_NAME.format(rank), rank=rank, world_size=world_size, rpc_backend_options=rpc_backend_options)        
     rpc.shutdown()
-    return {"Start!"}
+    # print(f'{WORKER_NAME.format(rank)} Start!')
+    return {f'{WORKER_NAME.format(rank)} Start!'}
 
-# @app.get("/stop")
-# def shutDown():
-#     rpc.shutdown()
-#     return {"Stop!"}
+@app.get("/shutdown")
+async def shutdown():
+    server.should_exit = True
+    server.force_exit = True
+    await server.shutdown()
+    
+
+def launch_worker(host="127.0.0.1", port=8005, log_level="info"):
+    global server
+    config = uvicorn.Config(app, host=host, port=port, log_level=log_level)
+    server = uvicorn.Server(config=config)
+    server.run()

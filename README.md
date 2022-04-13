@@ -25,7 +25,7 @@ $ mv /examples/energon /opt/tritonserver/python_backend/models
 $ bash run_gpt.sh
 ```
 
-
+### Contributing
 
 ### Technical Overview
 

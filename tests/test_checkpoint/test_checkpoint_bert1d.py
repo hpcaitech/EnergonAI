@@ -27,8 +27,8 @@ def check_equal(A, B):
 def check_bert_1d(rank, world_size, port):
     disable_existing_loggers()
     launch(pp_size=2, tp_size=2, rank=rank, world_size=world_size, host="localhost", port=port, backend="nccl")
-    state_prefix = "rk_{}.".format(gpc.get_global_rank())
-    parameter_prefix = "rk_{}".format(gpc.get_global_rank())
+    state_prefix = ""
+    parameter_prefix = ""
     m1 = bert_small()
     sd1 = m1.state_dict(prefix=state_prefix)
     for name, param in m1.named_parameters(prefix=parameter_prefix):

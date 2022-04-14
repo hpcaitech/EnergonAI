@@ -1,5 +1,6 @@
 import os
 import uvicorn
+import argparse
 from fastapi import FastAPI
 import torch.distributed.rpc as rpc
 from energon.initialize import launch_from_multiprocess
@@ -41,3 +42,15 @@ def launch_worker(host="127.0.0.1", port=8005, log_level="info"):
     config = uvicorn.Config(app, host=host, port=port, log_level=log_level)
     server = uvicorn.Server(config=config)
     server.run()
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host", type=str, default="127.0.0.1", help="Iteration")
+    parser.add_argument("--port", type=int, default=8005, help="Port")
+    parser.add_argument("--log_level", default="info", type=str)
+    args = parser.parse_args()
+    launch_worker(args.host, args.port, args.log_level)
+
+if __name__ == "__main__":
+    main()

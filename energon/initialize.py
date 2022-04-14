@@ -118,7 +118,9 @@ def launch_from_multiprocess(tp_size: int = 1,
     here we provide the multiprocess launch.
     TODO: only support the single node condition now. 
     """
-
+    os.environ['MASTER_ADDR'] = host
+    os.environ['MASTER_PORT'] = f'{port}'
+    
     launch(local_rank=local_rank,
            rank=rank,
            world_size=world_size,

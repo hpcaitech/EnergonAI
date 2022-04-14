@@ -56,13 +56,13 @@ def launch_engine(model_name,
                 host: str = "localhost",
                 port: int = 29500,
                 dtype = torch.float,
-                checkpoint = None,
+                checkpoint: str = None,
                 server_host = "localhost",
                 server_port = 8005,
                 log_level = "info"
                 ):
     
-    model_config = {'dtype': dtype}
+    model_config = {'dtype': dtype, 'checkpoint': True, 'checkpoint_path': checkpoint}
     global engine
     engine = InferenceEngine(MODEL_CLASSES[model_name], 
                             model_config,
@@ -72,8 +72,7 @@ def launch_engine(model_name,
                             pp_init_size = pp_init_size, 
                             host = host,
                             port = port,
-                            dtype = dtype,
-                            checkpoint = checkpoint)
+                            dtype = dtype)
 
     global server
     config = uvicorn.Config(app, host=server_host, port=server_port, log_level=log_level)

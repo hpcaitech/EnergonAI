@@ -30,14 +30,12 @@ class InferenceEngine(Module):
                 pp_init_size: int = -1,
                 host: str = 'localhost',
                 port: int = 29500,
-                dtype=None,
-                checkpoint=None
+                dtype=None
                 ):
         """
         Args:
             model: torch.nn.Module
             dtype: data-type by which inference is executed
-            checkpoint: load parameter.
         """
         super().__init__()
         
@@ -45,7 +43,6 @@ class InferenceEngine(Module):
         self.model_config = model_config
         self.model_type = model_type
         self.dtype = dtype
-        self.checkpoint = checkpoint
         self.max_batch_size = max_batch_size
              
         # for gpc
@@ -78,7 +75,7 @@ class InferenceEngine(Module):
         for i in range(self.global_world_size):
             print(f'[INFO] rank{self.rank} calls rank{i} to init.')
             ob_info = rpc.get_worker_info(self.WORKER_NAME.format(i))
-            self.rrefs.append(rpc.remote(ob_info, RPCWorker, args=(self.model_class, self.model_config, self.model_type, self.dtype, self.checkpoint, self.max_batch_size)))
+            self.rrefs.append(rpc.remote(ob_info, RPCWorker, args=(self.model_class, self.model_config, self.model_type, self.dtype, self.max_batch_size)))
         
     def run(self, inputs): 
         res_rref = 0

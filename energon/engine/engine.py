@@ -1,4 +1,3 @@
-import os
 import time
 import torch
 from torch.nn import Module
@@ -68,9 +67,7 @@ class InferenceEngine(Module):
     def _init_dist_rpc(self):
         r'''
         Based on global_context, init the rpc connection.
-        '''
-        os.environ['MASTER_ADDR'] = self.host
-        os.environ['MASTER_PORT'] = f'{self.port}'        
+        '''      
         launch_from_multiprocess(tp_size = self.tp_size, pp_size = self.pp_size, rank = self.rank, local_rank = self.rank, world_size = self.global_world_size, host = self.host, port = self.port)
         rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
             num_worker_threads=16)

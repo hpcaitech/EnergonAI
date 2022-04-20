@@ -283,7 +283,7 @@ def save_checkpoint(file,
 
 
 def judge_t(key_):
-    key_words = ['attn.query_key_value.weight', 'mlp.dense_1.weight', 'mlp.dense_2.weight']
+    key_words = ['attn.query_key_value.weight', 'mlp.dense_1.weight', 'mlp.dense_2.weight', 'attn.dense.weight']
     for word_ in key_words:
         if word_ in key_:
             return True

@@ -52,7 +52,9 @@ class GPTEmbedding1D(nn.Module):
         x = self.word_embeddings(input_ids) + self.position_embeddings(position_ids)
         if self.tokentype_embeddings is not None and tokentype_ids is not None:
             x = x + self.tokentype_embeddings(tokentype_ids)
-
+        # print("wte: {}".format(self.word_embeddings(input_ids)))
+        # print("wpe: {}".format(self.position_embeddings(position_ids)))
+        # print("hidden_states: {}".format(x))
         return x
 
 
@@ -84,21 +86,36 @@ class GPTSelfAttention1D(nn.Module):
             self.softmax = nn.Softmax(dim=-1)
         self.dense = Linear1D_Row(dim, dim, bias=True, dtype=dtype, parallel_input=True)
 
+
+    def _split_heads(self, tensor, num_heads, attn_head_size):
+        new_shape = tensor.size()[:-1] + (num_heads, attn_head_size)
+        tensor = tensor.view(new_shape)
+        return tensor.permute(0, 2, 1, 3)  # (batch, head, seq_length, head_features)
+
+
     def forward(self, x, attention_mask=None):
+        # print("x: {}".format(x.shape))
         qkv = self.query_key_value(x)
 
         # print(f'qkv {qkv.shape}')
 
         all_head_size = qkv.shape[-1] // 3
         num_attention_heads = divide(all_head_size, self.attention_head_size)  # num_heads
-
-        new_qkv_shape = qkv.shape[:-1] + \
-                        (num_attention_heads, 3 * self.attention_head_size)
-        qkv = qkv.view(new_qkv_shape)
-        qkv = qkv.permute((0, 2, 1, 3))
-        q, k, v = torch.chunk(qkv, 3, dim=-1)
+        # print(self.attention_head_size)
+        # new_qkv_shape = qkv.shape[:-1] + \
+        #                 (num_attention_heads, 3 * self.attention_head_size)
+        # qkv = qkv.view(new_qkv_shape)
+        # qkv = qkv.permute((0, 2, 1, 3))
+        # print("qkv: {} {}".format(qkv.shape, qkv))
+        # q, k, v = torch.chunk(qkv, 3, dim=-1)
+        q, k, v = qkv.split(all_head_size, dim=2)
+        q = self._split_heads(q, num_attention_heads, self.attention_head_size)
+        k = self._split_heads(k, num_attention_heads, self.attention_head_size)
+        v = self._split_heads(v, num_attention_heads, self.attention_head_size)
         # print(f'qkv {qkv.shape}')   # 6 40 128
-
+        # print("q: {} {}".format(q.shape, q))
+        # print("k: {} {}".format(k.shape, k))
+        # print("v: {} {}".format(v.shape, v))
         x = torch.matmul(q, k.transpose(-1, -2))
 
         if self.fuse_scale_mask_softmax:
@@ -118,8 +135,9 @@ class GPTSelfAttention1D(nn.Module):
         x = x.transpose(1, 2)
         new_context_layer_shape = x.size()[:-2] + (all_head_size,)
         x = x.reshape(new_context_layer_shape)
-
+        # print("before mlp: {} {}".format(x.shape, x))
         x = self.dense(x)
+        # print("after mlp: {}".format(x))
 
         return x
 
@@ -176,17 +194,20 @@ class GPTBlock1D(nn.Module):
         if not self.apply_post_layernorm:
             residual = x
         x = self.norm1(x)
+        # print("after norm1: {}".format(x))
         if self.apply_post_layernorm:
             residual = x
         x = residual + self.attn(x, attention_mask)
 
         if not self.apply_post_layernorm:
             residual = x
+        # print("after attn: {}".format(x))
         x = self.norm2(x)
+        # print("after norm2: {}".format(x))
         if self.apply_post_layernorm:
             residual = x
         x = residual + self.mlp(x)
-
+        # print("after mlp: {}".format(x))
         return x, attention_mask
 
 
@@ -349,6 +370,8 @@ class PipelineGPT1D(nn.Module):
                                     dtype=dtype)  # word_embeeding_weight=self.embed.word_embedding_weight not in the same process
 
     def forward(self, hidden_states=None, input_ids=None, attention_mask=None):
+        # print("input ids:{}".format(input_ids))
+        # print("attention_mask: {}".format(attention_mask))
         if self.first:
             hidden_states = self.embed(input_ids)
 
@@ -365,8 +388,12 @@ class PipelineGPT1D(nn.Module):
             attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
             attention_mask = attention_mask.to(dtype=hidden_states.dtype)  # fp16 compatibility
             attention_mask = (1.0 - attention_mask) * -10000.0
-
+        # print("processed attention mask: {}".format(attention_mask))
+        clk_cnt = 0
         for block in self.blocks:
+            # print("="*30)
+            # print("processing blk {}".format(clk_cnt))
+            clk_cnt += 1
             hidden_states, attention_mask = block(hidden_states, attention_mask)
 
         if self.last:

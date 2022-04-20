@@ -20,12 +20,10 @@ class RPCWorker:
                  model_config,
                  model_type,
                  dtype,
-                 checkpoint,
                  max_batch_size:int  = 1) -> None:
         self.model_class = model_class
         self.model_config = model_config
         self.dtype = dtype
-        self.checkpoint = checkpoint
         self.max_batch_size = max_batch_size
         self.pipe_wrapper = WRAPPER_TYPES[model_type]
 

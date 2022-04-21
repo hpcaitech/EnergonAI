@@ -51,7 +51,7 @@ def build_gpt_model():
                     "checkpoint_path": "GPT2.bin",
                     "prefix": "",
                     "vocab_size": 50257,
-                    "HuggingFace": True}
+                    "HuggingFace": 'GPT2'}
     engine = InferenceEngine(model_class=gpt2_small,
                              model_config=model_config,
                              model_type='gpt',

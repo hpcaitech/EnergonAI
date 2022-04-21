@@ -7,7 +7,6 @@ from multiprocessing import  Process
 def service():
     pass
 
-
 @service.command()
 @click.option("--model_name", default="bert_small", type=str)
 @click.option("--model_type", default="bert", type=str)

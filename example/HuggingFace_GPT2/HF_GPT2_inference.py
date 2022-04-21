@@ -11,20 +11,16 @@ from energon.context import ParallelMode
 from energon.core import global_context as gpc
 
 from energon.utils import get_timers
-from example.gpt.gpt import gpt2_small, gpt2_medium, gpt2_large, gpt2_xl, gpt2_8B, gpt3
+# from example.gpt.gpt import gpt2_small, gpt2_medium, gpt2_large, gpt2_xl, gpt2_8B, gpt3
 from energon.logging import get_dist_logger
+from example.gpt.hf_gpt2 import hf_gpt2
 from functools import partial
 import re
 
 from energon.engine import InferenceEngine
 
 MODEL_CLASSES = {
-    "gpt2_small": gpt2_small,
-    "gpt2_medium": gpt2_medium,
-    "gpt2_large": gpt2_large,
-    "gpt2_xl": gpt2_xl,
-    "gpt2_8B": gpt2_8B,
-    "gpt3": gpt3
+    "hf_gpt2": hf_gpt2,
 }
 
 def select_top_k(predictions, k=10):
@@ -50,9 +46,9 @@ def build_gpt_model():
                     "checkpoint": True,
                     "checkpoint_path": "GPT2.bin",
                     "prefix": "",
-                    "vocab_size": 50257,
-                    "HuggingFace": True}
-    engine = InferenceEngine(model_class=gpt2_small,
+                    "vocab_size": 50257}
+                    # "HuggingFace": 'GPT2'}
+    engine = InferenceEngine(model_class=hf_gpt2,
                              model_config=model_config,
                              model_type='gpt',
                              max_batch_size=32,

@@ -298,7 +298,7 @@ class Linear1D_Col(ParallelLayer):
         # Set up backprop all-reduce.
         input_parallel = reduce_grad(input_, ParallelMode.PARALLEL_1D)
         # Matrix multiply.
-
+        # print("gathered Linear input: {}".format(input_parallel))
         bias = self.bias if not self.skip_bias_add else None
         output_parallel = F.linear(input_parallel, self.weight, bias)
         if self.gather_output:
@@ -480,7 +480,6 @@ class Linear1D_Row(ParallelLayer):
             input_ = input_
         else:
             input_ = split_forward_gather_backward(input_, ParallelMode.PARALLEL_1D, dim=-1)
-
         output_parallel = F.linear(input_, self.weight)
         output = reduce_input(output_parallel, ParallelMode.PARALLEL_1D)
 

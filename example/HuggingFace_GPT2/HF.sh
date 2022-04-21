@@ -1,6 +1,6 @@
 #!/bin/bash
 
-tp_size=1
+tp_size=2
 pp_size=2
 model=gpt2_small
 world_size=`expr $tp_size \* $pp_size`

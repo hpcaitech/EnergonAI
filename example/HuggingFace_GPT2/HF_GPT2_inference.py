@@ -64,7 +64,7 @@ def build_gpt_model():
     # tokenizer = GPT2Tokenizer(vocab_file="vocab.json", merges_file="merges.txt")
     # test_input = ["MANY YEARS LATER as he faced the firing squad, Colonel Aureliano Buendía was to remember that"
     #               for _ in range(10)]
-    test_input = "What the fuck"
+    test_input = "I do not"
     print(test_input)
     input_token = tokenizer(test_input, return_tensors="pt")
     # tokens_tensor = torch.tensor([input_token])
@@ -80,7 +80,7 @@ def build_gpt_model():
     predictions = output.to_here()
     predicted_index = select_top_k(predictions, k=1)
     total_predicted_text += tokenizer.decode(predicted_index)
-    # print(total_predicted_text)
+    print(total_predicted_text)
     # sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
     # sample = dict(hidden_states=hidden_states, input_ids=input_ids)
 

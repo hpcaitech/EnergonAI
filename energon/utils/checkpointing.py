@@ -201,8 +201,8 @@ def load_checkpoint(
         if kwargs['prefix'] != '':
             model_state = remove_prefix(model_state, kwargs["prefix"])
     # print("Rank {}: {}".format(gpc.get_global_rank(), model_state))
-    print("+"*30)
-    print(model_state.keys())
+    # print("+"*30)
+    # print(model_state.keys())
     try:
         model.load_state_dict(model_state, strict=strict)
     except RuntimeError as e:
@@ -277,9 +277,9 @@ def save_checkpoint(file,
 
         # if lr_scheduler is not None:
         #     checkpoint['lr_scheduler'] = lr_scheduler.state_dict()
-        print("before save")
+        # print("before save")
         torch.save(checkpoint, file, **kwargs)
-        print("after save")
+        # print("after save")
 
 
 def judge_t(key_):
@@ -296,13 +296,41 @@ def processing_HF_GPT(state_dict: OrderedDict):
         new_k = module_name_mapping(k_)
         if new_k == "":
             continue
+
+
         new_v = state_dict[k_]
         if judge_t(new_k):
             new_v = torch.transpose(new_v, 0, 1)
-        new_dict[new_k] = new_v
+        if "attn.query_key_value.weight" in new_k:
+            num_ = re.search(r"blocks\.blk_\d+?\.", new_k)
+            if num_:
+                prefix = num_.group()
+            else:
+                prefix = ''
+            # print("prefix: {}".format(prefix))
+            q_, k_, v_ = torch.chunk(new_v, 3, 0)
+            # new_dict[prefix + "attn.query_.weight"] = torch.transpose(q_, 0, 1)
+            # new_dict[prefix + "attn.key_.weight"] = torch.transpose(k_, 0, 1)
+            # new_dict[prefix + "attn.value_.weight"] = torch.transpose(v_, 0, 1)
+            new_dict[prefix + "attn.query_.weight"] = q_
+            new_dict[prefix + "attn.key_.weight"] = k_
+            new_dict[prefix + "attn.value_.weight"] = v_
+        elif "attn.query_key_value.bias" in new_k:
+            num_ = re.search(r"blocks\.blk_\d+?\.", new_k)
+            if num_:
+                prefix = num_.group()
+            else:
+                prefix = ''
+            print("prefix: {}".format(prefix))
+            q_, k_, v_ = torch.chunk(new_v, 3, 0)
+            new_dict[prefix + "attn.query_.bias"] = q_
+            new_dict[prefix + "attn.key_.bias"] = k_
+            new_dict[prefix + "attn.value_.bias"] = v_
+        else:
+            new_dict[new_k] = new_v
     new_dict['head.dense.weight'] = new_dict['embed.word_embeddings.weight'].clone()
-    print("="*100)
-    print(new_dict.keys())
+    # print("="*100)
+    # print(new_dict.keys())
     return {"model": new_dict, "epoch": 0}
 
 

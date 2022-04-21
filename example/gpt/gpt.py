@@ -69,8 +69,10 @@ class GPTSelfAttention1D(nn.Module):
         super().__init__()
         self.fuse_scale_mask_softmax = fuse_scale_mask_softmax  # TODO
         self.attention_head_size = divide(dim, num_heads)
-        self.query_key_value = Linear1D_Col(dim, 3 * dim, bias=bias, dtype=dtype)
-
+        # self.query_key_value = Linear1D_Col(dim, 3 * dim, bias=bias, dtype=dtype)
+        self.query_ = Linear1D_Col(dim, dim, bias=bias, dtype=dtype)
+        self.key_ = Linear1D_Col(dim, dim, bias=bias, dtype=dtype)
+        self.value_ = Linear1D_Col(dim, dim, bias=bias, dtype=dtype)
         if fuse_scale_mask_softmax:
             from colossalai.kernel import FusedScaleMaskSoftmax
             from colossalai.kernel.cuda_native.scaled_softmax import \
@@ -95,27 +97,29 @@ class GPTSelfAttention1D(nn.Module):
 
     def forward(self, x, attention_mask=None):
         # print("x: {}".format(x.shape))
-        qkv = self.query_key_value(x)
+        # qkv = self.query_key_value(x)
 
         # print(f'qkv {qkv.shape}')
-
-        all_head_size = qkv.shape[-1] // 3
+        q = self.query_(x)
+        k = self.key_(x)
+        v = self.value_(x)
+        all_head_size = q.shape[-1]
         num_attention_heads = divide(all_head_size, self.attention_head_size)  # num_heads
         # print(self.attention_head_size)
         # new_qkv_shape = qkv.shape[:-1] + \
         #                 (num_attention_heads, 3 * self.attention_head_size)
         # qkv = qkv.view(new_qkv_shape)
         # qkv = qkv.permute((0, 2, 1, 3))
-        # print("qkv: {} {}".format(qkv.shape, qkv))
-        # q, k, v = torch.chunk(qkv, 3, dim=-1)
-        q, k, v = qkv.split(all_head_size, dim=2)
+        # print("{} qkv: {} {}".format(gpc.get_global_rank(), qkv.shape, qkv))
+        # # q, k, v = torch.chunk(qkv, 3, dim=-1)
+        # q, k, v = qkv.split(all_head_size, dim=2)
+        # print("{} q: {} {}".format(gpc.get_global_rank(), q.shape, q))
+        # print("{} k: {} {}".format(gpc.get_global_rank(), k.shape, k))
+        # print("{} v: {} {}".format(gpc.get_global_rank(), v.shape, v))
         q = self._split_heads(q, num_attention_heads, self.attention_head_size)
         k = self._split_heads(k, num_attention_heads, self.attention_head_size)
         v = self._split_heads(v, num_attention_heads, self.attention_head_size)
         # print(f'qkv {qkv.shape}')   # 6 40 128
-        # print("q: {} {}".format(q.shape, q))
-        # print("k: {} {}".format(k.shape, k))
-        # print("v: {} {}".format(v.shape, v))
         x = torch.matmul(q, k.transpose(-1, -2))
 
         if self.fuse_scale_mask_softmax:
@@ -135,7 +139,7 @@ class GPTSelfAttention1D(nn.Module):
         x = x.transpose(1, 2)
         new_context_layer_shape = x.size()[:-2] + (all_head_size,)
         x = x.reshape(new_context_layer_shape)
-        # print("before mlp: {} {}".format(x.shape, x))
+        # print("{} before dense: {} {}".format(gpc.get_global_rank(), x.shape, x))
         x = self.dense(x)
         # print("after mlp: {}".format(x))
 
@@ -194,20 +198,20 @@ class GPTBlock1D(nn.Module):
         if not self.apply_post_layernorm:
             residual = x
         x = self.norm1(x)
-        # print("after norm1: {}".format(x))
+        # print("{} after norm1: {}".format(gpc.get_global_rank(), x))
         if self.apply_post_layernorm:
             residual = x
         x = residual + self.attn(x, attention_mask)
 
         if not self.apply_post_layernorm:
             residual = x
-        # print("after attn: {}".format(x))
+        # print("{} after attn: {}".format(gpc.get_global_rank(), x))
         x = self.norm2(x)
-        # print("after norm2: {}".format(x))
+        # print("{} after norm2: {}".format(gpc.get_global_rank(), x))
         if self.apply_post_layernorm:
             residual = x
         x = residual + self.mlp(x)
-        # print("after mlp: {}".format(x))
+        # print("{} after mlp: {}".format(gpc.get_global_rank(), x))
         return x, attention_mask
 
 

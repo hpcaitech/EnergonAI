@@ -1,8 +1,11 @@
+import random
+import numpy as np
 import argparse
-
 import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
+
+from transformers import GPT2Tokenizer
 
 from energon.context import ParallelMode
 from energon.core import global_context as gpc
@@ -23,6 +26,11 @@ MODEL_CLASSES = {
     "gpt2_8B": gpt2_8B,
     "gpt3": gpt3
 }
+
+def select_top_k(predictions, k=10):
+    predicted_index = random.choice(
+        predictions[0, -1, :].sort(descending=True)[1][:10]).item()
+    return predicted_index
 
 
 def build_gpt_model():
@@ -52,25 +60,63 @@ def build_gpt_model():
                              pp_init_size=args.pipe_para_size,
                              port=args.port,
                              dtype=dtype_)
-    input_ids = torch.randint(1, 10, (32, 40), dtype=torch.int64)
-    attention_mask = torch.randint(0, 1, (32, 1, 40), dtype=torch.int64)
+    tokenizer = GPT2Tokenizer.from_pretrained('./')
+    # tokenizer = GPT2Tokenizer(vocab_file="vocab.json", merges_file="merges.txt")
+    # test_input = ["MANY YEARS LATER as he faced the firing squad, Colonel Aureliano Buendía was to remember that"
+    #               for _ in range(10)]
+    test_input = "I do not"
+    print(test_input)
+    input_token = tokenizer(test_input, return_tensors="pt")
+    # tokens_tensor = torch.tensor([input_token])
+    total_predicted_text = test_input
+    # print(input_ids['input_ids'])
+    # print(input_ids['attention_mask'])
+    # input_ids = input_token['input_ids']
+    # print(input_ids.shape)
+    # input_ids = torch.randint(1, 10, (32, 40), dtype=torch.int64)
+    # attention_mask = torch.randint(0, 1, (32, 1, 40), dtype=torch.int64)
     hidden_states = None
-    sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
+    output = engine.run(input_token)
+    predictions = output.to_here()
+    predicted_index = select_top_k(predictions, k=1)
+    total_predicted_text += tokenizer.decode(predicted_index)
+    print(total_predicted_text)
+    # sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
+    # sample = dict(hidden_states=hidden_states, input_ids=input_ids)
 
-    output = engine.run(sample)
-    # print(output.to_here())
-    output.to_here()
+    # output = engine.run(input_token)
+    # output.to_here()
+    # print(tokenizer.decode(output.to_here()[0]))
     timer = get_timers()
     timer('time1').start()
 
     for i in range(1, args.iteration):
-        input_ids = torch.randint(1, 10, (32, i % 20 + 2), dtype=torch.int64)
-        attention_mask = torch.randint(0, 1, (32, 1, i % 20 + 2), dtype=torch.int64)
-        hidden_states = None
-        sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
-        output = engine.run(sample)
+        output = engine.run(input_token)
+        predictions = output.to_here()
+        predicted_index = select_top_k(predictions, k=10)
+        total_predicted_text += tokenizer.decode(predicted_index)
+        # print(total_predicted_text)
+        if '<|endoftext|>' in total_predicted_text:
+            # 如果出现文本结束标志，就结束文本生成
+            break
 
-    print(output.to_here())
+        input_token = tokenizer(total_predicted_text, return_tensors="pt")
+
+        # input_ids = tokenizer(test_input, return_tensors='pt')
+        # # input_ids = torch.randint(1, 10, (32, 40), dtype=torch.int64)
+        # # attention_mask = torch.randint(0, 1, (32, 1, 40), dtype=torch.int64)
+        # hidden_states = None
+        # # sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
+        # # sample = dict(hidden_states=hidden_states, input_ids=input_ids)
+        # # input_ids = torch.randint(1, 10, (32, i % 20 + 2), dtype=torch.int64)
+        # # attention_mask = torch.randint(0, 1, (32, 1, i % 20 + 2), dtype=torch.int64)
+        # # hidden_states = None
+        # # sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
+        # output = engine.run(input_ids)
+
+        # print(tokenizer.decode(output.to_here()))
+    print(total_predicted_text)
+    # print(output.to_here())
     timer('time1').stop()
 
     time1 = timer('time1').elapsed()
@@ -84,7 +130,7 @@ def build_gpt_model():
                 f'Time: {time1 / args.iteration}')
 
     engine.clear()
-
+    #
 
 if __name__ == "__main__":
     build_gpt_model()

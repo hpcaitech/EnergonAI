@@ -85,7 +85,7 @@ def main():
         sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
         output = engine.run(sample)
     
-    print(output.to_here())    
+    print(output.to_here().shape)
     timer('time1').stop()
 
     time1 = timer('time1').elapsed()

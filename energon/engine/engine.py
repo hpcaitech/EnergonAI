@@ -38,7 +38,7 @@ class InferenceEngine(Module):
             dtype: data-type by which inference is executed
         """
         super().__init__()
-        
+
         self.model_class = model_class
         self.model_config = model_config
         self.model_type = model_type
@@ -56,7 +56,7 @@ class InferenceEngine(Module):
         # for TP
         self.rrefs = []        
         # for rpc
-        self.WORKER_NAME = "wok{}"        
+        self.WORKER_NAME = "wok{}"
         self._init_dist_rpc()
         self._init_model()
         self.key = CircleInt()
@@ -64,7 +64,7 @@ class InferenceEngine(Module):
     def _init_dist_rpc(self):
         r'''
         Based on global_context, init the rpc connection.
-        '''      
+        '''
         launch_from_multiprocess(tp_size = self.tp_size, pp_size = self.pp_size, rank = self.rank, local_rank = self.rank, world_size = self.global_world_size, host = self.host, port = self.port)
         rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
             num_worker_threads=16)

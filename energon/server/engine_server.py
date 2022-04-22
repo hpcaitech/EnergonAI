@@ -5,30 +5,18 @@ from fastapi import FastAPI
 from fastapi import Response
 import torch.distributed.rpc as rpc
 from energon.engine import InferenceEngine
-from energon.model import gpt2_small, gpt2_medium, gpt2_large, gpt2_xl, gpt2_8B, gpt3
-from energon.model import bert_small
 
-MODEL_CLASSES = {
-    "bert_small": bert_small,
-    "gpt2_small": gpt2_small,
-    "gpt2_medium": gpt2_medium,
-    "gpt2_large": gpt2_large,
-    "gpt2_xl": gpt2_xl,
-    "gpt2_8B": gpt2_8B,
-    "gpt3": gpt3
-}
+from transformers import GPT2Tokenizer
 
 app = FastAPI() # 创建 api 对象
-
-
 
 @app.get("/") # 根路由
 def root():
     return {"200"}
 
-@app.get("/run")
+@app.get("/run_ls_model")
 def run():
-    # a string arguement to produce sample
+    # for the performance only
     input_ids = torch.randint(1, 10, (32, 40), dtype=torch.int64)
     attention_mask = torch.randint(0, 1, (32, 1, 40, 40), dtype=torch.int64)
     hidden_states = None
@@ -38,6 +26,23 @@ def run():
     output = output.to_here()
     print(output)
     return {"To return the string result."}
+
+@app.get("/run_hf_gpt2/{request}")
+def run(request: str, max_seq_length: int):
+
+    input_token = tokenizer(request, return_tensors="pt")
+    total_predicted_text = request
+
+    for i in range(1, max_seq_length):
+        output = engine.run(input_token)
+        predictions = output.to_here()
+        total_predicted_text += tokenizer.decode(predictions)
+        # print(total_predicted_text)
+        if '<|endoftext|>' in total_predicted_text:
+            break
+        input_token = tokenizer(total_predicted_text, return_tensors="pt")
+    
+    return {total_predicted_text}
     
 
 @app.get("/shutdown")
@@ -57,14 +62,24 @@ def launch_engine(model_name,
                 port: int = 29500,
                 dtype = torch.float,
                 checkpoint: str = None,
+                tokenizer_path: str = None,
                 server_host = "localhost",
                 server_port = 8005,
                 log_level = "info"
                 ):
     
-    model_config = {'dtype': dtype, 'checkpoint': True, 'checkpoint_path': checkpoint}
+    # only for the generation task
+    global tokenizer
+    if(tokenizer_path):
+        tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_path)
+    
+    if checkpoint:
+        model_config = {'dtype': dtype, 'checkpoint': True, 'checkpoint_path': checkpoint}
+    else:
+        model_config = {'dtype': dtype}
+
     global engine
-    engine = InferenceEngine(MODEL_CLASSES[model_name], 
+    engine = InferenceEngine(model_name, 
                             model_config,
                             model_type,
                             max_batch_size = max_batch_size, 

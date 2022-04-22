@@ -11,6 +11,7 @@ from energon.logging import get_dist_logger
 from energon.nn.layer.utils import divide, ACT2FN
 from energon.nn import Linear1D_Col, Linear1D_Row, Classifier1D
 from energon.nn import LayerNorm1D
+from energon.kernel import transpose_pad, transpose_depad
 from energon.nn import VocabParallelEmbedding1D
 from energon.utils import get_current_device, is_using_pp
 
@@ -44,7 +45,7 @@ class BertEmbedding1D(nn.Module):
         # self.LayerNorm = nn.LayerNorm(embedding_dim, eps=layernorm_epsilon, dtype=dtype)
         self.LayerNorm = LayerNorm1D(embedding_dim, eps=layernorm_epsilon)
 
-    def forward(self, input_ids, position_ids=None, tokentype_ids=None):
+    def forward(self, input_ids, position_ids=None, tokentype_ids=None, seq_lens=None):
         seq_length = input_ids.size(1)
         # TODO: register_buffer in advance for position_ids to speedup
         if position_ids is None:
@@ -57,7 +58,17 @@ class BertEmbedding1D(nn.Module):
        
         x = self.LayerNorm(x)
 
-        return x        
+        if seq_lens:
+            batch_size = input_ids.shape[0]
+
+            y=x[0:1,0:seq_lens[0],:]
+            for i in range(1,batch_size):
+                tlen = seq_lens[i]
+                y = torch.cat([y, x[i:i+1,0:tlen,:]], dim=1)
+            print(f'Embedding Output: {y.size()}')
+            return y
+
+        return x
 
 
 class BertSelfAttention1D(nn.Module):
@@ -86,31 +97,52 @@ class BertSelfAttention1D(nn.Module):
         self.LayerNorm = LayerNorm1D(hidden_size, eps=layernorm_epsilon)
 
 
-    def forward(self, hidden_states, attention_mask=None):
+    def forward(self, hidden_states, attention_mask=None, seq_lens=None):
+        # batch_size = 32
+        # max_padding_size = 512
         attention_output = self.query_key_value(hidden_states)
         all_head_size = attention_output.shape[-1] // 3
         num_attention_heads = divide(all_head_size, self.attention_head_size)  # num_heads
 
         new_qkv_shape = attention_output.shape[:-1] + (num_attention_heads, 3*self.attention_head_size)
         attention_output = attention_output.view(new_qkv_shape)
-        attention_output = attention_output.permute(0, 2, 1, 3)
+        
+        print(f'1: {attention_output.size()}')
+        if seq_lens:
+            attention_output = transpose_pad(attention_output, batch_size, max_padding_size, seq_lens, num_attention_heads, self.attention_head_size*3)
+        else:
+            attention_output = attention_output.permute(0, 2, 1, 3)
+        # TODO: make sure self.attention_head_size*3 is correct
+        
+        print(f'2: {attention_output.size()}')
+        
         q, k, v = torch.chunk(attention_output, 3, dim = -1)
 
         attention_output = torch.matmul(q, k.transpose(-1, -2))
-
+        print(f'3: {attention_output.size()}')
         if self.fuse_scale_mask_softmax:
             raise NotImplementedError
         else:
             attention_output = attention_output / math.sqrt(self.attention_head_size)
-            if attention_mask is not None:
-                attention_output = attention_output + attention_mask
+            # if attention_mask is not None:
+            #     attention_output = attention_output + attention_mask
             attention_output = nn.functional.softmax(attention_output, dim=-1)
-        
+
         attention_output = torch.matmul(attention_output, v)
-        attention_output = attention_output.permute(0, 2, 1, 3).contiguous()
+
+        print(f'4: {attention_output.size()}')
+        
+        if seq_lens:
+            sum_seq = torch.sum(seq_lens)
+            attention_output = transpose_depad(attention_output, batch_size, sum_seq, max_padding_size, seq_lens, num_attention_heads, self.attention_head_size)
+        else: 
+            attention_output = attention_output.permute(0, 2, 1, 3).contiguous()
+
+        print(f'5: {attention_output.size()}')
+
+        
         new_context_layer_shape = attention_output.size()[:-2] + (all_head_size,)
         attention_output = attention_output.reshape(new_context_layer_shape)
-
         attention_output = self.dense(attention_output)
 
         hidden_states = self.LayerNorm(attention_output + hidden_states)
@@ -172,8 +204,8 @@ class BertTransformerLayer1D(nn.Module):
                             dtype,
                             bias)
     
-    def forward(self, hidden_states, attention_mask):
-        hidden_states = self.attention(hidden_states, attention_mask)
+    def forward(self, hidden_states, attention_mask, seq_lens=None):
+        hidden_states = self.attention(hidden_states, attention_mask, seq_lens)
         hidden_states = self.mlp(hidden_states)
 
         return hidden_states
@@ -195,7 +227,7 @@ class PipelineBert1D(nn.Module):
                  bias: bool = True,
                  fuse_scale_mask_softmax: bool = False,
                  first: bool = False,
-                 last: bool = False, **kwargs):
+                 last: bool = False):
         super().__init__()
         self.first = first
         self.last = last
@@ -222,30 +254,14 @@ class PipelineBert1D(nn.Module):
                                             fuse_scale_mask_softmax=fuse_scale_mask_softmax,
                                         )
                                         )
-        # self.blocks = nn.ModuleList([
-        #     BertTransformerLayer1D(
-        #         hidden_size=hidden_size,
-        #         num_heads=num_heads,
-        #         mlp_ratio=mlp_ratio,
-        #         activation=activation,
-        #         layernorm_epsilon=layernorm_epsilon,
-        #         dtype=dtype,
-        #         bias=bias,
-        #         fuse_scale_mask_softmax=fuse_scale_mask_softmax,
-        #     ) for _ in range(depth)
-        # ])
-
-        # if self.last:
-        #     self.norm = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
-        #     self.head = GPTLMHead1D(dim=dim, vocab_size=vocab_size, dtype=dtype)   # word_embeeding_weight=self.embed.word_embedding_weight not in the same process
 
 
-    def forward(self, hidden_states=None, input_ids=None, attention_mask=None):
+    def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None):
         if self.first:
-            hidden_states = self.embed(input_ids)
+            hidden_states = self.embed(input_ids=input_ids, position_ids=None, tokentype_ids=None, seq_lens=seq_lens) #, seq_lens
 
         for block in self.blocks:
-            hidden_states = block(hidden_states, attention_mask)
+            hidden_states = block(hidden_states=hidden_states, attention_mask=attention_mask, seq_lens = seq_lens)
 
         if self.last:
             hidden_states = hidden_states[:, 1, :]
@@ -320,4 +336,22 @@ def _create_bert_pipeline_model(depth=48, num_chunks=1, layer_partitions=None, *
 
 def bert_small(**kwargs):
     model_kwargs = dict(hidden_size=768, depth=12, num_heads=12, **kwargs)
+    return _create_bert_pipeline_model(**model_kwargs)
+
+def bert_large(**kwargs):
+    model_kwargs = dict(hidden_size=1024, depth=24, num_heads=16, **kwargs)
+    return _create_bert_pipeline_model(**model_kwargs)
+
+def bert_xl(**kwargs):
+    model_kwargs = dict(hidden_size=1600, depth=48, num_heads=16, **kwargs)
+    return _create_bert_pipeline_model(**model_kwargs)
+
+
+def bert_8B(**kwargs):
+    model_kwargs = dict(hidden_size=3072, depth=72, num_heads=24, **kwargs)
+    return _create_bert_pipeline_model(**model_kwargs)
+
+
+def bert_175B(**kwargs):
+    model_kwargs = dict(hidden_size=12288, depth=96, num_heads=96, **kwargs)
     return _create_bert_pipeline_model(**model_kwargs)

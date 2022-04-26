@@ -5,10 +5,14 @@ from multiprocessing import  Process
 
 from energon.model import gpt2_small, gpt2_medium, gpt2_large, gpt2_xl, gpt2_8B, gpt3
 from energon.model import hf_gpt2
-from energon.model import bert_small
+from energon.model import bert_small, bert_large, bert_xl, bert_8B, bert_175B
 
 MODEL_CLASSES = {
     "bert_small": bert_small,
+    "bert_large": bert_large, 
+    "bert_xl": bert_xl, 
+    "bert_8B": bert_8B, 
+    "bert_175B": bert_175B, 
     "gpt2_small": gpt2_small,
     "gpt2_medium": gpt2_medium,
     "gpt2_large": gpt2_large,

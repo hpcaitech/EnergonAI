@@ -17,8 +17,12 @@ def root():
 @app.get("/run_ls_model")
 def run():
     # for the performance only
-    input_ids = torch.randint(1, 10, (32, 40), dtype=torch.int64)
-    attention_mask = torch.randint(0, 1, (32, 1, 40, 40), dtype=torch.int64)
+    seq_len = 512
+    batch_size = 32
+
+    input_ids = torch.randint(1, 10, (batch_size, seq_len), dtype=torch.int64)
+    attention_mask = torch.randint(0, 1, (batch_size, 1, seq_len, seq_len), dtype=torch.int64)
+    # seq_lens = torch.randint(1, 128, (batch_size, ), dtype=torch.int64) # generate seq_lens randomly
     hidden_states = None
     sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
 
@@ -26,6 +30,23 @@ def run():
     output = output.to_here()
     print(output)
     return {"To return the string result."}
+
+# @app.get("/run_ls_model_wopadding")
+# def run():
+#     # for the performance only
+#     seq_len = 128
+#     batch_size = 16
+
+#     input_ids = torch.randint(1, 10, (batch_size, seq_len), dtype=torch.int64)
+#     attention_mask = torch.randint(0, 1, (batch_size, 1, seq_len, seq_len), dtype=torch.int64)
+#     seq_lens = torch.randint(1, 128, (batch_size, ), dtype=torch.int64) # generate seq_lens randomly
+#     hidden_states = None
+#     sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask, seq_lens=seq_lens)
+
+#     output = engine.run(sample)
+#     output = output.to_here()
+#     print(output)
+#     return {"To return the string result."}
 
 @app.get("/run_hf_gpt2/{request}")
 def run(request: str, max_seq_length: int):

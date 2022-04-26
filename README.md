@@ -1,23 +1,33 @@
+# ColossalAI-Inference: Energon
+
 ![energon](https://user-images.githubusercontent.com/12018307/165214566-467a1748-5987-4664-b5b2-d6e3367bb1b9.png)
 
 
 # ColossalAI-Inference
 
+
 [![GitHub license](https://img.shields.io/github/license/hpcaitech/FastFold)](https://github.com/hpcaitech/FastFold/blob/main/LICENSE)
 
-Temporary repo for large-scale model inference.
+A Large-scale model inference system.
 
 
 ### Installation
 --- 
 ``` bash
 $ git clone https://github.com/hpcaitech/ColossalAI-Inference.git
-$ python setup.py install or python setup.py develop
+$ python setup.py install
 ```
 
-### Quick Start
----
-``` bash
+### Large-scale Model Inference
+GPT-175B
+
+
+Bert-175B
+
+Google reported a [super-large Bert (481B)](https://mlcommons.org/en/training-normal-11/) in MLPerf-Training v1.1 open, here we produce a 175B bert for displaying the performance.
+
+
+<!-- ``` bash
 # To pack the distributed inference as a service, we rely on Triton python backend.
 $ docker run --gpus all --name=triton_server -v /<host path>/workspace:/opt/tritonserver/host --shm-size=1g --ulimit memlock=-1 -p 10010:8000 -p 10011:8001 -p 10012:8002 --ulimit stack=67108864 -ti nvcr.io/nvidia/tritonserver:21.10-py3
 
@@ -26,17 +36,47 @@ $ git clone https://github.com/triton-inference-server/python_backend -b r<xx.yy
 $ mv /examples/energon /opt/tritonserver/python_backend/models
 
 $ bash run_gpt.sh
-```
-### Huggingface GPT2 Demo
+``` -->
+### Huggingface GPT2 Generation Demo
+---
+<div  align="center">    
+    <img src="https://user-images.githubusercontent.com/12018307/164587795-6f70a473-ac87-47e2-bb91-926fc6b182ba.png" width = "600" height = "400" alt="Architecture" align=center />
+</div>
 
-<img width="1073" alt="30826ccd5ab94a2a14ba166132d780c" src="https://user-images.githubusercontent.com/12018307/164587795-6f70a473-ac87-47e2-bb91-926fc6b182ba.png">
+---
+
+
+``` bash
+# Download checkpoint
+$ wget https://huggingface.co/gpt2/blob/main/pytorch_model.bin
+# Download files for tokenizer
+$ wget https://huggingface.co/gpt2/blob/main/tokenizer.json
+$ wget https://huggingface.co/gpt2/blob/main/vocab.json
+$ wget https://huggingface.co/gpt2/blob/main/merges.txt
+# Launch the service
+energon service init \
+        --tp_init_size=2 \
+        --pp_init_size=2 \
+        --checkpoint=[/your/path/to/]pytorch_model.bin \
+        --tokenizer_path=[/your/path/to/tokenizer/dir]
+
+# Request for the service
+Method 1: 
+    FastAPI provides an automatic API docs, you can forward http://127.0.0.1:8005/docs and make request with the graphical interface.
+Method 2:
+    curl -X 'GET' \
+    'http://127.0.0.1:8005/run_hf_gpt2/I%20do%20not?max_seq_length=16' \
+    -H 'accept: application/json'
+```
+
+
 
 
 ### Contributing
 
 If interested in making your own contribution to the project, please refer to [Contributing](./CONTRIBUTING.md) for guidance.
 
-Thanks so much to all of our amazing contributors!
+Thanks so much!
 
 ### Technical Overview
 

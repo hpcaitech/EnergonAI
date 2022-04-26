@@ -24,6 +24,10 @@ $ mv /examples/energon /opt/tritonserver/python_backend/models
 
 $ bash run_gpt.sh
 ```
+### Huggingface GPT2 Demo
+
+<img width="1073" alt="30826ccd5ab94a2a14ba166132d780c" src="https://user-images.githubusercontent.com/12018307/164587795-6f70a473-ac87-47e2-bb91-926fc6b182ba.png">
+
 
 ### Contributing
 

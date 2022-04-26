@@ -1,14 +1,23 @@
-# ColossalAI-Inference: Energon
+<div  align="center">    
+    <img src="https://user-images.githubusercontent.com/12018307/165214566-467a1748-5987-4664-b5b2-d6e3367bb1b9.png" width = "600" height = "200
+    " alt="Architecture" align=center />
+</div>
 
-![energon](https://user-images.githubusercontent.com/12018307/165214566-467a1748-5987-4664-b5b2-d6e3367bb1b9.png)
+# Energon
+
+![](https://img.shields.io/badge/Made%20with-ColossalAI-blueviolet?style=flat)
+[![GitHub license](https://img.shields.io/github/license/hpcaitech/FastFold)](https://github.com/hpcaitech/ColossalAI-Inference/blob/main/LICENSE)
 
 
-# ColossalAI-Inference
-
-
-[![GitHub license](https://img.shields.io/github/license/hpcaitech/FastFold)](https://github.com/hpcaitech/FastFold/blob/main/LICENSE)
-
-A Large-scale model inference system.
+A Large-scale Model Inference System.
+Energon provides 3 levels of abstraction for enabling the large-scale model inference:
+- Runtime - distributed operations and customized CUDA kernels 
+- Engine - encapsulate the distributed multi-device execution with the remote procedure call.
+- Serving - batching requests, managing engines.
+  
+At present, we pre-build distributed bert and gpt models.
+For models trained by [Colossal-AI](https://github.com/hpcaitech/ColossalAI), it can be seamlessly transferred to Energon.
+For single-device models, there still requires manual coding works to introduce tensor parallel and pipeline parallel.
 
 
 ### Installation
@@ -37,14 +46,7 @@ $ mv /examples/energon /opt/tritonserver/python_backend/models
 
 $ bash run_gpt.sh
 ``` -->
-### Huggingface GPT2 Generation Demo
----
-<div  align="center">    
-    <img src="https://user-images.githubusercontent.com/12018307/164587795-6f70a473-ac87-47e2-bb91-926fc6b182ba.png" width = "600" height = "400" alt="Architecture" align=center />
-</div>
-
----
-
+### Huggingface GPT2 Generation Task Case
 
 ``` bash
 # Download checkpoint
@@ -53,6 +55,7 @@ $ wget https://huggingface.co/gpt2/blob/main/pytorch_model.bin
 $ wget https://huggingface.co/gpt2/blob/main/tokenizer.json
 $ wget https://huggingface.co/gpt2/blob/main/vocab.json
 $ wget https://huggingface.co/gpt2/blob/main/merges.txt
+
 # Launch the service
 energon service init \
         --tp_init_size=2 \
@@ -62,7 +65,8 @@ energon service init \
 
 # Request for the service
 Method 1: 
-    FastAPI provides an automatic API docs, you can forward http://127.0.0.1:8005/docs and make request with the graphical interface.
+    FastAPI provides an automatic API docs, you can forward 
+    http://127.0.0.1:8005/docs and make request with the graphical interface.
 Method 2:
     curl -X 'GET' \
     'http://127.0.0.1:8005/run_hf_gpt2/I%20do%20not?max_seq_length=16' \

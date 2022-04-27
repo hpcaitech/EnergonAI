@@ -71,9 +71,15 @@ class BertPipelineCommWrapper:
     For different model type, fill_meta_tensor is different
     '''
     def fill_meta_tensor(self, inputs, pipe_meta):
-        pipe_meta.get_meta_tensor()[0] = inputs['input_ids'].shape[0]
-        pipe_meta.get_meta_tensor()[1] = inputs['input_ids'].shape[0]
-        pipe_meta.get_meta_tensor()[2] = inputs['input_ids'].shape[1]
+        if 'seq_lens' in inputs:
+            pipe_meta.get_meta_tensor()[0] = 1
+            pipe_meta.get_meta_tensor()[1] = 1
+            pipe_meta.get_meta_tensor()[2] = torch.sum(inputs['seq_lens'])
+        else:
+            pipe_meta.get_meta_tensor()[0] = inputs['input_ids'].shape[0]
+            pipe_meta.get_meta_tensor()[1] = inputs['input_ids'].shape[0]
+            pipe_meta.get_meta_tensor()[2] = inputs['input_ids'].shape[1]
+        
         pipe_meta.get_meta_tensor()[3] = self.hidden_size
         pipe_meta.update_meta()
 
@@ -83,12 +89,13 @@ class BertPipelineCommWrapper:
         self.fill_meta_tensor(inputs, pipe_meta)
         self.pipe_msg_queue.enqueue(key, inputs, pipe_meta)
 
-        # different threads ask for a single lock  how to keep the correctness
+        # different threads ask for a single lock
         self.lock.acquire(timeout=3)
 
         sample, pipe_meta = self.pipe_msg_queue.top(self.key.val)
         self.key.addOne()
 
+        # tensor shapes should be re-stored for 
         with torch.inference_mode():
 
             if gpc.is_first_rank(ParallelMode.PIPELINE):

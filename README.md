@@ -58,11 +58,8 @@ $ wget https://huggingface.co/gpt2/blob/main/vocab.json
 $ wget https://huggingface.co/gpt2/blob/main/merges.txt
 
 # Launch the service
-energon service init \
-        --tp_init_size=2 \
-        --pp_init_size=2 \
-        --checkpoint=[/your/path/to/]pytorch_model.bin \
-        --tokenizer_path=[/your/path/to/tokenizer/dir]
+export PYTHONPATH=~/ColossalAI-Inference/examples/hf_gpt2
+energon service init --config_file=~/ColossalAI-Inference/hf_gpt2/hf_gpt2_config.py
 
 # Request for the service
 Method 1: 

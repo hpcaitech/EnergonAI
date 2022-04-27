@@ -15,7 +15,8 @@ Energon provides 3 levels of abstraction for enabling the large-scale model infe
 - Engine - encapsulate the distributed multi-device execution with the remote procedure call.
 - Serving - batching requests, managing engines.
   
-At present, we pre-build distributed bert and gpt models.
+At present, we pre-build distributed Bert and GPT models.
+
 For models trained by [Colossal-AI](https://github.com/hpcaitech/ColossalAI), it can be seamlessly transferred to Energon.
 For single-device models, there still requires manual coding works to introduce tensor parallel and pipeline parallel.
 

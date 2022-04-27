@@ -101,19 +101,20 @@ class BertSelfAttention1D(nn.Module):
         new_qkv_shape = attention_output.shape[:-1] + (num_attention_heads, 3*self.attention_head_size)
         attention_output = attention_output.view(new_qkv_shape)
         
-        print(f'1: {attention_output.size()}')
+        # print(f'1: {attention_output.size()}')
         if seq_lens is not None:
+            # TODO: use FasterTransformer's implementation.
             attention_output = transpose_pad(attention_output, batch_size, max_padding_size, seq_lens, num_attention_heads, self.attention_head_size*3)
         else:
             attention_output = attention_output.permute(0, 2, 1, 3)
         # TODO: make sure self.attention_head_size*3 is correct
         
-        print(f'2: {attention_output.size()}')
+        # print(f'2: {attention_output.size()}')
         
         q, k, v = torch.chunk(attention_output, 3, dim = -1)
 
         attention_output = torch.matmul(q, k.transpose(-1, -2))
-        print(f'3: {attention_output.size()}')
+        # print(f'3: {attention_output.size()}')
         if self.fuse_scale_mask_softmax:
             raise NotImplementedError
         else:
@@ -124,7 +125,7 @@ class BertSelfAttention1D(nn.Module):
 
         attention_output = torch.matmul(attention_output, v)
 
-        print(f'4: {attention_output.size()}')
+        # print(f'4: {attention_output.size()}')
         
         if seq_lens is not None:
             sum_seq = torch.sum(seq_lens)
@@ -132,7 +133,7 @@ class BertSelfAttention1D(nn.Module):
         else: 
             attention_output = attention_output.permute(0, 2, 1, 3).contiguous()
 
-        print(f'5: {attention_output.size()}')
+        # print(f'5: {attention_output.size()}')
 
         
         new_context_layer_shape = attention_output.size()[:-2] + (all_head_size,)
@@ -258,8 +259,8 @@ class PipelineBert1D(nn.Module):
             batch_size = input_ids.shape[0]
             max_padding_size = input_ids.shape[1]
 
-        print(self.first)
-        print(self.last)
+        # print(self.first)
+        # print(self.last)
 
         if self.first:
             hidden_states = self.embed(input_ids=input_ids, position_ids=None, tokentype_ids=None, seq_lens=seq_lens, batch_size=batch_size, max_padding_size=max_padding_size) #, seq_lens
@@ -269,7 +270,7 @@ class PipelineBert1D(nn.Module):
 
         if self.last:
             hidden_states = hidden_states[:, 1, :]
-            print(f'Hidden States: {hidden_states.size()}')
+            # print(f'Hidden States: {hidden_states.size()}')
 
         return hidden_states
 

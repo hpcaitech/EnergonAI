@@ -7,6 +7,7 @@ import torch.distributed.rpc as rpc
 from energon.engine import InferenceEngine
 from energon.model import gpt2_small, gpt2_medium, gpt2_large, gpt2_xl, gpt2_8B, gpt3
 from energon.model import bert_small
+from batch_manager import Batch_Manager, generate_cached_cost
 
 MODEL_CLASSES = {
     "bert_small": bert_small,
@@ -19,7 +20,9 @@ MODEL_CLASSES = {
 }
 
 app = FastAPI() # 创建 api 对象
-
+engine = None
+batch_wrapper = None
+server = None
 
 
 @app.get("/") # 根路由
@@ -73,6 +76,10 @@ def launch_engine(model_name,
                             host = host,
                             port = port,
                             dtype = dtype)
+
+    global batch_wrapper
+    cached_cost = generate_cached_cost(engine)
+    batch_wrapper = Batch_Manager(engine, cached_cost)
 
     global server
     config = uvicorn.Config(app, host=server_host, port=server_port, log_level=log_level)

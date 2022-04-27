@@ -3,7 +3,35 @@ import time
 from scipy import stats
 import numpy as np
 from engine_server import InferenceEngine
+from transformers import GPT2Tokenizer
+import random
 
+
+def generate_cached_cost(engine, max_seq_len: int = 1024, max_batch_size: int = 16, step: int = 1, repeat_round: int = 3):
+    def select_top_k(predictions, k=10):
+        predicted_index = random.choice(
+            predictions[0, -1, :].sort(descending=True)[1][:10]).item()
+        return predicted_index
+
+    cached_cost = [[0 for i in range(max_batch_size + 1)] for j in range(max_seq_len)]
+    input_text = ""
+    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+    for tmp_len in range(1, max_seq_len + 1, step):
+        input_text += "test "
+        for tmp_batch in range(1, max_batch_size + 1):
+            batched_text = [input_text for _ in range(tmp_batch)]
+            start_time = time.time()
+            for k in range(repeat_round):
+                input_token = tokenizer(batched_text, return_tensors="pt")
+                output = engine.run(input_token)
+                predictions = output.to_here()
+                predicted_index = select_top_k(predictions, k=1)
+                total_predicted_text = tokenizer.decode(predicted_index)
+            time_cost = (time.time() - start_time) / repeat_round
+            cached_cost[tmp_len][tmp_batch] = time_cost
+            for k in range(1, step):
+                cached_cost[tmp_len + k][tmp_batch] = time_cost
+    return cached_cost
 
 class single_request():
     def __init__(self, input_, time_stamp: float):
@@ -14,7 +42,7 @@ class single_request():
 
 class Batch_Manager():
     def __init__(self, engine: InferenceEngine, cached_cost: list,
-                 init_mu: int, init_theta: int,
+                 init_mu: int = 512, init_theta: int = 180,
                  max_batch_size: int = 32, lr: float = 0.01,
                  max_seq_len=1024):
         self.engine = engine
@@ -57,10 +85,11 @@ class Batch_Manager():
 
     def update_norm(self, batch_: list):
         new_mu = np.mean([i.seq_len for i in batch_])
-        new_theta = np.std([i.seq_len for i in batch_])
         delta_mu = new_mu - self.mu
-        delta_theta = new_theta - self.theta
         self.mu += self.lr * delta_mu
+        temp_batch = np.array([i.seq_len - self.mu for i in batch_])
+        new_theta = np.sqrt(np.mean(temp_batch**2))
+        delta_theta = new_theta - self.theta
         self.theta += self.lr * delta_theta
         return
 

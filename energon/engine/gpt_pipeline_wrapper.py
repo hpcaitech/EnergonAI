@@ -96,9 +96,7 @@ class GPTPipelineCommWrapper:
         pipe_meta.get_meta_tensor()[3] = self.hidden_size
         pipe_meta.update_meta()
 
-    def run(self, key, inputs):
-        print(f'Rank: {gpc.get_global_rank()}, Priority: {key}')
-        
+    def run(self, key, inputs):        
         pipe_meta = PipelineMeta(self.tensor_dim, self.max_batch_size)
         self.fill_meta_tensor(inputs, pipe_meta)
         self.pipe_msg_queue.enqueue(key, inputs, pipe_meta)

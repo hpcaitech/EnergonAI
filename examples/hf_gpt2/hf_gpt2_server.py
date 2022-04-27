@@ -5,72 +5,14 @@ from fastapi import FastAPI
 from fastapi import Response
 import torch.distributed.rpc as rpc
 from energon.engine import InferenceEngine
-from energon.model import gpt2_small, gpt2_medium, gpt2_large, gpt2_xl, gpt2_8B, gpt3
-from energon.model import bert_small
-from batch_manager import Batch_Manager, generate_cached_cost
 
 from transformers import GPT2Tokenizer
 
 app = FastAPI() # 创建 api 对象
-engine = None
-batch_wrapper = None
-server = None
-
 
 @app.get("/") # 根路由
 def root():
     return {"200"}
-
-@app.get("/model_with_padding")
-def run():
-    # for the performance only
-    seq_len = 512
-    batch_size = 32
-
-    input_ids = torch.randint(1, 10, (batch_size, seq_len), dtype=torch.int64)
-    attention_mask = torch.randint(0, 1, (batch_size, 1, seq_len, seq_len), dtype=torch.int64)
-    # seq_lens = torch.randint(1, 128, (batch_size, ), dtype=torch.int64) # generate seq_lens randomly
-    hidden_states = None
-    sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
-
-    output = engine.run(sample)
-    output = output.to_here()
-    print(output)
-    return {"To return the string result."}
-
-@app.get("/model_rm_padding")
-def run():
-    # for the performance only
-    seq_len = 512
-    batch_size = 32
-
-    input_ids = torch.randint(1, 10, (batch_size, seq_len), dtype=torch.int64)
-    attention_mask = torch.randint(0, 1, (batch_size, 1, seq_len, seq_len), dtype=torch.int64)
-    seq_lens = torch.randint(1, 128, (batch_size, ), dtype=torch.int64) # generate seq_lens randomly
-    hidden_states = None
-    sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask, seq_lens=seq_lens)
-
-    output = engine.run(sample)
-    output = output.to_here()
-    print(output)
-    return {"To return the string result."}
-
-# @app.get("/run_ls_model_wopadding")
-# def run():
-#     # for the performance only
-#     seq_len = 128
-#     batch_size = 16
-
-#     input_ids = torch.randint(1, 10, (batch_size, seq_len), dtype=torch.int64)
-#     attention_mask = torch.randint(0, 1, (batch_size, 1, seq_len, seq_len), dtype=torch.int64)
-#     seq_lens = torch.randint(1, 128, (batch_size, ), dtype=torch.int64) # generate seq_lens randomly
-#     hidden_states = None
-#     sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask, seq_lens=seq_lens)
-
-#     output = engine.run(sample)
-#     output = output.to_here()
-#     print(output)
-#     return {"To return the string result."}
 
 @app.get("/run_hf_gpt2/{request}")
 def run(request: str, max_seq_length: int):
@@ -86,9 +28,9 @@ def run(request: str, max_seq_length: int):
         if '<|endoftext|>' in total_predicted_text:
             break
         input_token = tokenizer(total_predicted_text, return_tensors="pt")
-
+    
     return {total_predicted_text}
-
+    
 
 @app.get("/shutdown")
 async def shutdown():
@@ -117,14 +59,14 @@ def launch_engine(model_name,
     global tokenizer
     if(tokenizer_path):
         tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_path)
-
+    
     if checkpoint:
         model_config = {'dtype': dtype, 'checkpoint': True, 'checkpoint_path': checkpoint}
     else:
         model_config = {'dtype': dtype}
 
     global engine
-    engine = InferenceEngine(model_name,
+    engine = InferenceEngine(model_name, 
                             model_config,
                             model_type,
                             max_batch_size = max_batch_size, 
@@ -133,10 +75,6 @@ def launch_engine(model_name,
                             host = host,
                             port = port,
                             dtype = dtype)
-
-    global batch_wrapper
-    cached_cost = generate_cached_cost(engine)
-    batch_wrapper = Batch_Manager(engine, cached_cost)
 
     global server
     config = uvicorn.Config(app, host=server_host, port=server_port, log_level=log_level)

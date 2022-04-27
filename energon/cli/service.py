@@ -1,42 +1,31 @@
 import click
 import torch
+import inspect
 import energon.server as server
 from multiprocessing import  Process
 
-@click.group()
-def service():
-    pass
+from energon.context import Config
 
-@service.command()
-@click.option("--model_name", default="bert_small", type=str)
-@click.option("--model_type", default="bert", type=str)
-@click.option("--max_batch_size", default=32, type=int)
-@click.option("--tp_init_size", default=1, type=int)
-@click.option("--pp_init_size", default=1, type=int)
-@click.option("--host", default="127.0.0.1", type=str)
-@click.option("--port", default=29400, type=int)
-@click.option("--half", is_flag=True, show_default=True)
-@click.option("--checkpoint", type=str)
-@click.option("--server_host", default="127.0.0.1", type=str)
-@click.option("--server_port", default=8005, type=int)
-@click.option("--log_level", default="info", type=str)
-@click.option("--backend", default="nccl", type=str)
-def init(model_name,
-         model_type,
-         max_batch_size,
-         tp_init_size,
-         pp_init_size,
-         host,
-         port,
-         half,
-         checkpoint,
-         server_host,
-         server_port,
-         log_level,
-         backend):
-
+def launches(model_class=None,
+         model_type=None,
+         engine_server=None,
+         max_batch_size=32,
+         tp_init_size=1,
+         pp_init_size=1,
+         host="127.0.0.1",
+         port=29500,
+         half=True,
+         checkpoint=None,
+         tokenizer_path=None,
+         server_host="127.0.0.1",
+         server_port=8005,
+         log_level="info",
+         backend="nccl"):
+             
     click.echo(f'*** Energon Init Configurations: *** \n'
-               f'Model Name: {model_name} \n'
+               f'Model Name: {model_class} \n'
+               f'Model Type: {model_type} \n'
+               f'Engine Server: {engine_server} \n'
                f'Max Batch Size: {max_batch_size} \n'
                f'Tensor Parallelism Size: {tp_init_size} \n'
                f'Pipeline Parallelism Size: {pp_init_size} \n'
@@ -44,6 +33,7 @@ def init(model_name,
                f'Communication Port: {port} \n'
                f'Is Half: {half} \n'
                f'Checkpoint Path: {checkpoint} \n'
+               f'Tokenizer Path: {tokenizer_path}'
                f'Worker Server Host: {server_host} \n'
                f'Worker Server Port: {server_port} \n'
                f'Unvicorn Log Level: {log_level} \n')
@@ -67,15 +57,39 @@ def init(model_name,
         p.start()
         process_list.append(p)
     
-    server.launch_engine(model_name,
-                        model_type,
-                        max_batch_size,
-                        tp_init_size,
-                        pp_init_size,
-                        host,
-                        port,
-                        dtype,
-                        checkpoint,
-                        server_host,
-                        engine_port,
-                        log_level)
+    engine_server(model_class,
+                    model_type,
+                    max_batch_size,
+                    tp_init_size,
+                    pp_init_size,
+                    host,
+                    port,
+                    dtype,
+                    checkpoint,
+                    tokenizer_path,
+                    server_host,
+                    engine_port,
+                    log_level)
+
+
+
+@click.group()
+def service():
+    pass
+
+
+@service.command()
+@click.option("--config_file", type=str)
+def init(config_file):
+    
+    cfg = Config.from_file(config_file)
+    sig = inspect.signature(launches)
+    parameters = sig.parameters
+
+    argv = dict()
+    for name, _ in parameters.items():
+        if name in cfg:
+            argv[name] = cfg[name]
+    launches(**argv)
+
+    

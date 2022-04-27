@@ -25,3 +25,13 @@ def transpose_depad(src, batch_size, sum_seq, max_seq_len, seq_len_list, head_nu
     return dst
 
 
+def depad(src, batch_size, seq_lens):
+    dst=src[0:1,0:seq_lens[0],:]
+    
+    for i in range(1, batch_size):
+        tlen = seq_lens[i]
+        dst = torch.cat([dst, src[i:i+1,0:tlen,:]], dim=1)
+
+    return dst
+
+

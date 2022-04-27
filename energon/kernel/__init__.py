@@ -1,5 +1,5 @@
-from .cuda_native import transpose_pad, transpose_depad, scale_mask_softmax
+from .cuda_native import transpose_pad, transpose_depad, depad, scale_mask_softmax
 
 __all__ = [
-    "transpose_pad", "transpose_depad", "scale_mask_softmax"
+    "transpose_pad", "transpose_depad", "depad", "scale_mask_softmax"
 ]

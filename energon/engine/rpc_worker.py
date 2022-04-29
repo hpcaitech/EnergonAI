@@ -50,6 +50,7 @@ class RPCWorker:
             self.model = self.pipe_wrapper(model = self.model, max_batch_size = self.max_batch_size, dtype=self.dtype)  
 
     def run(self, key, inputs):
+        print("key: {}".format(key), flush=True)
         torch.cuda.set_device(f'cuda:{gpc.get_local_rank(ParallelMode.GLOBAL)}') 
         for k, v in inputs.items():
             if v is not None:
@@ -59,8 +60,8 @@ class RPCWorker:
             output = self.model.run(key, inputs)
         else:
             output = self.model(**inputs)
-        
         if output is not None:
+            print("No.{} rpc output: {}".format(key, output.shape), flush=True)
             return output.cpu() #non_blocking=True
         
         return None

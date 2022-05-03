@@ -90,7 +90,7 @@ class BertPipelineCommWrapper:
         self.pipe_msg_queue.enqueue(key, inputs, pipe_meta)
 
         # different threads ask for a single lock
-        self.lock.acquire(timeout=3)
+        self.lock.acquire()
 
         sample, pipe_meta = self.pipe_msg_queue.top(self.key.val)
         self.key.addOne()

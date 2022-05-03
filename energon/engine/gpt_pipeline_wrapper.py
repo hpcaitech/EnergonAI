@@ -101,7 +101,7 @@ class GPTPipelineCommWrapper:
         self.fill_meta_tensor(inputs, pipe_meta)
         self.pipe_msg_queue.enqueue(key, inputs, pipe_meta)
         
-        self.lock.acquire(timeout=3)
+        self.lock.acquire()
         sample, pipe_meta = self.pipe_msg_queue.top(self.key.val)
         self.key.addOne()
 

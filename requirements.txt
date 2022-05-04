@@ -6,3 +6,5 @@ packaging
 fastapi
 uvicorn==0.14
 typer
+redis
+scipy

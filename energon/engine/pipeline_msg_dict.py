@@ -37,7 +37,7 @@ class PipelineMsgDict:
         while key not in self.pipeline_msg_dict:
             time.sleep(0.002)
 
-        pipe_msg = self.pipeline_msg_dict[key]
+        pipe_msg = self.pipeline_msg_dict.pop(key)
 
         return pipe_msg.sample, pipe_msg.pipe_meta
 

@@ -1,5 +1,5 @@
 from gpt import gpt2_small, gpt2_medium, gpt2_large, gpt2_xl, gpt2_8B, gpt3
-from gpt_server import launch_engine
+from gpt_batch_server import launch_engine
 
 model_class = gpt2_large
 model_type = "gpt"
@@ -10,6 +10,7 @@ host = "127.0.0.1"
 port = 29400
 half = True
 server_host = "127.0.0.1"
-server_port = 8010
+server_port = 8020
 log_level = "info"
 backend = "nccl"
+tokenizer_path = "/home/lcdjs/hf_gpt2"

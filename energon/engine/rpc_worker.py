@@ -25,7 +25,7 @@ class ReturnDict:
     def top(self, key):
         while key not in self.rd:
             time.sleep(0.001)
-        output = self.rd[key]
+        output = self.rd.pop(key)
         return output
 
 class RPCWorker:

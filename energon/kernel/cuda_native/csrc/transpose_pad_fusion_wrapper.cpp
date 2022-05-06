@@ -6,21 +6,23 @@
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 
-void transpose_pad(const float* src,
+template<typename T>
+void transpose_pad(const T* src,
                     const int batch_size, 
                     const int max_seq_len, 
-                    const int64_t* seq_len_list,
+                    const int* seq_len_list,
                     const int head_num,
                     const int size_per_head, 
-                    float* dst);
+                    T* dst);
 
-void transpose_depad(const float* src, 
+template<typename T>
+void transpose_depad(const T* src, 
                     const int batch_size,
                     const int max_seq_len,
-                    const int64_t* seq_len_list,
+                    const int* seq_len_list,
                     const int head_num, 
                     const int size_per_head,
-                    float* dst);
+                    T* dst);
 
 #define CHECK_CUDA(x) AT_ASSERTM(x.type().is_cuda(), #x " must be a CUDA tensor")
 #define CHECK_CONTIGUOUS(x) AT_ASSERTM(x.is_contiguous(), #x " must be contiguous")
@@ -34,14 +36,18 @@ torch::Tensor transpose_pad_wrapper(torch::Tensor src,
                     torch::Tensor seq_len_list,
                     int head_num,
                     int size_per_head){
-    CHECK_FP32_INPUT(src);
+    CHECK_INPUT(src);
     CHECK_INPUT(seq_len_list);
-    
-    auto options =  torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(false); 
-    auto dst = torch::zeros({batch_size, head_num, max_seq_len, size_per_head}, options); 
-    // dst.contiguous();
 
-    transpose_pad(src.data_ptr<float>(), batch_size, max_seq_len, seq_len_list.data_ptr<int64_t>(), head_num, size_per_head, dst.data_ptr<float>());
+    auto options =  torch::TensorOptions().dtype(src.dtype()).device(torch::kCUDA).requires_grad(false); 
+    auto dst = torch::zeros({batch_size, head_num, max_seq_len, size_per_head}, options); 
+
+    if(src.dtype() == torch::kFloat32){
+      transpose_pad(src.data_ptr<float>(), batch_size, max_seq_len, seq_len_list.data_ptr<int>(), head_num, size_per_head, dst.data_ptr<float>());
+    }else{
+      transpose_pad((half*)src.data_ptr(), batch_size, max_seq_len, seq_len_list.data_ptr<int>(), head_num, size_per_head, (half*)dst.data_ptr());
+    }
+    
     return dst;
 }
 
@@ -53,18 +59,18 @@ torch::Tensor transpose_depad_wrapper(torch::Tensor src,
                     torch::Tensor seq_len_list,
                     int head_num, 
                     int size_per_head){
-    CHECK_FP32_INPUT(src);
+    CHECK_INPUT(src);
     CHECK_INPUT(seq_len_list);
-    // int sum_seq = 0;
-    // for(int i = 0; i < batch_size; i++){
-    //     sum_seq += seq_len_list[i];
-    // }
 
-    auto options =  torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(false); 
+    auto options =  torch::TensorOptions().dtype(src.dtype()).device(torch::kCUDA).requires_grad(false); 
     auto dst = torch::zeros({1, sum_seq, head_num, size_per_head}, options); 
     // dst.contiguous();
-
-    transpose_depad(src.data_ptr<float>(), batch_size, max_seq_len, seq_len_list.data_ptr<int64_t>(), head_num, size_per_head, dst.data_ptr<float>());
+    if(src.dtype() == torch::kFloat32){
+      transpose_depad(src.data_ptr<float>(), batch_size, max_seq_len, seq_len_list.data_ptr<int>(), head_num, size_per_head, dst.data_ptr<float>());
+    }else{
+      transpose_depad((half*)src.data_ptr(), batch_size, max_seq_len, seq_len_list.data_ptr<int>(), head_num, size_per_head, (half*)dst.data_ptr());
+    }
+    
     return dst;
 }
 

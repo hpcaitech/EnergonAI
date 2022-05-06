@@ -88,7 +88,8 @@ def launch_engine(model_name,
     cached_cost = generate_cached_cost(engine, max_seq_len=256, max_batch_size=4, step=4, repeat_round=2)
 
     global batch_manager
-    batch_manager = Batch_Manager(engine, cached_cost, max_seq_len=256, max_batch_size=4)
+    batch_manager = Batch_Manager(engine, cached_cost, max_batch_size=4, tokenizer=tokenizer,
+                                  pad_token=GPT2Tokenizer.eos_token)
     print("batch manager initialized")
 
     global server

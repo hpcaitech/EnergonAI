@@ -3,6 +3,7 @@ from typing import Callable
 import os
 
 import torch
+import random
 from torch import nn as nn, Tensor, dtype
 
 from energon.context import ParallelMode
@@ -268,6 +269,19 @@ class GPT1D(nn.Module):
                                 word_embeding_weight=self.embed.word_embedding_weight,
                                 dtype=dtype)
 
+    def select_top_k(self, batch_id, temp_predictions, top_k: int = 10):
+        """
+        Pick out a word from the top k of 50257 words according to the possibility given by temp_predictions
+        for each sequence in this batch.
+        :param temp_predictions: Transformer output tensor with size of (batch size, sequence length, vocab size)
+                                which contains the possibilities for each word in this batch.
+        :type temp_predictions: torch.Tensor
+        :param top_k: How many top words to choose from.
+        """
+        temp_predicted_index = random.choice(
+            temp_predictions[batch_id, -1, :].sort(descending=True)[1][:top_k]).item()
+        return temp_predicted_index
+
     def forward(self, input_ids, attention_mask=None):
         x = self.embed(input_ids)
 
@@ -282,8 +296,10 @@ class GPT1D(nn.Module):
             x, attention_mask = block(x, attention_mask)
 
         x = self.head(self.norm(x))
-
-        return x
+        res = []
+        for i in range(x.shape[0]):
+            res.append(self.select_top_k(i, x))
+        return res
 
 
 class PipelineGPT1D(nn.Module):
@@ -348,6 +364,19 @@ class PipelineGPT1D(nn.Module):
             self.head = GPTLMHead1D(dim=dim, vocab_size=vocab_size,
                                     dtype=dtype)  # word_embeeding_weight=self.embed.word_embedding_weight not in the same process
 
+    def select_top_k(self, batch_id, temp_predictions, top_k: int = 10):
+        """
+        Pick out a word from the top k of 50257 words according to the possibility given by temp_predictions
+        for each sequence in this batch.
+        :param temp_predictions: Transformer output tensor with size of (batch size, sequence length, vocab size)
+                                which contains the possibilities for each word in this batch.
+        :type temp_predictions: torch.Tensor
+        :param top_k: How many top words to choose from.
+        """
+        temp_predicted_index = random.choice(
+            temp_predictions[batch_id, -1, :].sort(descending=True)[1][:top_k]).item()
+        return temp_predicted_index
+
     def forward(self, hidden_states=None, input_ids=None, attention_mask=None):
         if self.first:
             hidden_states = self.embed(input_ids)
@@ -371,7 +400,10 @@ class PipelineGPT1D(nn.Module):
 
         if self.last:
             hidden_states = self.head(self.norm(hidden_states))
-
+            res = []
+            for i in range(hidden_states.shape[0]):
+                res.append(self.select_top_k(i, hidden_states))
+            hidden_states = torch.Tensor(res)
         return hidden_states
 
 

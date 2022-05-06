@@ -48,8 +48,7 @@ class RPCWorker:
         torch.cuda.set_device(f'cuda:{gpc.get_local_rank(ParallelMode.GLOBAL)}')
         self._init_self()
 
-        if gpc.is_initialized(ParallelMode.PIPELINE):
-            self.return_dict = ReturnDict()
+        self.return_dict = ReturnDict()
 
     def _init_self(self):
         print("[INFO] init model in rank {}".format(self.rank))
@@ -62,8 +61,7 @@ class RPCWorker:
         self.model.eval()
 
 
-        if gpc.is_initialized(ParallelMode.PIPELINE):
-            self.model = self.pipe_wrapper(model = self.model, max_batch_size = self.max_batch_size, dtype=self.dtype)  
+        self.model = self.pipe_wrapper(model = self.model, max_batch_size = self.max_batch_size, dtype=self.dtype)  
 
     def run(self, key, inputs):
         # print("key: {}".format(key), flush=True)
@@ -72,16 +70,13 @@ class RPCWorker:
             if v is not None:
                 inputs[k] = v.cuda() #non_blocking=True
 
-        if gpc.is_initialized(ParallelMode.PIPELINE):
-            if gpc.is_last_rank(ParallelMode.PIPELINE):
-                output, cur_key = self.model.run(key, inputs)
-                self.return_dict.enqueue(cur_key, output.cpu())
-                return self.return_dict.top(key)
-            else:
-                self.model.run(key, inputs)
-                return None
-        else:
-            output = self.model(**inputs)
-            return output
-        
+                
+        if (gpc.is_initialized(ParallelMode.PIPELINE)) and (not gpc.is_last_rank(ParallelMode.PIPELINE)):
+            self.model.run(key, inputs)
+            return None
+        else: 
+            output, cur_key = self.model.run(key, inputs)
+            self.return_dict.enqueue(cur_key, output.cpu())
+            return self.return_dict.top(key)
+            
         return None

@@ -23,31 +23,29 @@ class GPTPipelineCommWrapper:
         # TODO (dujiangsu): to make sample capability for different types. Iteration, Tensor, and others.
         self.model = model
         self.dtype = dtype
-
-        # get the hidden_size
-        input_ids = torch.randint(1, 10, (max_batch_size, 512), dtype=torch.int64).cuda()
-        attention_mask = torch.randint(0, 1, (max_batch_size, 1, 512), dtype=torch.int64).cuda()
-        hidden_states = None
-        self.sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
         
         self.tensor_dim = 0
         self.hidden_size = 0
         self.max_batch_size = max_batch_size
 
         if gpc.is_initialized(ParallelMode.PIPELINE) and gpc.get_world_size(ParallelMode.PIPELINE) > 1:
-            self._init_tensor_meta()
+            input_ids = torch.randint(1, 10, (max_batch_size, 512), dtype=torch.int64).cuda()
+            attention_mask = torch.randint(0, 1, (max_batch_size, 1, 512), dtype=torch.int64).cuda()
+            hidden_states = None
+            sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
+            self._init_tensor_meta(sample)
 
         self.pipe_msg_queue = PipelineMsgDict()
         self.lock = threading.Lock()
         self.key = CircleInt()
 
 
-    def _init_tensor_meta(self):   
+    def _init_tensor_meta(self, sample):   
         
         with torch.inference_mode():
             recv_tensor_shape = None
             if gpc.is_first_rank(ParallelMode.PIPELINE):
-                output = self.model(hidden_states = None, input_ids=self.sample['input_ids'], attention_mask = self.sample['attention_mask']) # ([32, 512, 1600])
+                output = self.model(hidden_states = None, input_ids=sample['input_ids'], attention_mask = sample['attention_mask']) # ([32, 512, 1600])
                 send_tensor_meta(output)
                 send_forward(output)
                 self.tensor_dim = output.dim()
@@ -62,9 +60,34 @@ class GPTPipelineCommWrapper:
                 input_tensor = recv_forward(recv_tensor_shape, dtype=self.dtype) # only a tensor now
                 self.tensor_dim = input_tensor.dim()
                 self.hidden_size = input_tensor.size()[-1]
-                output = self.model(hidden_states = None, input_ids=input_tensor, attention_mask = self.sample['attention_mask'])
+                output = self.model(hidden_states = None, input_ids=input_tensor, attention_mask = sample['attention_mask'])
                 send_tensor_meta(output)
                 send_forward(output)
+
+    
+
+    def run(self, key, inputs):
+        if gpc.is_initialized(ParallelMode.PIPELINE):
+            return self.run_with_pp(key, inputs)            
+        else:
+            return self.run_without_pp(key, inputs)
+
+
+    def run_without_pp(self, key, inputs):
+        pipe_meta = None
+        self.pipe_msg_queue.enqueue(key, inputs, pipe_meta)
+
+        self.lock.acquire()
+
+        cur_key = self.key.val
+        sample, pipe_meta = self.pipe_msg_queue.top(cur_key)
+        self.key.addOne()
+        output = self.model(hidden_states = None, 
+                                    input_ids = sample['input_ids'], 
+                                    attention_mask = sample['attention_mask'])
+        self.lock.release()
+        
+        return output, cur_key
 
     '''
     hidden_size : ([32, 512, 1600])
@@ -77,7 +100,7 @@ class GPTPipelineCommWrapper:
         pipe_meta.get_meta_tensor()[3] = self.hidden_size
         pipe_meta.update_meta()
 
-    def run(self, key, inputs):
+    def run_with_pp(self, key, inputs):
         pipe_meta = PipelineMeta(self.tensor_dim, self.max_batch_size)
         self.fill_meta_tensor(inputs, pipe_meta)
         self.pipe_msg_queue.enqueue(key, inputs, pipe_meta)

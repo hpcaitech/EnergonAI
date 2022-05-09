@@ -184,9 +184,6 @@ def load_checkpoint(
                   if gpc.get_local_rank(ParallelMode.MODEL) == 0 else None)
 
     # model states
-    # if "HuggingFace" in kwargs.keys() and state_dict is not None:
-    #     if kwargs['HuggingFace'] == 'GPT2':
-    #         state_dict = processing_HF_GPT(state_dict)
     model_state = state_dict.pop("model") if state_dict is not None else dict()
     # pipeline
     if is_using_pp():
@@ -194,9 +191,6 @@ def load_checkpoint(
     if "prefix" in kwargs.keys():
         if kwargs['prefix'] != '':
             model_state = remove_prefix(model_state, kwargs["prefix"])
-    # print("Rank {}: {}".format(gpc.get_global_rank(), model_state))
-    # print("+"*30)
-    # print(model_state.keys())
     try:
         model.load_state_dict(model_state, strict=strict)
     except RuntimeError as e:
@@ -215,14 +209,6 @@ def load_checkpoint(
 
     # broadcast the rest states
     state_dict = broadcast_state_dict(state_dict, ParallelMode.MODEL)
-
-    # # optimizer states
-    # if optimizer is not None and 'optimizer' in state_dict:
-    #     optimizer.load_state_dict(state_dict['optimizer'])
-
-    # # lr scheduler states
-    # if lr_scheduler is not None and 'lr_scheduler' in state_dict:
-    #     lr_scheduler.load_state_dict(state_dict['lr_scheduler'])
 
     # last epoch
     last_epoch = state_dict.pop("epoch", -1)
@@ -262,16 +248,4 @@ def save_checkpoint(file,
         checkpoint["model"] = model_state
         for key_ in model_state:
             print(key_, model_state[key_].size())
-        # try:
-        #     print("saving checkpoint: {}".format(checkpoint))
-        # except Exception as e:
-        #     print(e)
-        # if optimizer is not None:
-        #     checkpoint['optimizer'] = optimizer.state_dict()
-
-        # if lr_scheduler is not None:
-        #     checkpoint['lr_scheduler'] = lr_scheduler.state_dict()
-        # print("before save")
         torch.save(checkpoint, file, **kwargs)
-        # print("after save")
-

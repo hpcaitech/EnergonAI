@@ -47,6 +47,7 @@ class Linear1D(torch.nn.Module):
     :param bias_initializer: The intializer of bias, defaults to xavier uniform initializer
     :type bias_initializer: typing.Callable, optional
     """
+
     def __init__(self,
                  in_features: int,
                  out_features: int,
@@ -89,7 +90,6 @@ class Linear1D(torch.nn.Module):
         return self.layer(input_)
 
 
-
 class Classifier1D(ParallelLayer):
     """RowLinear with given weight
     Classifier of 1D parallelism
@@ -109,6 +109,7 @@ class Classifier1D(ParallelLayer):
     :param bias_initializer: The intializer of bias, defaults to xavier uniform initializer
     :type bias_initializer: typing.Callable, optional
     """
+
     def __init__(self,
                  in_features: int,
                  num_classes: int,
@@ -217,7 +218,6 @@ class Classifier1D(ParallelLayer):
                                                                bias_key: False
                                                            })
         super()._load_from_state_dict(local_state, prefix, *args)
-
 
 
 class Linear1D_Col(ParallelLayer):
@@ -358,7 +358,6 @@ class Linear1D_Col(ParallelLayer):
         super()._load_from_state_dict(local_state, prefix, *args)
 
 
-
 class Linear1D_Row(ParallelLayer):
     """ Linear layer with row parallelism 
 
@@ -490,7 +489,6 @@ class Linear1D_Row(ParallelLayer):
             return output, self.bias
 
 
-
 class MixedFusedLayerNorm1D(torch.nn.Module):
     r"""
     Layer Normalization for 1D parallelism
@@ -508,7 +506,7 @@ class MixedFusedLayerNorm1D(torch.nn.Module):
         super(MixedFusedLayerNorm1D, self).__init__()
 
         if isinstance(normalized_shape, numbers.Integral):
-            normalized_shape = (normalized_shape, )
+            normalized_shape = (normalized_shape,)
             self.normalized_shape = torch.Size(normalized_shape)
         self.eps = eps
         self.weight = Parameter(torch.Tensor(*normalized_shape))
@@ -584,10 +582,8 @@ class MixedFusedLayerNorm1D(torch.nn.Module):
         #                                                    })
         # super()._load_from_state_dict(local_state, prefix, *args)
 
-
     def forward(self, input):
         return FusedLayerNormAffineFunction1D.apply(input, self.weight, self.bias, self.normalized_shape, self.eps)
-
 
 
 class Embedding1D(ParallelLayer):
@@ -607,6 +603,7 @@ class Embedding1D(ParallelLayer):
     :param args: Args used in F.embedding
     :param kwargs: Kwargs used in F.embedding
     """
+
     def __init__(self,
                  num_embeddings: int,
                  embedding_dim: int,
@@ -680,7 +677,6 @@ class Embedding1D(ParallelLayer):
         return output
 
 
-
 class Dropout1D(ParallelLayer):
     """
     Dropout layer of 1D parallelism
@@ -690,6 +686,7 @@ class Dropout1D(ParallelLayer):
     :param inplace: If set to ``True``, will do this operation in-place, defaults tp ``False``
     :type inplace: bool, optional
     """
+
     def __init__(self, p: float = 0.5, inplace: bool = False):
         super().__init__()
         self.parallel_input = get_parallel_input()

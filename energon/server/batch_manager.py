@@ -5,6 +5,8 @@ This code modifies the batch wrapping algorithm of Turbo Transformer.
 ------------------------------------------
 """
 import time
+
+import torch.cuda
 from scipy import stats
 import numpy as np
 from energon.engine import InferenceEngine
@@ -15,6 +17,7 @@ from tqdm import trange
 import threading
 from readerwriterlock import rwlock
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 
 def generate_cached_cost(engine, max_seq_len: int = 1024, max_batch_size: int = 16, step: int = 1,
@@ -120,6 +123,7 @@ class Batch_Manager(Manager):
             self.tokenizer.pad_token = pad_token  # GPT2Tokenizer.eos_token
         self.running_flag = True
         self.publisher = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
+        self.pool = ThreadPoolExecutor(max_workers=16)
         self.main_thread = threading.Thread(target=self.processing_batch)
         self.main_thread.start()
 
@@ -226,6 +230,7 @@ class Batch_Manager(Manager):
         and starts new processes that wait for and publish the inference result.
         """
         while self.running_flag:
+
             if len(self.req_list) > 0:
                 target_batch = self.wrap_batch()
                 pad_len = target_batch[-1].seq_len
@@ -235,11 +240,12 @@ class Batch_Manager(Manager):
                     input_ids = self.tokenizer(input_text, padding="longest", return_tensors="pt")
                 else:
                     input_ids = input_text
-                # print("input_ids shape: {}".format(input_ids['input_ids'].shape))
-                # print("attention_mask shape: {}".format(input_ids['attention_mask'].shape))
                 output = self.engine.run(input_ids)
-                pub_thread = threading.Thread(target=self.publish_result, args=(output, target_batch))
-                pub_thread.start()
+                self.pool.submit(self.publish_result, output, target_batch, start_time)
+                # self.publish_result(output, target_batch, start_time)
+                # pub_thread = threading.Thread(target=self.publish_result, args=(output, target_batch, start_time))
+                # pub_thread.start()
+            time.sleep(0.03)
 
     def publish_result(self, output, target_batch):
         """
@@ -248,7 +254,6 @@ class Batch_Manager(Manager):
         :param output: the rpc reference of the inference result.
         :param target_batch: the input batch
         """
-
         predictions = output.to_here()
         for i in range(len(target_batch)):
             temp_st = target_batch[i].time_

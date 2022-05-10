@@ -1,4 +1,3 @@
-
 import torch
 from torch import nn as nn, Tensor, distributed as dist
 from torch.nn import functional as F
@@ -14,7 +13,7 @@ from ..base_layer import ParallelLayer
 from .layers import Linear1D_Row
 from energon.nn.layer.utils import divide
 
-from ._utils import (gather_forward_split_backward,  reduce_grad, reduce_input)
+from ._utils import (gather_forward_split_backward, reduce_grad, reduce_input)
 
 
 class VocabParallelEmbedding(torch.nn.Module):
@@ -122,16 +121,13 @@ class VocabParallelEmbedding(torch.nn.Module):
                                        keep_vars=False):
         """For easy load."""
 
-        state_dict_ = {}
-        state_dict_[self._word_embeddings_key] \
-            = self.word_embeddings.state_dict(destination, prefix, keep_vars)
-        state_dict_[self._position_embeddings_key] \
-            = self.position_embeddings.state_dict(
-                destination, prefix, keep_vars)
+        state_dict_ = {self._word_embeddings_key: self.word_embeddings.state_dict(destination, prefix, keep_vars),
+                       self._position_embeddings_key: self.position_embeddings.state_dict(
+                           destination, prefix, keep_vars)}
         if self.num_tokentypes > 0:
             state_dict_[self._tokentype_embeddings_key] \
                 = self.tokentype_embeddings.state_dict(
-                    destination, prefix, keep_vars)
+                destination, prefix, keep_vars)
 
         return state_dict_
 
@@ -213,7 +209,7 @@ class VocabParallelEmbedding1D(torch.nn.Module):
                 self.num_embeddings, gpc.get_local_rank(ParallelMode.PARALLEL_1D),
                 self.tensor_model_parallel_size) if not skip_tp else 0, num_embeddings
         self.num_embeddings_per_partition = self.vocab_end_index - \
-            self.vocab_start_index
+                                            self.vocab_start_index
 
         # Allocate weights and initialize.
         factory_kwargs = {'device': get_current_device(), 'dtype': dtype}
@@ -271,12 +267,10 @@ class VocabParallelEmbedding1D(torch.nn.Module):
         destination.update(local_state)
 
 
-
 class _VocabParallelCrossEntropy(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, vocab_parallel_logits, target):
-
         # Maximum value along vocab dimension across all GPUs.
         logits_max = torch.max(vocab_parallel_logits, dim=-1)[0]
         torch.distributed.all_reduce(logits_max,
@@ -332,7 +326,6 @@ class _VocabParallelCrossEntropy(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-
         # Retreive tensors from the forward path.
         softmax, target_mask, masked_target_1d = ctx.saved_tensors
 
@@ -346,7 +339,7 @@ class _VocabParallelCrossEntropy(torch.autograd.Function):
         arange_1d = torch.arange(start=0, end=grad_2d.size()[0],
                                  device=grad_2d.device)
         grad_2d[arange_1d, masked_target_1d] -= (
-            1.0 - target_mask.view(-1).float())
+                1.0 - target_mask.view(-1).float())
 
         # Finally elementwise multiplication with the output gradients.
         grad_input.mul_(grad_output.unsqueeze(dim=-1))
@@ -509,11 +502,11 @@ class HiddenParallelEmbedding(torch.nn.Module):
             = self.word_embeddings.state_dict(destination, prefix, keep_vars)
         state_dict_[self._position_embeddings_key] \
             = self.position_embeddings.state_dict(
-                destination, prefix, keep_vars)
+            destination, prefix, keep_vars)
         if self.num_tokentypes > 0:
             state_dict_[self._tokentype_embeddings_key] \
                 = self.tokentype_embeddings.state_dict(
-                    destination, prefix, keep_vars)
+                destination, prefix, keep_vars)
 
         return state_dict_
 
@@ -597,7 +590,6 @@ class HiddenParallelEmbedding1D(torch.nn.Module):
         init.uniform_(self.weight, -1, 1)
 
     def forward(self, input_):
-
         # Get the embeddings.
         output_parallel = F.embedding(input_, self.weight,
                                       self.padding_idx, self.max_norm,

@@ -242,7 +242,7 @@ class Batch_Manager(Manager):
                 else:
                     input_ids = input_text
                 output = self.engine.run(input_ids)
-                self.pool.submit(self.publish_result, output, target_batch, start_time)
+                self.pool.submit(self.publish_result, output, target_batch)
                 # self.publish_result(output, target_batch, start_time)
                 # pub_thread = threading.Thread(target=self.publish_result, args=(output, target_batch, start_time))
                 # pub_thread.start()

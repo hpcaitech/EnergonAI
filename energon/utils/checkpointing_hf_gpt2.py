@@ -9,11 +9,11 @@ from . import is_using_pp
 from ..communication.collective import scatter_object_list
 from ..context.parallel_mode import ParallelMode
 from ..core import global_context as gpc
+
 try:
     from torch.nn.modules.module import _EXTRA_STATE_KEY_SUFFIX
 except ImportError:
     _EXTRA_STATE_KEY_SUFFIX = '_extra_state'
-
 
 __all__ = ["partition_tensor_parallel_state_dict",
            "load_checkpoint",
@@ -96,7 +96,6 @@ def gather_tensor_parallel_state_dict(
     return state_dict
 
 
-
 def _send_state_dict(state_dict, dst, parallel_mode):
     state_tensor, state_size = dist.distributed_c10d._object_to_tensor(state_dict)
     dist.send(state_size, dst, group=gpc.get_cpu_group(parallel_mode))
@@ -163,11 +162,11 @@ def remove_prefix(state_dict, prefix):
 
 
 def load_checkpoint(
-    file,
-    model: torch.nn.Module,
-    optimizer: torch.optim.Optimizer = None,
-    lr_scheduler: torch.optim.lr_scheduler._LRScheduler = None,
-    strict: bool = True, **kwargs
+        file,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer = None,
+        lr_scheduler: torch.optim.lr_scheduler._LRScheduler = None,
+        strict: bool = True, **kwargs
 ):
     """Loads training states from a checkpoint file.
 
@@ -296,7 +295,6 @@ def processing_HF_GPT(state_dict: OrderedDict):
         new_k = module_name_mapping(k_)
         if new_k == "":
             continue
-
 
         new_v = state_dict[k_]
         if judge_t(new_k):

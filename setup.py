@@ -14,6 +14,7 @@ if '--no_cuda_ext' in sys.argv:
     sys.argv.remove('--no_cuda_ext')
     build_cuda_ext = False
 
+
 def get_cuda_bare_metal_version(cuda_dir):
     raw_output = subprocess.check_output([cuda_dir + "/bin/nvcc", "-V"], universal_newlines=True)
     output = raw_output.split()
@@ -56,8 +57,10 @@ def fetch_requirements(path):
 
 if not torch.cuda.is_available():
     # https://github.com/NVIDIA/apex/issues/486
-    # Extension builds after https://github.com/pytorch/pytorch/pull/23408 attempt to query torch.cuda.get_device_capability(),
-    # which will fail if you are compiling in an environment without visible GPUs (e.g. during an nvidia-docker build command).
+    # Extension builds after https://github.com/pytorch/pytorch/pull/23408 attempt to
+    # query torch.cuda.get_device_capability(),
+    # which will fail if you are compiling in an environment without visible GPUs
+    # (e.g. during an nvidia-docker build command).
     print('\nWarning: Torch did not find available GPUs on this system.\n',
           'If your intention is to cross-compile, this is not an error.\n'
           'By default, Colossal-AI will cross-compile for Pascal (compute capabilities 6.0, 6.1, 6.2),\n'
@@ -93,18 +96,24 @@ version_dependent_macros = ['-DVERSION_GE_1_1', '-DVERSION_GE_1_3', '-DVERSION_G
 if build_cuda_ext:
     if CUDA_HOME is None:
         raise RuntimeError(
-            "--cuda_ext was requested, but nvcc was not found.  Are you sure your environment has nvcc available?  If you're installing within a container from https://hub.docker.com/r/pytorch/pytorch, only images whose names contain 'devel' will provide nvcc.")
+            "--cuda_ext was requested, but nvcc was not found.  Are you sure your environment has nvcc available?  If "
+            "you're installing within a container from https://hub.docker.com/r/pytorch/pytorch, only images whose "
+            "names contain 'devel' will provide nvcc.")
     else:
         check_cuda_torch_binary_vs_bare_metal(CUDA_HOME)
+
 
         def cuda_ext_helper(name, sources, extra_cuda_flags):
             return CUDAExtension(name=name,
                                  sources=[os.path.join('energon/kernel/cuda_native/csrc', path) for path in sources],
                                  include_dirs=[os.path.join(
-                                     this_dir, 'energon/kernel/cuda_native/csrc/kernels/include'), '/opt/lcsoftware/spack/opt/spack/linux-ubuntu20.04-zen2/gcc-9.3.0/nccl-2.9.6-1-ysovaavjkgjez2fwms4dkvatu5yrxbec/include'],
+                                     this_dir, 'energon/kernel/cuda_native/csrc/kernels/include'),
+                                     '/opt/lcsoftware/spack/opt/spack/linux-ubuntu20.04-zen2/gcc-9.3.0/nccl-2.9.6-1'
+                                     '-ysovaavjkgjez2fwms4dkvatu5yrxbec/include'],
                                  extra_compile_args={'cxx': ['-O3'] + version_dependent_macros,
                                                      'nvcc': append_nvcc_threads(['-O3',
                                                                                   '--use_fast_math'] + version_dependent_macros + extra_cuda_flags)})
+
 
         cc_flag = ['-gencode', 'arch=compute_70,code=sm_70']
         _, bare_metal_major, _ = get_cuda_bare_metal_version(CUDA_HOME)
@@ -119,23 +128,21 @@ if build_cuda_ext:
                             '-DTHRUST_IGNORE_CUB_VERSION_CHECK'
                             ]
         ext_modules.append(cuda_ext_helper('energon_scale_mask',
-                                            ['scale_mask_softmax_kernel.cu', 
+                                           ['scale_mask_softmax_kernel.cu',
                                             'scale_mask_softmax_wrapper.cpp'],
-                                            extra_cuda_flags + cc_flag))
+                                           extra_cuda_flags + cc_flag))
 
         ext_modules.append(cuda_ext_helper('energon_layer_norm',
-                                            ['layer_norm_cuda_kernel.cu', 'layer_norm_cuda.cpp'],
-                                            extra_cuda_flags + cc_flag))
+                                           ['layer_norm_cuda_kernel.cu', 'layer_norm_cuda.cpp'],
+                                           extra_cuda_flags + cc_flag))
 
         ext_modules.append(cuda_ext_helper('energon_transpose_pad',
-                                            ['transpose_pad_fusion_wrapper.cpp', 'transpose_pad_fusion_kernel.cu'],
-                                            extra_cuda_flags + cc_flag))
+                                           ['transpose_pad_fusion_wrapper.cpp', 'transpose_pad_fusion_kernel.cu'],
+                                           extra_cuda_flags + cc_flag))
 
         ext_modules.append(cuda_ext_helper('energon_nccl',
-                                            ['get_ncclid.cpp'],
-                                            extra_cuda_flags + cc_flag))
-
-        
+                                           ['get_ncclid.cpp'],
+                                           extra_cuda_flags + cc_flag))
 
 setup(
     name='energon',

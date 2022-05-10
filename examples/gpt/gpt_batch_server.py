@@ -18,6 +18,16 @@ app = FastAPI()
 def root():
     return {"200"}
 
+@app.post("/model_with_padding_without_batch")
+def run_without_batch(input_str: str = Body(..., title="input_str", embed=True)):
+    global engine
+    global tokenizer
+    input_token = tokenizer(input_str, return_tensors="pt")
+    print(input_token['input_ids'].size())
+    output = engine.run(input_token)
+    predictions = output.to_here()
+    text_ = tokenizer.decode(predictions)
+    return {text_}
 
 @app.post("/model_with_padding")
 def run(

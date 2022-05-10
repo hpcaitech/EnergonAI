@@ -135,7 +135,7 @@ def scatter_object_list(scatter_object_output_list, scatter_object_input_list, s
     if dist._rank_not_in_group(group):
         return
 
-    if (not isinstance(scatter_object_output_list, list) or len(scatter_object_output_list) < 1):
+    if not isinstance(scatter_object_output_list, list) or len(scatter_object_output_list) < 1:
         raise RuntimeError("Expected argument scatter_object_output_list to be a list of size at least 1.")
 
     # set tensor device to cuda if backend is nccl

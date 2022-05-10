@@ -2,6 +2,7 @@ import torch
 from energon.core import global_context as gpc
 from energon.context import ParallelMode
 
+
 # The class is not multithread safe, there needs a explicite logic for manage multiple calls
 class PipelineMeta:
     def __init__(self, tensor_num_dim: int = -1, max_batch_size: int = -1):
@@ -10,12 +11,11 @@ class PipelineMeta:
         self.max_batch_size = max_batch_size
 
         self.info_len = tensor_num_dim + max_batch_size + 1
-        self.batch_size = 1 # 1
-        
-        self.tensor_shapes = [] # ([32, 512, 1600])  3
-        self.seq_lens = [] # [42,52,63,12] # batch_size
-        self.meta_tensor = torch.zeros(self.info_len, dtype = torch.int, requires_grad=False).cuda()
- 
+        self.batch_size = 1  # 1
+
+        self.tensor_shapes = []  # ([32, 512, 1600])  3
+        self.seq_lens = []  # [42,52,63,12] # batch_size
+        self.meta_tensor = torch.zeros(self.info_len, dtype=torch.int, requires_grad=False).cuda()
 
     # resolve meta from tensor.
     # batchsize | TensorShape | seq_lens
@@ -26,7 +26,7 @@ class PipelineMeta:
         cur = 0
         self.batch_size = metaTensor[0].item()
         # print(type(self.batch_size))
-        
+
         self.tensor_shapes.clear()
         for i in range(self.tensor_num_dim):
             cur = cur + 1
@@ -41,7 +41,7 @@ class PipelineMeta:
         cur = 0
         self.batch_size = self.meta_tensor[0].item()
         # print(type(self.batch_size))
-        
+
         self.tensor_shapes.clear()
         for i in range(self.tensor_num_dim):
             cur = cur + 1
@@ -57,7 +57,7 @@ class PipelineMeta:
 
     def get_tensor_shapes(self):
         return torch.Size(self.tensor_shapes)
-    
+
     def get_batch_size(self):
         return self.batch_size
 
@@ -71,8 +71,5 @@ class PipelineMeta:
     def get_meta_tensor_shape(self):
         return self.meta_tensor.size()
 
-
     def get_info_len(self):
         return self.info_len
-
-    

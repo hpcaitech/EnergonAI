@@ -9,11 +9,11 @@ from . import is_using_pp
 from ..communication.collective import scatter_object_list
 from ..context.parallel_mode import ParallelMode
 from ..core import global_context as gpc
+
 try:
     from torch.nn.modules.module import _EXTRA_STATE_KEY_SUFFIX
 except ImportError:
     _EXTRA_STATE_KEY_SUFFIX = '_extra_state'
-
 
 __all__ = ["partition_tensor_parallel_state_dict",
            "load_checkpoint",
@@ -22,6 +22,15 @@ __all__ = ["partition_tensor_parallel_state_dict",
 
 
 def broadcast_state_dict(state_dict, parallel_mode):
+    """
+    Broadcast the state dict among the group under the selected parallel mode
+    Args:
+        state_dict: state dict containing the parameters of the model
+        parallel_mode: PP/TP and so on
+
+    Returns:
+        state dict
+    """
     state_dict = [state_dict.copy() if isinstance(state_dict, dict) else state_dict]
     src_rank = gpc.get_ranks_in_group(parallel_mode)[0]
     dist.broadcast_object_list(state_dict, src=src_rank, group=gpc.get_cpu_group(parallel_mode))
@@ -32,6 +41,12 @@ def partition_tensor_parallel_state_dict(state_dict: OrderedDict,
                                          parallel_mode: ParallelMode,
                                          dims: dict = dict(),
                                          partition_states: dict = dict()):
+    """
+    Given a state dict, do the partition of parameters among workers.
+    Args:
+        dims: dimensions to chunk on.
+        partition_states: the states in state dicts that needs to be chunked.
+    """
     src_rank = gpc.get_ranks_in_group(parallel_mode)[0]
     depth = gpc.get_world_size(parallel_mode)
 
@@ -87,7 +102,6 @@ def gather_tensor_parallel_state_dict(
             state_dict[key] = param
 
     return state_dict
-
 
 
 def _send_state_dict(state_dict, dst, parallel_mode):
@@ -156,11 +170,11 @@ def remove_prefix(state_dict, prefix):
 
 
 def load_checkpoint(
-    file,
-    model: torch.nn.Module,
-    optimizer: torch.optim.Optimizer = None,
-    lr_scheduler: torch.optim.lr_scheduler._LRScheduler = None,
-    strict: bool = True, **kwargs
+        file,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer = None,
+        lr_scheduler: torch.optim.lr_scheduler._LRScheduler = None,
+        strict: bool = True, **kwargs
 ):
     """Loads training states from a checkpoint file.
 

@@ -4,6 +4,7 @@ from energon.context import Config, ParallelMode, ConfigException
 from energon.core import global_context as gpc
 from energon.logging import get_dist_logger
 
+
 def launch(rank: int,
            world_size: int,
            host: str,
@@ -12,8 +13,8 @@ def launch(rank: int,
            local_rank: int = None,
            seed: int = 1024,
            verbose: bool = True,
-           tp_size = 1,
-           pp_size = 1):
+           tp_size=1,
+           pp_size=1):
     """This function first parses the configuration arguments, using :func:`parse_args()` in case one of the input
     arguments are not given. Then initialize and set distributed environment by calling global_context's functions.
     :param rank: Rank for the default process group
@@ -48,7 +49,7 @@ def launch(rank: int,
     #     pipeline=dict(size=pp_size),
     #     tensor=dict(size=tp_size, mode='1d'),
     # )
-    config = dict(parallel = dict(pipeline=dict(size=pp_size),tensor=dict(size=tp_size, mode='1d')))
+    config = dict(parallel=dict(pipeline=dict(size=pp_size), tensor=dict(size=tp_size, mode='1d')))
 
     gpc.load_config(config)
 
@@ -71,11 +72,12 @@ def launch(rank: int,
                     f'data parallel size: {gpc.data_parallel_size}, pipeline parallel size: {gpc.pipeline_parallel_size}, '
                     f'tensor parallel size: {gpc.tensor_parallel_size}', ranks=[0])
 
-def launch_from_torch(tp_size = 1,
-                    pp_size = 1,
-                    backend: str = 'nccl',
-                    seed: int = 1024,
-                    verbose: bool = True):
+
+def launch_from_torch(tp_size=1,
+                      pp_size=1,
+                      backend: str = 'nccl',
+                      seed: int = 1024,
+                      verbose: bool = True):
     """A wrapper for colossalai.launch for torchrun or torch.distributed.launch by reading rank and world size
     from the environment variables set by PyTorch
     :type config: Union[str, dict, Config]
@@ -102,17 +104,18 @@ def launch_from_torch(tp_size = 1,
            tp_size=tp_size,
            pp_size=pp_size)
 
+
 def launch_from_multiprocess(tp_size: int = 1,
-                            pp_size:int = 1,
-                            backend: str = 'nccl',
-                            seed: int = 1024,
-                            verbose: bool = True,
-                            rank: int = 0,
-                            local_rank: int = 0,
-                            world_size:int = 1,
-                            host: str = '127.0.0.1',
-                            port: int = 29500
-                            ):
+                             pp_size: int = 1,
+                             backend: str = 'nccl',
+                             seed: int = 1024,
+                             verbose: bool = True,
+                             rank: int = 0,
+                             local_rank: int = 0,
+                             world_size: int = 1,
+                             host: str = '127.0.0.1',
+                             port: int = 29500
+                             ):
     """A wrapper for colossalai.launch for using multiprocessing.
     As it is essential to provide a single entrance of input&&output in the triton,
     here we provide the multiprocess launch.
@@ -120,7 +123,7 @@ def launch_from_multiprocess(tp_size: int = 1,
     """
     os.environ['MASTER_ADDR'] = host
     os.environ['MASTER_PORT'] = f'{port}'
-    
+
     launch(local_rank=local_rank,
            rank=rank,
            world_size=world_size,

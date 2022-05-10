@@ -127,7 +127,6 @@ class Batch_Manager(Manager):
         self.main_thread = threading.Thread(target=self.processing_batch)
         self.main_thread.start()
 
-
     def insert_req(self, time_stamp: float, input_ids, input_str: str):
         """
         Build a single_request class with the input string and then insert it into the queue.

@@ -8,6 +8,7 @@ from energon.core import global_context as gpc
 
 __all__ = ['ParallelLayer']
 
+
 class ParallelLayer(nn.Module):
 
     def __init__(self):

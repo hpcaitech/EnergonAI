@@ -12,30 +12,6 @@ from energon.constants import (IS_TENSOR_PARALLEL, NUM_PARTITIONS, TENSOR_PARALL
 from torch import Tensor, nn
 
 
-# class CheckpointModule(nn.Module):
-#     def __init__(self, checkpoint: bool = True):
-#         super().__init__()
-#         self.checkpoint = checkpoint
-#         self._use_checkpoint = checkpoint
-
-#     def _forward(self, *args, **kwargs):
-#         raise NotImplementedError('CheckpointModule should implement _forward method instead of origin forward')
-
-#     def forward(self, *args, **kwargs):
-#         if self._use_checkpoint:
-#             return checkpoint(self._forward, *args, **kwargs)
-#         else:
-#             return self._forward(*args, **kwargs)
-
-#     def train(self, mode: bool = True):
-#         self._use_checkpoint = self.checkpoint
-#         return super().train(mode=mode)
-
-#     def eval(self):
-#         self._use_checkpoint = False
-#         return super().eval()
-
-
 def divide(numerator, denominator):
     """Only allow exact division
 

@@ -7,14 +7,7 @@ import sys
 from energon.core import global_context as gpc
 from energon.context import ParallelMode
 from .rpc_utils import remote_cls_method, sync_cls_method, async_cls_method
-from .gpt_pipeline_wrapper import GPTPipelineCommWrapper
-from .bert_pipeline_wrapper import BertPipelineCommWrapper
-
-WRAPPER_TYPES = {
-    "gpt": GPTPipelineCommWrapper,
-    "bert": BertPipelineCommWrapper,
-}
-
+from .pipeline_wrapper import PipelineCommWrapper
 
 class ReturnDict:
     def __init__(self):
@@ -41,7 +34,6 @@ class RPCWorker:
         self.model_config = model_config
         self.dtype = dtype
         self.max_batch_size = max_batch_size
-        self.pipe_wrapper = WRAPPER_TYPES[model_type]
 
         self.WORKER_NAME = "wok{}"
         self.model = None  # call the model
@@ -62,7 +54,7 @@ class RPCWorker:
             # print("Pass")
         self.model.eval()
 
-        self.model = self.pipe_wrapper(model=self.model, max_batch_size=self.max_batch_size, dtype=self.dtype)
+        self.model = PipelineCommWrapper(model=self.model, max_batch_size=self.max_batch_size, dtype=self.dtype)
 
     def run(self, key, inputs):
         # print("key: {}".format(key), flush=True)

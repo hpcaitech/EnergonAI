@@ -15,7 +15,7 @@ from .pipeline_msg_dict import PipelineMsgDict, CircleInt  # PipelineMsgPriority
 
 
 # The Wrapper is only for Transformer Model.
-class GPTPipelineCommWrapper:
+class PipelineCommWrapper:
     def __init__(self,
                  model: nn.Module,
                  max_batch_size: int = 1,

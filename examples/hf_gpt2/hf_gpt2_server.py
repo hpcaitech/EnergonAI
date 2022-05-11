@@ -40,7 +40,7 @@ async def shutdown():
     await server.shutdown()
 
 
-def launch_engine(model_name,
+def launch_engine(model_class,
                 model_type,
                 max_batch_size: int = 1,
                 tp_init_size: int = -1,
@@ -66,7 +66,7 @@ def launch_engine(model_name,
         model_config = {'dtype': dtype}
 
     global engine
-    engine = InferenceEngine(model_name, 
+    engine = InferenceEngine(model_class, 
                             model_config,
                             model_type,
                             max_batch_size = max_batch_size, 

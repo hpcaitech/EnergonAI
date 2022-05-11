@@ -61,20 +61,30 @@ def launches(model_class=None,
         p.start()
         process_list.append(p)
 
-    engine_server(model_class,
-                  model_type,
-                  max_batch_size,
-                  tp_init_size,
-                  pp_init_size,
-                  host,
-                  port,
-                  dtype,
-                  checkpoint,
-                  tokenizer_path,
-                  server_host,
-                  engine_port,
-                  log_level,
-                  rm_padding)
+    sig_server = inspect.signature(engine_server)
+    parameters_server = sig_server.parameters
+    
+    cfg = {'model_class' : model_class,
+        'model_type' : model_type,
+        'max_batch_size' : max_batch_size,
+        'tp_init_size' : tp_init_size,
+        'pp_init_size' : pp_init_size,
+        'host' : host,
+        'port' : port,
+        'dtype' : dtype,
+        'checkpoint' : checkpoint,
+        'tokenizer_path' : tokenizer_path,
+        'server_host' : server_host,
+        'server_port' : engine_port,
+        'log_level' : log_level,
+        'rm_padding' : rm_padding}
+
+    argv = dict()
+    for name, _ in parameters_server.items():
+        if name in cfg:
+            argv[name] = cfg[name]
+
+    engine_server(**argv)
 
 
 @click.group()
@@ -86,6 +96,7 @@ def service():
 @click.option("--config_file", type=str)
 def init(config_file):
     cfg = Config.from_file(config_file)
+
     sig = inspect.signature(launches)
     parameters = sig.parameters
 

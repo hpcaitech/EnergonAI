@@ -89,7 +89,7 @@ class GPTSelfAttention1D(nn.Module):
             self.softmax = nn.Softmax(dim=-1)
         self.dense = Linear1D_Row(dim, dim, bias=True, dtype=dtype, parallel_input=True)
 
-    def forward(self, x, attention_mask=None, batch_size=None, max_padding_size=None, seq_lens=None):
+    def forward(self, x, attention_mask=None, batch_size=None, max_padding_size=None, seq_lens=None, valid_word_num=None):
         qkv = self.query_key_value(x)
         all_head_size = qkv.shape[-1] // 3
         num_attention_heads = divide(all_head_size, self.attention_head_size)  # num_heads
@@ -115,6 +115,7 @@ class GPTSelfAttention1D(nn.Module):
             causal_mask = torch.tril(torch.ones((q_len, k_len), dtype=torch.uint8,
                                                 device=get_current_device())).view(1, 1, q_len, k_len).bool()
             x = torch.where(causal_mask, x, torch.tensor(-1e4, dtype=x.dtype, device=get_current_device()))
+
             if attention_mask is not None:
                 x = x + attention_mask
             x = self.softmax(x)
@@ -122,7 +123,7 @@ class GPTSelfAttention1D(nn.Module):
         x = torch.matmul(x, v)
 
         if seq_lens is not None:
-            x = transpose_depad(x, batch_size, valid_word_num[0].item(), max_padding_size, seq_lens, num_attention_heads, self.attention_head_size)
+            x = transpose_depad(x, batch_size, valid_word_num, max_padding_size, seq_lens, num_attention_heads, self.attention_head_size)
         else: 
             x = x.transpose(1, 2)
 
@@ -142,6 +143,7 @@ class GPTMLP1D(nn.Module):
                  dtype: dtype = None,
                  bias: bool = True):
         super().__init__()
+        
         intermediate_dim = int(dim * mlp_ratio)
         self.dense_1 = Linear1D_Col(dim, intermediate_dim, bias=bias, dtype=dtype, gather_output=False)
         self.activation = activation
@@ -179,13 +181,13 @@ class GPTBlock1D(nn.Module):
         self.norm2 = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
         self.mlp = GPTMLP1D(dim=dim, mlp_ratio=mlp_ratio, activation=activation, dtype=dtype, bias=bias)
 
-    def forward(self, x, attention_mask=None, batch_size=None, max_padding_size=None, seq_lens=None):
+    def forward(self, x, attention_mask=None, batch_size=None, max_padding_size=None, seq_lens=None, valid_word_num=None):
         if not self.apply_post_layernorm:
             residual = x
         x = self.norm1(x)
         if self.apply_post_layernorm:
             residual = x
-        x = residual + self.attn(x, attention_mask, batch_size, max_padding_size, seq_lens)
+        x = residual + self.attn(x, attention_mask, batch_size, max_padding_size, seq_lens, valid_word_num)
 
         if not self.apply_post_layernorm:
             residual = x
@@ -295,30 +297,25 @@ class PipelineGPT1D(nn.Module):
             if seq_lens is not None:
                 hidden_states = ft_remove_padding(hidden_states, self.tmp_mask_offset, 
                                    self.mask_offset, self.valid_word_num[0].item(), self.dim)
-        elif seq_lens is not None:
-             ft_remove_padding(hidden_states, self.tmp_mask_offset, 
-                                            self.mask_offset, self.valid_word_num[0].item(), self.dim)
 
         # We create a 3D attention mask from a 2D tensor mask.
         # Sizes are [batch_size, 1, 1, to_seq_length]
         # So we can broadcast to [batch_size, num_heads, from_seq_length, to_seq_length]
         # Adapted from huggingface
+    
         if attention_mask is not None:
-            if self.first:
-                batch_size = input_ids.shape[0]
-            else:
-                batch_size = hidden_states.shape[0]
             attention_mask = attention_mask.view(batch_size, -1)
             attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
             attention_mask = attention_mask.to(dtype=hidden_states.dtype)  # fp16 compatibility
             attention_mask = (1.0 - attention_mask) * -10000.0
+            
 
         for block in self.blocks:
-            hidden_states = block(hidden_states, attention_mask, batch_size, max_padding_size, seq_lens)
+            hidden_states = block(hidden_states, attention_mask, batch_size, max_padding_size, seq_lens, self.valid_word_num[0].item())
 
         if self.last:
             if seq_lens is not None:
-                hidden_states = ft_rebuild_padding(hidden_states, self.mask_offset, self.valid_word_num[0].item(), self.dim, batch_size, max_padding_size)
+                hidden_states = ft_rebuild_padding(hidden_states, self.tmp_mask_offset[0:self.valid_word_num[0].item()], self.valid_word_num[0].item(), self.dim, batch_size, max_padding_size)
             hidden_states = self.head(self.norm(hidden_states))
             # res = []
             # for i in range(hidden_states.shape[0]):

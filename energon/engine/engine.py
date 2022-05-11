@@ -17,7 +17,6 @@ from energon.initialize import launch_from_torch, launch_from_multiprocess
 
 from energon.utils import ensure_directory_exists
 from energon.logging import get_dist_logger
-from energon.nn import PipelineCommWrapper
 
 
 class InferenceEngine(Module):

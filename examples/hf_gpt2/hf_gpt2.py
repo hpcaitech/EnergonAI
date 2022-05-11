@@ -377,7 +377,7 @@ class PipelineGPT1D(nn.Module):
             self.head = GPTLMHead1D(dim=dim, vocab_size=vocab_size,
                                     dtype=dtype)  # word_embeeding_weight=self.embed.word_embedding_weight not in the same process
 
-    def forward(self, hidden_states=None, input_ids=None, attention_mask=None):
+    def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None):
         topk = 5 # TODO: add as a parameter
         if self.first:
             hidden_states = self.embed(input_ids)

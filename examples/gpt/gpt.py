@@ -15,6 +15,8 @@ from energon.nn import LayerNorm1D
 from energon.nn import VocabParallelEmbedding1D
 from energon.utils import get_current_device, is_using_pp
 from energon.utils.checkpointing import load_checkpoint
+from energon.kernel import transpose_pad, transpose_depad, depad
+from energon.kernel import ft_build_padding_offsets, ft_remove_padding, ft_rebuild_padding
 
 __all__ = [
     'GPTEmbedding1D'
@@ -66,6 +68,8 @@ class GPTSelfAttention1D(nn.Module):
                  fuse_scale_mask_softmax: bool = False,
                  dtype: dtype = None) -> None:
         super().__init__()
+
+        self.dim = dim
         self.fuse_scale_mask_softmax = fuse_scale_mask_softmax  # TODO
         self.attention_head_size = divide(dim, num_heads)
         self.query_key_value = Linear1D_Col(dim, 3 * dim, bias=bias, dtype=dtype)
@@ -85,7 +89,7 @@ class GPTSelfAttention1D(nn.Module):
             self.softmax = nn.Softmax(dim=-1)
         self.dense = Linear1D_Row(dim, dim, bias=True, dtype=dtype, parallel_input=True)
 
-    def forward(self, x, attention_mask=None):
+    def forward(self, x, attention_mask=None, batch_size=None, max_padding_size=None, seq_lens=None):
         qkv = self.query_key_value(x)
         all_head_size = qkv.shape[-1] // 3
         num_attention_heads = divide(all_head_size, self.attention_head_size)  # num_heads
@@ -93,7 +97,12 @@ class GPTSelfAttention1D(nn.Module):
         new_qkv_shape = qkv.shape[:-1] + \
                         (num_attention_heads, 3 * self.attention_head_size)
         qkv = qkv.view(new_qkv_shape)
-        qkv = qkv.permute((0, 2, 1, 3))
+
+        if seq_lens is not None:
+            qkv = transpose_pad(qkv, batch_size, max_padding_size, seq_lens, num_attention_heads, self.attention_head_size*3)
+        else:
+            qkv = qkv.permute((0, 2, 1, 3))
+
         q, k, v = torch.chunk(qkv, 3, dim=-1)
         x = torch.matmul(q, k.transpose(-1, -2))
 
@@ -111,10 +120,14 @@ class GPTSelfAttention1D(nn.Module):
             x = self.softmax(x)
 
         x = torch.matmul(x, v)
-        x = x.transpose(1, 2)
+
+        if seq_lens is not None:
+            x = transpose_depad(x, batch_size, valid_word_num[0].item(), max_padding_size, seq_lens, num_attention_heads, self.attention_head_size)
+        else: 
+            x = x.transpose(1, 2)
+
         new_context_layer_shape = x.size()[:-2] + (all_head_size,)
         x = x.reshape(new_context_layer_shape)
-
         x = self.dense(x)
 
         return x
@@ -166,13 +179,13 @@ class GPTBlock1D(nn.Module):
         self.norm2 = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
         self.mlp = GPTMLP1D(dim=dim, mlp_ratio=mlp_ratio, activation=activation, dtype=dtype, bias=bias)
 
-    def forward(self, x, attention_mask=None):
+    def forward(self, x, attention_mask=None, batch_size=None, max_padding_size=None, seq_lens=None):
         if not self.apply_post_layernorm:
             residual = x
         x = self.norm1(x)
         if self.apply_post_layernorm:
             residual = x
-        x = residual + self.attn(x, attention_mask)
+        x = residual + self.attn(x, attention_mask, batch_size, max_padding_size, seq_lens)
 
         if not self.apply_post_layernorm:
             residual = x
@@ -181,7 +194,7 @@ class GPTBlock1D(nn.Module):
             residual = x
         x = residual + self.mlp(x)
 
-        return x, attention_mask
+        return x
 
 
 class GPTLMHead1D(nn.Module):
@@ -203,89 +216,12 @@ class GPTLMHead1D(nn.Module):
         x = self.dense(x)
         return x
 
-
-class GPT1D(nn.Module):
-
-    def __init__(self,
-                 vocab_size: int = 50304,
-                 max_position_embeddings: int = 1024,
-                 dim: int = 768,
-                 num_heads: int = 12,
-                 depth: int = 12,
-                 mlp_ratio: float = 4.0,
-                 layernorm_epsilon: float = 1e-5,
-                 activation: Callable = nn.functional.gelu,
-                 padding_idx: int = 0,
-                 dtype: dtype = None,
-                 bias: bool = True,
-                 apply_post_layernorm: bool = False,
-                 fuse_scale_mask_softmax: bool = False) -> None:
-        super().__init__()
-        self.embed = GPTEmbedding1D(embedding_dim=dim,
-                                    vocab_size=vocab_size,
-                                    max_position_embeddings=max_position_embeddings,
-                                    padding_idx=padding_idx,
-                                    dtype=dtype)
-        self.blocks = nn.ModuleList()
-        self.pp_rank = gpc.get_local_rank(ParallelMode.PIPELINE)
-        for id_ in range(depth):
-            self.blocks.register_module("blk_{}".format(id_ + self.pp_rank * depth),
-                                        GPTBlock1D(
-                                            dim=dim,
-                                            num_heads=num_heads,
-                                            mlp_ratio=mlp_ratio,
-                                            activation=activation,
-                                            layernorm_epsilon=layernorm_epsilon,
-                                            dtype=dtype,
-                                            bias=bias,
-                                            apply_post_layernorm=apply_post_layernorm,
-                                            fuse_scale_mask_softmax=fuse_scale_mask_softmax,
-                                        )
-                                        )
-        self.norm = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
-        self.head = GPTLMHead1D(dim=dim,
-                                vocab_size=vocab_size,
-                                word_embeding_weight=self.embed.word_embedding_weight,
-                                dtype=dtype)
-
-    def select_top_k(self, batch_id, temp_predictions, top_k: int = 10):
-        """
-        Pick out a word from the top k of 50257 words according to the possibility given by temp_predictions
-        for each sequence in this batch.
-        :param temp_predictions: Transformer output tensor with size of (batch size, sequence length, vocab size)
-                                which contains the possibilities for each word in this batch.
-        :type temp_predictions: torch.Tensor
-        :param top_k: How many top words to choose from.
-        """
-        temp_predicted_index = random.choice(
-            temp_predictions[batch_id, -1, :].sort(descending=True)[1][:top_k]).item()
-        return temp_predicted_index
-
-    def forward(self, input_ids, attention_mask=None):
-        x = self.embed(input_ids)
-
-        if attention_mask is not None:
-            batch_size = input_ids.shape[0]
-            attention_mask = attention_mask.view(batch_size, -1)
-            attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
-            attention_mask = attention_mask.to(dtype=x.dtype)  # fp16 compatibility
-            attention_mask = (1.0 - attention_mask) * -10000.0
-
-        for block in self.blocks:
-            x, attention_mask = block(x, attention_mask)
-
-        x = self.head(self.norm(x))
-        res = []
-        for i in range(x.shape[0]):
-            res.append(self.select_top_k(i, x))
-        return res
-
-
 class PipelineGPT1D(nn.Module):
 
     def __init__(self,
                  vocab_size: int = 50257,
                  max_position_embeddings: int = 1024,
+                 max_batch_size = 32,
                  dim: int = 768,
                  num_heads: int = 12,
                  depth: int = 12,
@@ -300,6 +236,11 @@ class PipelineGPT1D(nn.Module):
                  first: bool = False,
                  last: bool = False, **kwargs):
         super().__init__()
+        self.tmp_mask_offset = torch.zeros(max_batch_size, max_position_embeddings, dtype=torch.int).cuda()
+        self.mask_offset = torch.zeros(max_batch_size, max_position_embeddings, dtype=torch.int).cuda()
+        self.valid_word_num = torch.zeros(1, dtype=torch.int).cuda()
+        self.dim = dim
+
         self.first = first
         self.last = last
         if first:
@@ -342,9 +283,21 @@ class PipelineGPT1D(nn.Module):
             temp_predictions[batch_id, -1, :].sort(descending=True)[1][:top_k]).item()
         return temp_predicted_index
 
-    def forward(self, hidden_states=None, input_ids=None, attention_mask=None):
+    def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None):
+        batch_size = input_ids.shape[0]
+        max_padding_size = input_ids.shape[1]
+
+        if seq_lens is not None:
+            ft_build_padding_offsets(seq_lens, batch_size, max_padding_size, self.valid_word_num, self.tmp_mask_offset)
+
         if self.first:
             hidden_states = self.embed(input_ids)
+            if seq_lens is not None:
+                hidden_states = ft_remove_padding(hidden_states, self.tmp_mask_offset, 
+                                   self.mask_offset, self.valid_word_num[0].item(), self.dim)
+        elif seq_lens is not None:
+             ft_remove_padding(hidden_states, self.tmp_mask_offset, 
+                                            self.mask_offset, self.valid_word_num[0].item(), self.dim)
 
         # We create a 3D attention mask from a 2D tensor mask.
         # Sizes are [batch_size, 1, 1, to_seq_length]
@@ -361,14 +314,17 @@ class PipelineGPT1D(nn.Module):
             attention_mask = (1.0 - attention_mask) * -10000.0
 
         for block in self.blocks:
-            hidden_states, attention_mask = block(hidden_states, attention_mask)
+            hidden_states = block(hidden_states, attention_mask, batch_size, max_padding_size, seq_lens)
 
         if self.last:
+            if seq_lens is not None:
+                hidden_states = ft_rebuild_padding(hidden_states, self.mask_offset, self.valid_word_num[0].item(), self.dim, batch_size, max_padding_size)
             hidden_states = self.head(self.norm(hidden_states))
-            res = []
-            for i in range(hidden_states.shape[0]):
-                res.append(self.select_top_k(i, hidden_states))
-            hidden_states = torch.Tensor(res)
+            # res = []
+            # for i in range(hidden_states.shape[0]):
+            #     res.append(self.select_top_k(i, hidden_states))
+            # hidden_states = torch.Tensor(res)
+            hidden_states = hidden_states[:, 0:1, 0:1].view(batch_size)
         return hidden_states
 
 

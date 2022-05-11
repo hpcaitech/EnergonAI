@@ -21,7 +21,8 @@ def launches(model_class=None,
              server_host="127.0.0.1",
              server_port=8005,
              log_level="info",
-             backend="nccl"):
+             backend="nccl",
+             rm_padding=False):
     click.echo(f'*** Energon Init Configurations: *** \n'
                f'Model Name: {model_class} \n'
                f'Model Type: {model_type} \n'
@@ -36,7 +37,9 @@ def launches(model_class=None,
                f'Tokenizer Path: {tokenizer_path}'
                f'Worker Server Host: {server_host} \n'
                f'Worker Server Port: {server_port} \n'
-               f'Unvicorn Log Level: {log_level} \n')
+               f'Unvicorn Log Level: {log_level} \n'
+               f'Remove padding: {rm_padding} \n'
+               )
 
     if half:
         dtype = torch.half
@@ -70,7 +73,8 @@ def launches(model_class=None,
                   tokenizer_path,
                   server_host,
                   engine_port,
-                  log_level)
+                  log_level,
+                  rm_padding)
 
 
 @click.group()

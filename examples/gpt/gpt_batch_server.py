@@ -62,7 +62,8 @@ def launch_engine(model_name,
                   tokenizer_path: str = None,
                   server_host="localhost",
                   server_port=8005,
-                  log_level="info"
+                  log_level="info",
+                  rm_padding=False
                   ):
     """Initialize the tokenizer, inference engine, cached cost for current device,
     and batch manager. Then start the server."""

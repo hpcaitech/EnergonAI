@@ -19,7 +19,7 @@ def run():
     batch_size = 32
 
     input_ids = torch.randint(1, 10, (batch_size, seq_len), dtype=torch.int64)
-    attention_mask = torch.randint(0, 1, (batch_size, 1, seq_len, seq_len), dtype=torch.int64)
+    attention_mask = torch.randint(0, 1, (batch_size, 1, seq_len), dtype=torch.int64)
     # seq_lens = torch.randint(1, 128, (batch_size, ), dtype=torch.int64) # generate seq_lens randomly
     hidden_states = None
     sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask)
@@ -36,8 +36,8 @@ def run():
     batch_size = 32
 
     input_ids = torch.randint(1, 10, (batch_size, seq_len), dtype=torch.int64)
-    attention_mask = torch.randint(0, 1, (batch_size, 1, seq_len, seq_len), dtype=torch.int64)
-    seq_lens = torch.randint(1, 128, (batch_size, ), dtype=torch.int64) # generate seq_lens randomly
+    attention_mask = torch.randint(0, 1, (batch_size, 1, seq_len), dtype=torch.int64)
+    seq_lens = torch.randint(1, 128, (batch_size, ), dtype=torch.int) # generate seq_lens randomly
     hidden_states = None
     sample = dict(hidden_states=hidden_states, input_ids=input_ids, attention_mask=attention_mask, seq_lens=seq_lens)
 

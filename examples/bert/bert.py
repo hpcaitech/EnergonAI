@@ -246,15 +246,18 @@ class PipelineBert1D(nn.Module):
 
     def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None):
 
-        batch_size = None
-        max_padding_size = None
-        if seq_lens is not None:
-            batch_size = input_ids.shape[0]
-            max_padding_size = input_ids.shape[1]
+        batch_size = input_ids.shape[0]
+        max_padding_size = input_ids.shape[1]
 
         if self.first:
             hidden_states = self.embed(input_ids=input_ids, position_ids=None, tokentype_ids=None, seq_lens=seq_lens,
                                        batch_size=batch_size, max_padding_size=max_padding_size)  # , seq_lens
+
+        if attention_mask is not None:
+            attention_mask = attention_mask.view(batch_size, -1)
+            attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+            attention_mask = attention_mask.to(dtype=hidden_states.dtype)  # fp16 compatibility
+            attention_mask = (1.0 - attention_mask) * -10000.0
 
         for block in self.blocks:
             hidden_states = block(hidden_states=hidden_states, attention_mask=attention_mask, seq_lens=seq_lens,

@@ -10,6 +10,7 @@ from fastapi import Response, Body
 import torch.distributed.rpc as rpc
 from energon.engine import InferenceEngine
 from energon.server.batch_manager import Batch_Manager, generate_cached_cost, Manager
+from energon.server.naive_batch_manager import Naive_Batch_Manager
 
 app = FastAPI()
 
@@ -18,6 +19,22 @@ app = FastAPI()
 def root():
     return {"200"}
 
+@app.post("/model_with_padding_naive")
+def run_without_batch(input_str: str = Body(..., title="input_str", embed=True)):
+    red = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
+    sub = red.pubsub()
+    input_token = tokenizer(input_str, return_tensors="pt")
+    time_stamp = time.time()
+    naive_manager.insert_req(time_stamp, input_token, input_str)
+    sub.subscribe(str(time_stamp))
+    predictions = input_str
+    for message in sub.listen():
+        if message is not None and isinstance(message, dict):
+            predictions = message.get('data')
+            if not isinstance(predictions, int):
+                break
+
+    return {predictions}
 
 @app.post("/model_with_padding")
 def run(
@@ -87,11 +104,15 @@ def launch_engine(model_class,
                              dtype=dtype)
 
     global cached_cost
-    cached_cost = generate_cached_cost(engine, max_seq_len=256, max_batch_size=8, step=4, repeat_round=2, tokenizer=tokenizer)
+    cached_cost = generate_cached_cost(engine, max_seq_len=1024, max_batch_size=4, step=8, repeat_round=2, tokenizer=tokenizer)
 
     global batch_manager
     batch_manager = Batch_Manager(engine, cached_cost, max_batch_size=4, tokenizer=tokenizer,
                                   pad_token=GPT2Tokenizer.eos_token)
+
+    global naive_manager
+    naive_manager = Naive_Batch_Manager(engine, max_batch_size=4, tokenizer=tokenizer,
+                                        pad_token=GPT2Tokenizer.eos_token)
 
     global server
     config = uvicorn.Config(app, host=server_host, port=server_port, log_level=log_level)

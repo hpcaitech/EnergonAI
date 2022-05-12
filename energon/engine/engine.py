@@ -67,7 +67,9 @@ class InferenceEngine(Module):
         launch_from_multiprocess(tp_size=self.tp_size, pp_size=self.pp_size, rank=self.rank, local_rank=self.rank,
                                  world_size=self.global_world_size, host=self.host, port=self.port)
         rpc_backend_options = rpc.TensorPipeRpcBackendOptions(
-            num_worker_threads=16)
+            num_worker_threads=16,
+            # _transports=["uv"] TODO: potentially a bug
+            )
         rpc.init_rpc(self.WORKER_NAME.format(0), rank=0, world_size=self.global_world_size,
                      rpc_backend_options=rpc_backend_options)
 

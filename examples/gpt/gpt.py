@@ -254,7 +254,7 @@ class PipelineGPT1D(nn.Module):
         self.blocks = nn.ModuleList()
         self.pp_rank = gpc.get_local_rank(ParallelMode.PIPELINE) if is_using_pp() else 0
         for id_ in range(depth):
-            self.blocks.register_module("blk_{}".format(id_ + self.pp_rank * depth),
+            self.blocks.add_module("blk_{}".format(id_ + self.pp_rank * depth),
                                         GPTBlock1D(
                                             dim=dim,
                                             num_heads=num_heads,

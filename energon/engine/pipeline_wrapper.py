@@ -81,7 +81,8 @@ class PipelineCommWrapper:
         self.key.addOne()
         output = self.model(hidden_states=None,
                             input_ids=sample['input_ids'],
-                            attention_mask=sample['attention_mask'])
+                            attention_mask=sample['attention_mask'],
+                            seq_lens=inputs['seq_lens'] if 'seq_lens' in inputs else None)
         self.lock.release()
 
         return output, cur_key

@@ -154,10 +154,10 @@ class Batch_Manager(Manager):
 
         wait_time = cur_stamp - earliest_timestamp
         batch_size = len(batch_list)
-        appear_possibility_weight = 1.0 / self.cal_norm_weight(cur_len)
+        # appear_possibility_weight = 1.0 / self.cal_norm_weight(cur_len)
 
         # TODO adjust the euqation
-        priority = appear_possibility_weight * batch_size * np.exp(wait_time)
+        priority = batch_size * np.exp(2 * wait_time * wait_time)
         return priority
 
     def cal_norm_weight(self, seq_len):
@@ -232,7 +232,7 @@ class Batch_Manager(Manager):
         while self.running_flag:
 
             if len(self.req_list) > 0:
-                st_ = time.time()
+                print(len(self.req_list))
                 target_batch = self.wrap_batch()
                 pad_len = target_batch[-1].seq_len
                 logging.info("A batch with {} requests and length of {} packed, in-batch length: {}"
@@ -242,16 +242,15 @@ class Batch_Manager(Manager):
                     input_ids = self.tokenizer(input_text, padding="longest", return_tensors="pt")
                 else:
                     input_ids = input_text
-                print("calculation time cost {}:".format(time.time() - st_))
                 if self.rm_padding:
                     input_ids['seq_lens'] = torch.Tensor([p.seq_len for p in target_batch])
                 output = self.engine.run(input_ids)
                 self.pool.submit(self.publish_result, output, target_batch)
-                self.update_norm(target_batch)
+                # self.update_norm(target_batch)
                 # self.publish_result(output, target_batch, start_time)
                 # pub_thread = threading.Thread(target=self.publish_result, args=(output, target_batch, start_time))
                 # pub_thread.start()
-            time.sleep(0.05)
+            time.sleep(0.2)
 
     def publish_result(self, output, target_batch):
         """

@@ -8,7 +8,6 @@ uvicorn==0.14
 typer
 redis
 scipy
-energon
 pytest
 requests
 click

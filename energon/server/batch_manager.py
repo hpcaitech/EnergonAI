@@ -232,7 +232,6 @@ class Batch_Manager(Manager):
         while self.running_flag:
 
             if len(self.req_list) > 0:
-                print(len(self.req_list))
                 target_batch = self.wrap_batch()
                 pad_len = target_batch[-1].seq_len
                 logging.info("A batch with {} requests and length of {} packed, in-batch length: {}"

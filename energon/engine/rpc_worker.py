@@ -62,6 +62,9 @@ class RPCWorker:
         for k, v in inputs.items():
             if v is not None:
                 inputs[k] = v.cuda()  # non_blocking=True
+        
+        torch.cuda.synchronize()
+        st_ = time.time()
 
         if (gpc.is_initialized(ParallelMode.PIPELINE)) and (not gpc.is_last_rank(ParallelMode.PIPELINE)):
             self.model.run(key, inputs)
@@ -69,6 +72,8 @@ class RPCWorker:
         else:
             output, cur_key = self.model.run(key, inputs)
             self.return_dict.enqueue(cur_key, output.cpu())
+            torch.cuda.synchronize()
+            print("RPC Worker Time {}".format(time.time() - st_))
             return self.return_dict.top(key)
 
         return None

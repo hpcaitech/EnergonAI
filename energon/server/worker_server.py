@@ -42,8 +42,10 @@ def launch_worker(host="127.0.0.1", port=29500, tp_init_size=1, pp_init_size=1, 
     world_size = tp_init_size * pp_init_size
 
     launch_from_multiprocess(tp_init_size, pp_init_size, backend, seed, verbose, rank, local_rank, world_size, host, port)
-    WORKER_NAME = "wok{}"    
-    rpc_backend_options=rpc.TensorPipeRpcBackendOptions(num_worker_threads=16)
+    WORKER_NAME = "wok{}"
+    rpc_backend_options=rpc.TensorPipeRpcBackendOptions(num_worker_threads=16,
+                                                      # _transports=["uv"] TODO: potentially a bug
+                                                      )
     rpc.init_rpc(WORKER_NAME.format(rank), rank=rank, world_size=world_size, rpc_backend_options=rpc_backend_options)   
 
     global server

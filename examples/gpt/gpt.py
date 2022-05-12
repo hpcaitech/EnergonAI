@@ -416,5 +416,5 @@ def gpt2_8B(**kwargs):
 
 
 def gpt3(**kwargs):
-    model_kwargs = dict(dim=12288, depth=48, num_heads=96, **kwargs)
+    model_kwargs = dict(dim=12288, depth=96, num_heads=96, **kwargs)
     return _create_gpt_pipeline_model(**model_kwargs)

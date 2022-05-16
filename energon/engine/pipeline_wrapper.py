@@ -79,10 +79,11 @@ class PipelineCommWrapper:
         cur_key = self.key.val
         sample, pipe_meta = self.pipe_msg_queue.top(cur_key)
         self.key.addOne()
-        output = self.model(hidden_states=None,
-                            input_ids=sample['input_ids'],
-                            attention_mask=sample['attention_mask'],
-                            seq_lens=inputs['seq_lens'] if 'seq_lens' in inputs else None)
+        with torch.inference_mode():
+            output = self.model(hidden_states=None,
+                                input_ids=sample['input_ids'],
+                                attention_mask=sample['attention_mask'],
+                                seq_lens=inputs['seq_lens'] if 'seq_lens' in inputs else None)
         self.lock.release()
 
         return output, cur_key

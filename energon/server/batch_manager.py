@@ -20,58 +20,6 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 
 
-def generate_cached_cost(engine, model_name: str, pp: int, tp: int,
-                         max_seq_len: int = 1024, max_batch_size: int = 16, step: int = 1,
-                         repeat_round: int = 3, tokenizer=None):
-    """
-    Test the running time for different sequence length and batch size on the current machine.
-    :param engine: InferenceEngine from energon.engine
-    :type engine: InferenceEngine
-    :param max_seq_len: The max sequence length that is measured.
-    :param max_batch_size: The max batch size that is measured.
-    :param step: Run time is measured every other 'step' of sequence length
-    :param repeat_round: We inference current batch 'repeat_round' times and take average.
-    """
-    logging.log(0, "fetching cached cost")
-    cached_name = "cached_cost_{}_pp{}_tp{}_{}_{}_{}_{}.npy".format(model_name, pp, tp, max_seq_len, max_batch_size, step, repeat_round)
-    if os.path.exists(cached_name):
-        logging.log(0, "loading cached cost from file")
-        cached_cost = np.load(cached_name).tolist()
-    else:
-        logging.log(0, "generating new cached cost")
-        cached_cost = [[0 for i in range(max_batch_size + 1)] for j in range(max_seq_len + 1)]
-        warm_up_str = "test test test"
-        if tokenizer:
-            warm_up_input = tokenizer(warm_up_str, return_tensors="pt")
-        else:
-            warm_up_input = warm_up_str
-        for tt in range(5):
-            output = engine.run(warm_up_input)
-            predictions = output.to_here()
-        input_text = ""
-        for tmp_len in trange(1, max_seq_len + 1, step):
-            input_text += "test "
-            for tmp_batch in range(1, max_batch_size + 1):
-                batched_text = [input_text for _ in range(tmp_batch)]
-                start_time = time.time()
-                for k in range(repeat_round):
-                    if tokenizer:
-                        input_token = tokenizer(batched_text, return_tensors="pt")
-                    else:
-                        input_token = batched_text
-                    output = engine.run(input_token)
-                    predictions = output.to_here()
-                    if tokenizer:
-                        tokenizer.decode(predictions)
-                time_cost = (time.time() - start_time) / repeat_round
-                cached_cost[tmp_len][tmp_batch] = time_cost
-                for k in range(1, step):
-                    cached_cost[tmp_len + k][tmp_batch] = time_cost
-        np.save(cached_name, np.array(cached_cost))
-    logging.log(0, "cached cost loaded")
-    return cached_cost
-
-
 class single_request:
     def __init__(self, input_, time_stamp: float, input_str: str):
         """
@@ -106,8 +54,11 @@ class Batch_Manager(Manager):
     in function cal_priority and then sent into the inference engine.
     """
 
-    def __init__(self, engine: InferenceEngine, cached_cost: list, init_mu: int = 512, init_theta: int = 180,
-                 max_batch_size: int = 32, lr: float = 0.01, tokenizer=None, pad_token=None, rm_padding=False):
+    def __init__(self, engine: InferenceEngine, model_name: str, pp: int, tp: int,
+                 max_sequence_length: int, init_mu: int = 512, init_theta: int = 180,
+                 max_batch_size: int = 32, lr: float = 0.01, tokenizer=None, pad_token=None, rm_padding=False,
+                 step: int = 1, repeat_round: int = 3
+    ):
         """
         :param engine: The InferenceEngine from energon.engine
         :param cached_cost: The output of function generate_cached_cost
@@ -126,7 +77,9 @@ class Batch_Manager(Manager):
         self.req_list = []
         self.req_list_lock = rwlock.RWLockFair()
         self.write_lock = self.req_list_lock.gen_wlock()
-        self.cached_cost = cached_cost
+        self.cached_cost = self.generate_cached_cost(engine, model_name, pp=pp, tp=tp, max_seq_len=max_sequence_length,
+                                                max_batch_size=max_batch_size, step=step, repeat_round=repeat_round,
+                                                     tokenizer=tokenizer)
         self.tokenizer = tokenizer
         self.rm_padding = rm_padding
         if self.tokenizer and pad_token:
@@ -136,6 +89,71 @@ class Batch_Manager(Manager):
         self.pool = ThreadPoolExecutor(max_workers=16)
         self.main_thread = threading.Thread(target=self.processing_batch)
         self.main_thread.start()
+
+    def generate_cached_cost(self, engine, model_name: str, pp: int, tp: int,
+                             max_seq_len: int = 1024, max_batch_size: int = 16, step: int = 1,
+                             repeat_round: int = 3, tokenizer=None):
+        """
+        Test the running time for different sequence length and batch size on the current machine.
+        :param engine: InferenceEngine from energon.engine
+        :type engine: InferenceEngine
+        :param max_seq_len: The max sequence length that is measured.
+        :param max_batch_size: The max batch size that is measured.
+        :param step: Run time is measured every other 'step' of sequence length
+        :param repeat_round: We inference current batch 'repeat_round' times and take average.
+        """
+        logging.log(0, "fetching cached cost")
+        cached_name = "cached_cost_{}_pp{}_tp{}_{}_{}_{}_{}.npy".format(model_name, pp, tp, max_seq_len, max_batch_size,
+                                                                        step, repeat_round)
+        if os.path.exists(cached_name):
+            logging.log(0, "loading cached cost from file")
+            cached_cost = np.load(cached_name).tolist()
+        else:
+            logging.log(0, "generating new cached cost")
+            cached_cost = [[0 for i in range(max_batch_size + 1)] for j in range(max_seq_len + 1)]
+            warm_up_str = "test test test"
+            if tokenizer:
+                warm_up_input = tokenizer(warm_up_str, return_tensors="pt")
+            else:
+                warm_up_input = warm_up_str
+            for tt in range(5):
+                output = engine.run(warm_up_input)
+                predictions = output.to_here()
+            input_text = ""
+            for tmp_len in trange(1, max_seq_len + 1, step):
+                input_text += "test "
+                for tmp_batch in range(1, max_batch_size + 1):
+                    batched_text = [input_text for _ in range(tmp_batch)]
+                    start_time = time.time()
+                    for k in range(repeat_round):
+                        if tokenizer:
+                            input_token = tokenizer(batched_text, return_tensors="pt")
+                        else:
+                            input_token = batched_text
+                        output = engine.run(input_token)
+                        predictions = output.to_here()
+                        if tokenizer:
+                            tokenizer.decode(predictions)
+                    time_cost = (time.time() - start_time) / repeat_round
+                    cached_cost[tmp_len][tmp_batch] = time_cost
+                    for k in range(1, step):
+                        cached_cost[tmp_len + k][tmp_batch] = time_cost
+            np.save(cached_name, np.array(cached_cost))
+        logging.log(0, "cached cost loaded")
+        return cached_cost
+
+    def subscribe_result(self, time_stamp):
+        # red = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
+        # sub = red.pubsub()
+        sub = self.publisher.pubsub()
+        sub.subscribe(str(time_stamp))
+        predictions = ''
+        for message in sub.listen():
+            if message is not None and isinstance(message, dict):
+                predictions = message.get('data')
+                if not isinstance(predictions, int):
+                    break
+        return predictions
 
     def insert_req(self, time_stamp: float, input_ids, input_str: str):
         """

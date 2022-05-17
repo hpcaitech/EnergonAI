@@ -85,8 +85,9 @@ class Naive_Batch_Manager(Manager):
         self.write_lock.release()
 
     def subscribe_result(self, time_stamp):
-        red = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
-        sub = red.pubsub()
+        # red = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
+        # sub = red.pubsub()
+        sub = self.publisher.pubsub()
         sub.subscribe(str(time_stamp))
         predictions = ''
         for message in sub.listen():

@@ -20,7 +20,8 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 
 
-def generate_cached_cost(engine, max_seq_len: int = 1024, max_batch_size: int = 16, step: int = 1,
+def generate_cached_cost(engine, model_name: str, pp: int, tp: int,
+                         max_seq_len: int = 1024, max_batch_size: int = 16, step: int = 1,
                          repeat_round: int = 3, tokenizer=None):
     """
     Test the running time for different sequence length and batch size on the current machine.
@@ -32,13 +33,21 @@ def generate_cached_cost(engine, max_seq_len: int = 1024, max_batch_size: int = 
     :param repeat_round: We inference current batch 'repeat_round' times and take average.
     """
     logging.log(0, "fetching cached cost")
-    cached_name = "cached_cost_{}_{}_{}_{}.npy".format(max_seq_len, max_batch_size, step, repeat_round)
+    cached_name = "cached_cost_{}_pp{}_tp{}_{}_{}_{}_{}.npy".format(model_name, pp, tp, max_seq_len, max_batch_size, step, repeat_round)
     if os.path.exists(cached_name):
         logging.log(0, "loading cached cost from file")
         cached_cost = np.load(cached_name).tolist()
     else:
         logging.log(0, "generating new cached cost")
         cached_cost = [[0 for i in range(max_batch_size + 1)] for j in range(max_seq_len + 1)]
+        warm_up_str = "test test test"
+        if tokenizer:
+            warm_up_input = tokenizer(warm_up_str, return_tensors="pt")
+        else:
+            warm_up_input = warm_up_str
+        for tt in range(50):
+            output = engine.run(warm_up_input)
+            predictions = output.to_here()
         input_text = ""
         for tmp_len in trange(1, max_seq_len + 1, step):
             input_text += "test "
@@ -249,7 +258,7 @@ class Batch_Manager(Manager):
                 # self.publish_result(output, target_batch, start_time)
                 # pub_thread = threading.Thread(target=self.publish_result, args=(output, target_batch, start_time))
                 # pub_thread.start()
-            time.sleep(0.2)
+            time.sleep(0.08)
 
     def publish_result(self, output, target_batch):
         """

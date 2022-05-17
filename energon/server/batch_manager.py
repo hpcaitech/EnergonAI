@@ -45,7 +45,7 @@ def generate_cached_cost(engine, model_name: str, pp: int, tp: int,
             warm_up_input = tokenizer(warm_up_str, return_tensors="pt")
         else:
             warm_up_input = warm_up_str
-        for tt in range(50):
+        for tt in range(5):
             output = engine.run(warm_up_input)
             predictions = output.to_here()
         input_text = ""

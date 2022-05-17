@@ -24,7 +24,7 @@ def run_without_batch(input_str: str = Body(..., title="input_str", embed=True))
     input_token = tokenizer(input_str, return_tensors="pt")
     time_stamp = time.time()
     naive_manager.insert_req(time_stamp, input_token, input_str)
-    predictions = batch_manager.subscribe_result(time_stamp)
+    predictions = naive_manager.subscribe_result(time_stamp)
     return {predictions}
 
 @app.post("/model_with_padding")

@@ -84,6 +84,18 @@ class Naive_Batch_Manager(Manager):
         self.req_list.append(tmp_req)
         self.write_lock.release()
 
+    def subscribe_result(self, time_stamp):
+        red = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
+        sub = red.pubsub()
+        sub.subscribe(str(time_stamp))
+        predictions = ''
+        for message in sub.listen():
+            if message is not None and isinstance(message, dict):
+                predictions = message.get('data')
+                if not isinstance(predictions, int):
+                    break
+        return predictions
+
     def wrap_batch(self):
         """
         Given a sorted sequence list, calculate the best way to wrap the batch with DP according to the
@@ -120,7 +132,7 @@ class Naive_Batch_Manager(Manager):
                 # self.publish_result(output, target_batch, start_time)
                 # pub_thread = threading.Thread(target=self.publish_result, args=(output, target_batch, start_time))
                 # pub_thread.start()
-            time.sleep(0.05)
+            time.sleep(0.08)
 
     def publish_result(self, output, target_batch):
         """

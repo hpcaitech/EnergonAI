@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi import Response, Body
 import torch.distributed.rpc as rpc
 from energon.engine import InferenceEngine
-from energon.server.batch_manager import Batch_Manager, generate_cached_cost, Manager
+from energon.server.batch_manager import Batch_Manager, Manager
 from energon.server.naive_batch_manager import Naive_Batch_Manager
 
 app = FastAPI()
@@ -21,19 +21,10 @@ def root():
 
 @app.post("/model_with_padding_naive")
 def run_without_batch(input_str: str = Body(..., title="input_str", embed=True)):
-    red = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
-    sub = red.pubsub()
     input_token = tokenizer(input_str, return_tensors="pt")
     time_stamp = time.time()
     naive_manager.insert_req(time_stamp, input_token, input_str)
-    sub.subscribe(str(time_stamp))
-    predictions = input_str
-    for message in sub.listen():
-        if message is not None and isinstance(message, dict):
-            predictions = message.get('data')
-            if not isinstance(predictions, int):
-                break
-
+    predictions = batch_manager.subscribe_result(time_stamp)
     return {predictions}
 
 @app.post("/model_with_padding")
@@ -43,20 +34,12 @@ def run(
     """Receive user request with post function. The input string is sent to the batch manager
     and then the result will be sent back with Redis pub-sub. The time stamp is used as the
     channel name that the current request process subscribes."""
-    red = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
-    sub = red.pubsub()
     input_token = tokenizer(input_str, return_tensors="pt")
     time_stamp = time.time()
     batch_manager.insert_req(time_stamp, input_token, input_str)
-    sub.subscribe(str(time_stamp))
-    predictions = input_str
-    for message in sub.listen():
-        if message is not None and isinstance(message, dict):
-            predictions = message.get('data')
-            if not isinstance(predictions, int):
-                break
-
+    predictions = batch_manager.subscribe_result(time_stamp)
     return {predictions}
+
 
 
 @app.get("/shutdown")
@@ -103,12 +86,15 @@ def launch_engine(model_class,
                              port=port,
                              dtype=dtype)
 
-    global cached_cost
-    cached_cost = generate_cached_cost(engine, max_seq_len=1024, max_batch_size=4, step=8, repeat_round=2, tokenizer=tokenizer)
+    # global cached_cost
+    # cached_cost = generate_cached_cost(engine, max_seq_len=1024, max_batch_size=4, step=8, repeat_round=2, tokenizer=tokenizer)
 
     global batch_manager
-    batch_manager = Batch_Manager(engine, cached_cost, max_batch_size=4, tokenizer=tokenizer,
-                                  pad_token=GPT2Tokenizer.eos_token)
+    batch_manager = Batch_Manager(engine, model_name="gpt2_8B", pp=4, tp=2,
+                                  max_sequence_length=256,
+                                  max_batch_size=16, tokenizer=tokenizer,
+                                  pad_token=GPT2Tokenizer.eos_token,
+                                  step=8, repeat_round=2)
 
     global naive_manager
     naive_manager = Naive_Batch_Manager(engine, max_batch_size=4, tokenizer=tokenizer,

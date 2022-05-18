@@ -85,3 +85,9 @@ Thanks so much!
 <div  align="center">    
     <img src="https://user-images.githubusercontent.com/12018307/158764528-c14538f4-8d9a-4bc8-8c6f-2e1ea82ecb59.png" width = "500" height = "350" alt="Architecture" align=center />
 </div>
+
+![图片2](https://user-images.githubusercontent.com/12018307/168971629-6df3232b-85a7-43ce-95df-f067e7e5959c.png)
+![8072cc71-5a6d-4b05-a2ec-11e1ca5d76b4](https://user-images.githubusercontent.com/12018307/168971637-ffd1d6ba-44bb-4043-a275-3dc2a008c048.png)
+![image (1)](https://user-images.githubusercontent.com/12018307/168971641-aebe986a-7e9d-4c66-9ced-4e8b7a1628e2.png)
+![batch drawio](https://user-images.githubusercontent.com/12018307/168971644-35393802-7d8b-4e13-9428-340f7328616c.png)
+

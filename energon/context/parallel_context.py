@@ -134,7 +134,7 @@ class ParallelContext:
         """
         self._check_parallel_mode(parallel_mode)
         self._local_ranks[parallel_mode] = rank
-    
+
     def rm_local_rank(self, parallel_mode: ParallelMode):
         """Removes the local rank of the current device for `parallel_mode` to the context.
         """
@@ -327,20 +327,14 @@ class ParallelContext:
         """
         self._check_parallel_mode(parallel_mode)
         self._ranks_in_group[parallel_mode] = ranks
-    
+
     def rm_ranks_in_group(self, parallel_mode: ParallelMode):
         """Removes the ranks of the current device for `parallel_mode` in the group.
         """
         self._check_parallel_mode(parallel_mode)
         self._ranks_in_group.pop(parallel_mode)
 
-    def init_global_dist(self,
-                         rank: int,
-                         world_size: int,
-                         backend: str,
-                         host: str,
-                         port: int
-                         ):
+    def init_global_dist(self, rank: int, world_size: int, backend: str, host: str, port: int):
         """Initializes the global distributed environment
         :param rank: rank for the default process group
         :type rank: int
@@ -355,10 +349,7 @@ class ParallelContext:
         """
         # initialize the default process group
         init_method = f'tcp://{host}:{port}'
-        dist.init_process_group(rank=rank,
-                                world_size=world_size,
-                                backend=backend,
-                                init_method=init_method)
+        dist.init_process_group(rank=rank, world_size=world_size, backend=backend, init_method=init_method)
         ranks = list(range(world_size))
         # None will give the default global process group for pytorch dist operations
         cpu_group = dist.new_group(ranks, backend='gloo') if dist.get_backend() != 'gloo' else None
@@ -399,8 +390,7 @@ class ParallelContext:
                 setattr(self, attr_name, ele['size'])
             else:
                 raise NotImplementedError(
-                    f"Parallel configuration does not support this kind of argument, please use int or dict"
-                )
+                    f"Parallel configuration does not support this kind of argument, please use int or dict")
 
     def init_parallel_groups(self):
         """Initializes the parallel groups.
@@ -463,12 +453,10 @@ class ParallelContext:
         for initializer_cfg in pg_init:
             cfg = initializer_cfg.copy()
             initializer_type = cfg.pop('type')
-            initializer = DIST_GROUP_INITIALIZER.get_module(initializer_type)(
-                rank, world_size, self.config,
-                self.data_parallel_size,
-                self.pipeline_parallel_size,
-                self.tensor_parallel_size,
-                **cfg)
+            initializer = DIST_GROUP_INITIALIZER.get_module(initializer_type)(rank, world_size, self.config,
+                                                                              self.data_parallel_size,
+                                                                              self.pipeline_parallel_size,
+                                                                              self.tensor_parallel_size, **cfg)
             parallel_setting = initializer.init_dist_group()
             if isinstance(parallel_setting, list):
                 for args in parallel_setting:
@@ -504,7 +492,7 @@ class ParallelContext:
             if mode is not ParallelMode.GLOBAL:
                 modes.append(mode)
                 dist.destroy_process_group(group)
-        
+
         for mode in modes:
             self._deregister_dist(mode)
 
@@ -555,10 +543,9 @@ class ParallelContext:
             seed_str = ', '.join([f'{k}: {v}' for k, v in seeds.items()])
 
             if self._verbose:
-                self._logger.info(
-                    f"initialized seed on rank {global_rank}, "
-                    f"numpy: {seed}, python random: {seed}, {seed_str},"
-                    f"the default parallel seed is {ParallelMode.DATA}.")
+                self._logger.info(f"initialized seed on rank {global_rank}, "
+                                  f"numpy: {seed}, python random: {seed}, {seed_str},"
+                                  f"the default parallel seed is {ParallelMode.DATA}.")
         else:
             if self._verbose:
                 self._logger.info(

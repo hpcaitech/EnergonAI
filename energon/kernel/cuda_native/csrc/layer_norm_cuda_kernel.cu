@@ -12,7 +12,7 @@
 #include "type_shim.h"
 
 template <typename U>
-__device__ void cuWelfordOnlineSum(const U curr, U& mu, U& sigma2, U& count) {
+__device__ void cuWelfordOnlineSum(const U curr, U &mu, U &sigma2, U &count) {
   count = count + U(1);
   U delta = curr - mu;
   U lmean = mu + delta / count;
@@ -23,7 +23,7 @@ __device__ void cuWelfordOnlineSum(const U curr, U& mu, U& sigma2, U& count) {
 
 template <typename U>
 __device__ void cuChanOnlineSum(const U muB, const U sigma2B, const U countB,
-                                U& mu, U& sigma2, U& count) {
+                                U &mu, U &sigma2, U &count) {
   U delta = muB - mu;
   U nA = count;
   U nB = countB;
@@ -41,9 +41,9 @@ __device__ void cuChanOnlineSum(const U muB, const U sigma2B, const U countB,
 }
 
 template <typename T, typename U>
-__device__ void cuWelfordMuSigma2(const T* __restrict__ vals, const int n1,
-                                  const int n2, const int i1, U& mu, U& sigma2,
-                                  U* buf) {
+__device__ void cuWelfordMuSigma2(const T *__restrict__ vals, const int n1,
+                                  const int n2, const int i1, U &mu, U &sigma2,
+                                  U *buf) {
   // Assumptions:
   // 1) blockDim.x == warpSize
   // 2) Tensor is contiguous
@@ -59,7 +59,7 @@ __device__ void cuWelfordMuSigma2(const T* __restrict__ vals, const int n1,
     // initialize with standard Welford algorithm
     const int numx = blockDim.x * blockDim.y;
     const int thrx = threadIdx.x + threadIdx.y * blockDim.x;
-    const T* lvals = vals + i1 * n2;
+    const T *lvals = vals + i1 * n2;
     int l = 4 * thrx;
     for (; l + 3 < n2; l += 4 * numx) {
       for (int k = 0; k < 4; ++k) {
@@ -82,8 +82,8 @@ __device__ void cuWelfordMuSigma2(const T* __restrict__ vals, const int n1,
     // threadIdx.x == 0 has correct values for each warp
     // inter-warp reductions
     if (blockDim.y > 1) {
-      U* ubuf = (U*)buf;
-      U* ibuf = (U*)(ubuf + blockDim.y);
+      U *ubuf = (U *)buf;
+      U *ibuf = (U *)(ubuf + blockDim.y);
       for (int offset = blockDim.y / 2; offset > 0; offset /= 2) {
         // upper half of warps write to shared
         if (threadIdx.x == 0 && threadIdx.y >= offset &&
@@ -120,9 +120,9 @@ __device__ void cuWelfordMuSigma2(const T* __restrict__ vals, const int n1,
 }
 
 template <>
-__device__ void cuWelfordMuSigma2(const at::Half* __restrict__ vals,
+__device__ void cuWelfordMuSigma2(const at::Half *__restrict__ vals,
                                   const int n1, const int n2, const int i1,
-                                  float& mu, float& sigma2, float* buf) {
+                                  float &mu, float &sigma2, float *buf) {
   // Assumptions:
   // 1) blockDim.x == warpSize
   // 2) Tensor is contiguous
@@ -138,7 +138,7 @@ __device__ void cuWelfordMuSigma2(const at::Half* __restrict__ vals,
     // initialize with standard Welford algorithm
     const int numx = blockDim.x * blockDim.y;
     const int thrx = threadIdx.x + threadIdx.y * blockDim.x;
-    const at::Half* lvals = vals + i1 * n2;
+    const at::Half *lvals = vals + i1 * n2;
     int l = 8 * thrx;
     if ((((size_t)lvals) & 3) != 0) {
       // 16 bit alignment
@@ -152,7 +152,7 @@ __device__ void cuWelfordMuSigma2(const at::Half* __restrict__ vals,
     // at this point, lvals[l] are 32 bit aligned for all threads.
     for (; l + 7 < n2; l += 8 * numx) {
       for (int k = 0; k < 8; k += 2) {
-        float2 curr = __half22float2(*((__half2*)(lvals + l + k)));
+        float2 curr = __half22float2(*((__half2 *)(lvals + l + k)));
         cuWelfordOnlineSum(curr.x, mu, sigma2, count);
         cuWelfordOnlineSum(curr.y, mu, sigma2, count);
       }
@@ -172,8 +172,8 @@ __device__ void cuWelfordMuSigma2(const at::Half* __restrict__ vals,
     // threadIdx.x == 0 has correct values for each warp
     // inter-warp reductions
     if (blockDim.y > 1) {
-      float* ubuf = (float*)buf;
-      float* ibuf = (float*)(ubuf + blockDim.y);
+      float *ubuf = (float *)buf;
+      float *ibuf = (float *)(ubuf + blockDim.y);
       for (int offset = blockDim.y / 2; offset > 0; offset /= 2) {
         // upper half of warps write to shared
         if (threadIdx.x == 0 && threadIdx.y >= offset &&
@@ -209,18 +209,9 @@ __device__ void cuWelfordMuSigma2(const at::Half* __restrict__ vals,
   }
 }
 
-template <typename U>
-U rsqrt(U v) {
-  return U(1) / sqrt(v);
-}
-template <>
-float rsqrt(float v) {
-  return rsqrtf(v);
-}
-template <>
-double rsqrt(double v) {
-  return rsqrt(v);
-}
+template <typename U> U rsqrt(U v) { return U(1) / sqrt(v); }
+template <> float rsqrt(float v) { return rsqrtf(v); }
+template <> double rsqrt(double v) { return rsqrt(v); }
 
 namespace {
 // This is the un-specialized struct.  Note that we prevent instantiation of
@@ -238,37 +229,34 @@ namespace {
 //      }
 //  };
 // https://github.com/NVIDIA/apex/issues/246
-template <typename T>
-struct SharedMemory;
+template <typename T> struct SharedMemory;
 
-template <>
-struct SharedMemory<float> {
-  __device__ float* getPointer() {
+template <> struct SharedMemory<float> {
+  __device__ float *getPointer() {
     extern __shared__ float s_float[];
     return s_float;
   }
 };
 
-}  // namespace
+} // namespace
 
 template <typename T, typename U, typename V>
-__global__ void cuApplyLayerNorm(V* __restrict__ output_vals,
-                                 U* __restrict__ mean, U* __restrict__ invvar,
-                                 const T* __restrict__ vals, const int n1,
-                                 const int n2, const U epsilon,
-                                 const V* __restrict__ gamma,
-                                 const V* __restrict__ beta) {
+__global__ void
+cuApplyLayerNorm(V *__restrict__ output_vals, U *__restrict__ mean,
+                 U *__restrict__ invvar, const T *__restrict__ vals,
+                 const int n1, const int n2, const U epsilon,
+                 const V *__restrict__ gamma, const V *__restrict__ beta) {
   // Assumptions:
   // 1) blockDim.x == warpSize
   // 2) Tensors are contiguous
   //
   for (auto i1 = blockIdx.y; i1 < n1; i1 += gridDim.y) {
     SharedMemory<U> shared;
-    U* buf = shared.getPointer();
+    U *buf = shared.getPointer();
     U mu, sigma2;
     cuWelfordMuSigma2(vals, n1, n2, i1, mu, sigma2, buf);
-    const T* lvals = vals + i1 * n2;
-    V* ovals = output_vals + i1 * n2;
+    const T *lvals = vals + i1 * n2;
+    V *ovals = output_vals + i1 * n2;
     U c_invvar = rsqrt(sigma2 + epsilon);
     const int numx = blockDim.x * blockDim.y;
     const int thrx = threadIdx.x + threadIdx.y * blockDim.x;
@@ -293,9 +281,9 @@ __global__ void cuApplyLayerNorm(V* __restrict__ output_vals,
 template <typename T, typename U, typename V>
 __device__ void cuLoadWriteStridedInputs(
     const int i1_block, const int thr_load_row_off, const int thr_load_col_off,
-    const int i2_off, const int row_stride, U* warp_buf1, U* warp_buf2,
-    const T* input, const V* dout, const int i1_end, const int n2,
-    const U* __restrict__ mean, const U* __restrict__ invvar) {
+    const int i2_off, const int row_stride, U *warp_buf1, U *warp_buf2,
+    const T *input, const V *dout, const int i1_end, const int n2,
+    const U *__restrict__ mean, const U *__restrict__ invvar) {
   int i1 = i1_block + thr_load_row_off;
   if (i1 < i1_end) {
     U curr_mean = mean[i1];
@@ -327,9 +315,9 @@ __device__ void cuLoadWriteStridedInputs(
 template <typename T, typename U, typename V>
 __device__ void cuLoadAddStridedInputs(
     const int i1_block, const int thr_load_row_off, const int thr_load_col_off,
-    const int i2_off, const int row_stride, U* warp_buf1, U* warp_buf2,
-    const T* input, const V* dout, const int i1_end, const int n2,
-    const U* __restrict__ mean, const U* __restrict__ invvar) {
+    const int i2_off, const int row_stride, U *warp_buf1, U *warp_buf2,
+    const T *input, const V *dout, const int i1_end, const int n2,
+    const U *__restrict__ mean, const U *__restrict__ invvar) {
   int i1 = i1_block + thr_load_row_off;
   if (i1 < i1_end) {
     U curr_mean = mean[i1];
@@ -351,9 +339,9 @@ __device__ void cuLoadAddStridedInputs(
 
 template <typename T, typename U, typename V>
 __global__ void cuComputePartGradGammaBeta(
-    const V* __restrict__ dout, const T* __restrict__ input, const int n1,
-    const int n2, const U* __restrict__ mean, const U* __restrict__ invvar,
-    U epsilon, U* part_grad_gamma, U* part_grad_beta) {
+    const V *__restrict__ dout, const T *__restrict__ input, const int n1,
+    const int n2, const U *__restrict__ mean, const U *__restrict__ invvar,
+    U epsilon, U *part_grad_gamma, U *part_grad_beta) {
   const int numsegs_n1 =
       (n1 + blockDim.y * blockDim.y - 1) / (blockDim.y * blockDim.y);
   const int segs_per_block = (numsegs_n1 + gridDim.y - 1) / gridDim.y;
@@ -367,11 +355,11 @@ __global__ void cuComputePartGradGammaBeta(
       (threadIdx.x * blockDim.y) / blockDim.x + threadIdx.y * blockDim.y;
   const int i2_off = blockIdx.x * blockDim.x + thr_load_col_off;
   SharedMemory<U> shared;
-  U* buf = shared.getPointer();  // buf has at least blockDim.x * blockDim.y *
-                                 // blockDim.y + (blockDim.y -
-                                 // 1)*(blockDim.x/blockDim.y) elements
-  U* warp_buf1 = (U*)buf;
-  U* warp_buf2 = warp_buf1 + blockDim.y * blockDim.y * row_stride;
+  U *buf = shared.getPointer(); // buf has at least blockDim.x * blockDim.y *
+                                // blockDim.y + (blockDim.y -
+                                // 1)*(blockDim.x/blockDim.y) elements
+  U *warp_buf1 = (U *)buf;
+  U *warp_buf2 = warp_buf1 + blockDim.y * blockDim.y * row_stride;
   // compute partial sums from strided inputs
   // do this to increase number of loads in flight
   cuLoadWriteStridedInputs(i1_beg, thr_load_row_off, thr_load_col_off, i2_off,
@@ -421,23 +409,22 @@ __global__ void cuComputePartGradGammaBeta(
 }
 
 template <typename U, typename V>
-__global__ void cuComputeGradGammaBeta(const U* part_grad_gamma,
-                                       const U* part_grad_beta,
-                                       const int part_size, const int n1,
-                                       const int n2, V* grad_gamma,
-                                       V* grad_beta) {
+__global__ void
+cuComputeGradGammaBeta(const U *part_grad_gamma, const U *part_grad_beta,
+                       const int part_size, const int n1, const int n2,
+                       V *grad_gamma, V *grad_beta) {
   // sum partial gradients for gamma and beta
   SharedMemory<U> shared;
-  U* buf = shared.getPointer();
+  U *buf = shared.getPointer();
   int i2 = blockIdx.x * blockDim.x + threadIdx.x;
   if (i2 < n2) {
     // each warp does sequential reductions until reduced part_size is num_warps
     int num_warp_reductions = part_size / blockDim.y;
     U sum_gamma = U(0);
     U sum_beta = U(0);
-    const U* part_grad_gamma_ptr =
+    const U *part_grad_gamma_ptr =
         part_grad_gamma + threadIdx.y * num_warp_reductions * n2 + i2;
-    const U* part_grad_beta_ptr =
+    const U *part_grad_beta_ptr =
         part_grad_beta + threadIdx.y * num_warp_reductions * n2 + i2;
     for (int warp_offset = 0; warp_offset < num_warp_reductions;
          ++warp_offset) {
@@ -471,18 +458,18 @@ __global__ void cuComputeGradGammaBeta(const U* part_grad_gamma,
 }
 
 template <typename T, typename U, typename V>
-__global__ void cuComputeGradInput(const V* __restrict__ dout,
-                                   const T* __restrict__ input, const int n1,
-                                   const int n2, const U* __restrict__ mean,
-                                   const U* __restrict__ invvar, U epsilon,
-                                   const V* gamma, T* grad_input) {
+__global__ void cuComputeGradInput(const V *__restrict__ dout,
+                                   const T *__restrict__ input, const int n1,
+                                   const int n2, const U *__restrict__ mean,
+                                   const U *__restrict__ invvar, U epsilon,
+                                   const V *gamma, T *grad_input) {
   for (auto i1 = blockIdx.y; i1 < n1; i1 += gridDim.y) {
     U sum_loss1 = U(0);
     U sum_loss2 = U(0);
     const U c_mean = mean[i1];
     const U c_invvar = invvar[i1];
-    const T* k_input = input + i1 * n2;
-    const V* k_dout = dout + i1 * n2;
+    const T *k_input = input + i1 * n2;
+    const V *k_dout = dout + i1 * n2;
     const int numx = blockDim.x * blockDim.y;
     const int thrx = threadIdx.x + threadIdx.y * blockDim.x;
     if (gamma != NULL) {
@@ -526,7 +513,7 @@ __global__ void cuComputeGradInput(const V* __restrict__ dout,
     // inter-warp reductions
     if (blockDim.y > 1) {
       SharedMemory<U> shared;
-      U* buf = shared.getPointer();
+      U *buf = shared.getPointer();
       for (int offset = blockDim.y / 2; offset > 0; offset /= 2) {
         // upper half of warps write to shared
         if (threadIdx.y >= offset && threadIdx.y < 2 * offset) {
@@ -556,7 +543,7 @@ __global__ void cuComputeGradInput(const V* __restrict__ dout,
     // all threads now have the two sums over l
     U fH = (U)n2;
     U term1 = (U(1) / fH) * c_invvar;
-    T* k_grad_input = grad_input + i1 * n2;
+    T *k_grad_input = grad_input + i1 * n2;
     if (gamma != NULL) {
       for (int l = thrx; l < n2; l += numx) {
         const U c_h = static_cast<U>(k_input[l]);
@@ -582,8 +569,8 @@ __global__ void cuComputeGradInput(const V* __restrict__ dout,
 }
 
 template <typename T, typename U, typename V>
-void HostApplyLayerNorm(V* output, U* mean, U* invvar, const T* input, int n1,
-                        int n2, double epsilon, const V* gamma, const V* beta) {
+void HostApplyLayerNorm(V *output, U *mean, U *invvar, const T *input, int n1,
+                        int n2, double epsilon, const V *gamma, const V *beta) {
   auto stream = at::cuda::getCurrentCUDAStream().stream();
   const dim3 threads(32, 4, 1);
   const uint64_t maxGridY =
@@ -595,14 +582,14 @@ void HostApplyLayerNorm(V* output, U* mean, U* invvar, const T* input, int n1,
       output, mean, invvar, input, n1, n2, U(epsilon), gamma, beta);
 }
 
-void cuda_layer_norm(at::Tensor* output, at::Tensor* mean, at::Tensor* invvar,
-                     at::Tensor* input, int n1, int n2,
+void cuda_layer_norm(at::Tensor *output, at::Tensor *mean, at::Tensor *invvar,
+                     at::Tensor *input, int n1, int n2,
 #ifdef VERSION_GE_1_1
                      at::IntArrayRef normalized_shape,
 #else
                      at::IntList normalized_shape,
 #endif
-                     at::Tensor* gamma, at::Tensor* beta, double epsilon) {
+                     at::Tensor *gamma, at::Tensor *beta, double epsilon) {
   using namespace at;
   DISPATCH_FLOAT_HALF_AND_BFLOAT_INOUT_TYPES(
       input->scalar_type(), output->scalar_type(), "cuda_layer_norm_kernel",
@@ -614,10 +601,10 @@ void cuda_layer_norm(at::Tensor* output, at::Tensor* mean, at::Tensor* invvar,
 }
 
 template <typename T, typename U, typename V>
-void HostLayerNormGradient(const V* dout, const U* mean, const U* invvar,
-                           at::Tensor* input, int n1, int n2, const V* gamma,
-                           const V* beta, double epsilon, T* grad_input,
-                           V* grad_gamma, V* grad_beta) {
+void HostLayerNormGradient(const V *dout, const U *mean, const U *invvar,
+                           at::Tensor *input, int n1, int n2, const V *gamma,
+                           const V *beta, double epsilon, T *grad_input,
+                           V *grad_gamma, V *grad_beta) {
   auto stream = at::cuda::getCurrentCUDAStream().stream();
 
   if (gamma != NULL && beta != NULL) {
@@ -655,17 +642,17 @@ void HostLayerNormGradient(const V* dout, const U* mean, const U* invvar,
       grad_input);
 }
 
-void cuda_layer_norm_gradient(at::Tensor* dout, at::Tensor* mean,
-                              at::Tensor* invvar, at::Tensor* input, int n1,
+void cuda_layer_norm_gradient(at::Tensor *dout, at::Tensor *mean,
+                              at::Tensor *invvar, at::Tensor *input, int n1,
                               int n2,
 #ifdef VERSION_GE_1_1
                               at::IntArrayRef normalized_shape,
 #else
                               at::IntList normalized_shape,
 #endif
-                              at::Tensor* gamma, at::Tensor* beta,
-                              double epsilon, at::Tensor* grad_input,
-                              at::Tensor* grad_gamma, at::Tensor* grad_beta) {
+                              at::Tensor *gamma, at::Tensor *beta,
+                              double epsilon, at::Tensor *grad_input,
+                              at::Tensor *grad_gamma, at::Tensor *grad_beta) {
   using namespace at;
   DISPATCH_FLOAT_HALF_AND_BFLOAT_INOUT_TYPES(
       input->scalar_type(), gamma->scalar_type(),

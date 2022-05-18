@@ -3,6 +3,7 @@ import time
 
 
 class CircleInt:
+
     def __init__(self, minValue=0, maxValue=10000):
         self.minValue = minValue
         self.maxValue = maxValue
@@ -20,12 +21,14 @@ class CircleInt:
 
 
 class PipelineMsg:
+
     def __init__(self, sample, pipe_meta):
         self.sample = sample
         self.pipe_meta = pipe_meta
 
 
 class PipelineMsgDict:
+
     def __init__(self):
         self.pipeline_msg_dict = dict()
 

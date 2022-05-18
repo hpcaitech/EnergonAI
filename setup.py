@@ -61,13 +61,14 @@ if not torch.cuda.is_available():
     # query torch.cuda.get_device_capability(),
     # which will fail if you are compiling in an environment without visible GPUs
     # (e.g. during an nvidia-docker build command).
-    print('\nWarning: Torch did not find available GPUs on this system.\n',
-          'If your intention is to cross-compile, this is not an error.\n'
-          'By default, Colossal-AI will cross-compile for Pascal (compute capabilities 6.0, 6.1, 6.2),\n'
-          'Volta (compute capability 7.0), Turing (compute capability 7.5),\n'
-          'and, if the CUDA version is >= 11.0, Ampere (compute capability 8.0).\n'
-          'If you wish to cross-compile for a single specific architecture,\n'
-          'export TORCH_CUDA_ARCH_LIST="compute capability" before running setup.py.\n')
+    print(
+        '\nWarning: Torch did not find available GPUs on this system.\n',
+        'If your intention is to cross-compile, this is not an error.\n'
+        'By default, Colossal-AI will cross-compile for Pascal (compute capabilities 6.0, 6.1, 6.2),\n'
+        'Volta (compute capability 7.0), Turing (compute capability 7.5),\n'
+        'and, if the CUDA version is >= 11.0, Ampere (compute capability 8.0).\n'
+        'If you wish to cross-compile for a single specific architecture,\n'
+        'export TORCH_CUDA_ARCH_LIST="compute capability" before running setup.py.\n')
     if os.environ.get("TORCH_CUDA_ARCH_LIST", None) is None:
         _, bare_metal_major, _ = get_cuda_bare_metal_version(CUDA_HOME)
         if int(bare_metal_major) == 11:
@@ -102,18 +103,20 @@ if build_cuda_ext:
     else:
         check_cuda_torch_binary_vs_bare_metal(CUDA_HOME)
 
-
         def cuda_ext_helper(name, sources, extra_cuda_flags):
-            return CUDAExtension(name=name,
-                                 sources=[os.path.join('energon/kernel/cuda_native/csrc', path) for path in sources],
-                                 include_dirs=[os.path.join(
-                                     this_dir, 'energon/kernel/cuda_native/csrc/kernels/include'),
-                                     '/opt/lcsoftware/spack/opt/spack/linux-ubuntu20.04-zen2/gcc-9.3.0/nccl-2.9.6-1'
-                                     '-ysovaavjkgjez2fwms4dkvatu5yrxbec/include'],
-                                 extra_compile_args={'cxx': ['-O3'] + version_dependent_macros,
-                                                     'nvcc': append_nvcc_threads(['-O3',
-                                                                                  '--use_fast_math'] + version_dependent_macros + extra_cuda_flags)})
-
+            return CUDAExtension(
+                name=name,
+                sources=[os.path.join('energon/kernel/cuda_native/csrc', path) for path in sources],
+                include_dirs=[
+                    os.path.join(this_dir, 'energon/kernel/cuda_native/csrc/kernels/include'),
+            #  '/opt/lcsoftware/spack/opt/spack/linux-ubuntu20.04-zen2/gcc-9.3.0/nccl-2.9.6-1'
+            #  '-ysovaavjkgjez2fwms4dkvatu5yrxbec/include'
+                ],
+                extra_compile_args={
+                    'cxx': ['-O3'] + version_dependent_macros,
+                    'nvcc':
+                        append_nvcc_threads(['-O3', '--use_fast_math'] + version_dependent_macros + extra_cuda_flags)
+                })
 
         cc_flag = ['-gencode', 'arch=compute_70,code=sm_70']
         _, bare_metal_major, _ = get_cuda_bare_metal_version(CUDA_HOME)
@@ -121,47 +124,45 @@ if build_cuda_ext:
             cc_flag.append('-gencode')
             cc_flag.append('arch=compute_80,code=sm_80')
 
-        extra_cuda_flags = ['-std=c++14',
-                            '-U__CUDA_NO_HALF_OPERATORS__',
-                            '-U__CUDA_NO_HALF_CONVERSIONS__',
-                            '-U__CUDA_NO_HALF2_OPERATORS__',
-                            '-DTHRUST_IGNORE_CUB_VERSION_CHECK'
-                            ]
-        ext_modules.append(cuda_ext_helper('energon_scale_mask',
-                                           ['scale_mask_softmax_kernel.cu',
-                                            'scale_mask_softmax_wrapper.cpp'],
-                                           extra_cuda_flags + cc_flag))
+        extra_cuda_flags = [
+            '-std=c++14', '-U__CUDA_NO_HALF_OPERATORS__', '-U__CUDA_NO_HALF_CONVERSIONS__',
+            '-U__CUDA_NO_HALF2_OPERATORS__', '-DTHRUST_IGNORE_CUB_VERSION_CHECK'
+        ]
+        ext_modules.append(
+            cuda_ext_helper('energon_scale_mask', ['scale_mask_softmax_kernel.cu', 'scale_mask_softmax_wrapper.cpp'],
+                            extra_cuda_flags + cc_flag))
 
-        ext_modules.append(cuda_ext_helper('energon_layer_norm',
-                                           ['layer_norm_cuda_kernel.cu', 'layer_norm_cuda.cpp'],
-                                           extra_cuda_flags + cc_flag))
+        ext_modules.append(
+            cuda_ext_helper('energon_layer_norm', ['layer_norm_cuda_kernel.cu', 'layer_norm_cuda.cpp'],
+                            extra_cuda_flags + cc_flag))
 
-        ext_modules.append(cuda_ext_helper('energon_transpose_pad',
-                                           ['transpose_pad_fusion_wrapper.cpp', 'transpose_pad_fusion_kernel.cu'],
-                                           extra_cuda_flags + cc_flag))
+        ext_modules.append(
+            cuda_ext_helper('energon_transpose_pad',
+                            ['transpose_pad_fusion_wrapper.cpp', 'transpose_pad_fusion_kernel.cu'],
+                            extra_cuda_flags + cc_flag))
 
-        ext_modules.append(cuda_ext_helper('energon_nccl',
-                                           ['get_ncclid.cpp'],
-                                           extra_cuda_flags + cc_flag))
+        # ext_modules.append(cuda_ext_helper('energon_nccl',
+        #                                    ['get_ncclid.cpp'],
+        #                                    extra_cuda_flags + cc_flag))
 
-setup(
-    name='energon',
-    version='0.0.1-beta',
-    packages=find_packages(exclude=('benchmark',
-                                    'docker',
-                                    'tests',
-                                    'docs',
-                                    'example',
-                                    'tests',
-                                    'scripts',
-                                    'requirements',
-                                    '*.egg-info',)),
-    description='Large-scale Model Inference',
-    ext_modules=ext_modules,
-    cmdclass={'build_ext': BuildExtension} if ext_modules else {},
-    install_requires=fetch_requirements('requirements.txt'),
-    entry_points='''
+setup(name='energon',
+      version='0.0.1-beta',
+      packages=find_packages(exclude=(
+          'benchmark',
+          'docker',
+          'tests',
+          'docs',
+          'example',
+          'tests',
+          'scripts',
+          'requirements',
+          '*.egg-info',
+      )),
+      description='Large-scale Model Inference',
+      ext_modules=ext_modules,
+      cmdclass={'build_ext': BuildExtension} if ext_modules else {},
+      install_requires=fetch_requirements('requirements.txt'),
+      entry_points='''
         [console_scripts]
         energon=energon.cli:typer_click_object
-    '''
-)
+    ''')

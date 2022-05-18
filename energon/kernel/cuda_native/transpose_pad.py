@@ -6,8 +6,8 @@ try:
 except ImportError:
     raise RuntimeError('transpose_pad requires cuda extensions')
 
-
 # from transpose import transpose_pad_wrapper, transpose_depad_wrapper
+
 
 def transpose_pad(src, batch_size, max_seq_len, seq_len_list, head_num, size_per_head):
     src = src.contiguous()
@@ -38,6 +38,7 @@ def depad(src, batch_size, seq_lens):
 
 
 # From FasterTransformer
+
 
 def ft_build_padding_offsets(seq_lens, batch_size, max_seq_len, valid_word_num, tmp_mask_offset):
     seq_lens = seq_lens.contiguous()

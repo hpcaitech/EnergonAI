@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 class single_request:
+
     def __init__(self, input_, time_stamp: float, input_str: str):
         """
         class to store related information for a single request.
@@ -54,11 +55,21 @@ class Batch_Manager(Manager):
     in function cal_priority and then sent into the inference engine.
     """
 
-    def __init__(self, engine: InferenceEngine, model_name: str, pp: int, tp: int,
-                 max_sequence_length: int, init_mu: int = 512, init_theta: int = 180,
-                 max_batch_size: int = 32, lr: float = 0.01, tokenizer=None, pad_token=None, rm_padding=False,
-                 step: int = 1, repeat_round: int = 3
-    ):
+    def __init__(self,
+                 engine: InferenceEngine,
+                 model_name: str,
+                 pp: int,
+                 tp: int,
+                 max_sequence_length: int,
+                 init_mu: int = 512,
+                 init_theta: int = 180,
+                 max_batch_size: int = 32,
+                 lr: float = 0.01,
+                 tokenizer=None,
+                 pad_token=None,
+                 rm_padding=False,
+                 step: int = 1,
+                 repeat_round: int = 3):
         """
         :param engine: The InferenceEngine from energon.engine
         :param cached_cost: The output of function generate_cached_cost
@@ -77,22 +88,35 @@ class Batch_Manager(Manager):
         self.req_list = []
         self.req_list_lock = rwlock.RWLockFair()
         self.write_lock = self.req_list_lock.gen_wlock()
-        self.cached_cost = self.generate_cached_cost(engine, model_name, pp=pp, tp=tp, max_seq_len=max_sequence_length,
-                                                max_batch_size=max_batch_size, step=step, repeat_round=repeat_round,
+        self.cached_cost = self.generate_cached_cost(engine,
+                                                     model_name,
+                                                     pp=pp,
+                                                     tp=tp,
+                                                     max_seq_len=max_sequence_length,
+                                                     max_batch_size=max_batch_size,
+                                                     step=step,
+                                                     repeat_round=repeat_round,
                                                      tokenizer=tokenizer)
         self.tokenizer = tokenizer
         self.rm_padding = rm_padding
         if self.tokenizer and pad_token:
-            self.tokenizer.pad_token = pad_token  # GPT2Tokenizer.eos_token
+            self.tokenizer.pad_token = pad_token    # GPT2Tokenizer.eos_token
         self.running_flag = True
         self.publisher = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
         self.pool = ThreadPoolExecutor(max_workers=16)
         self.main_thread = threading.Thread(target=self.processing_batch)
         self.main_thread.start()
 
-    def generate_cached_cost(self, engine, model_name: str, pp: int, tp: int,
-                             max_seq_len: int = 1024, max_batch_size: int = 16, step: int = 1,
-                             repeat_round: int = 3, tokenizer=None):
+    def generate_cached_cost(self,
+                             engine,
+                             model_name: str,
+                             pp: int,
+                             tp: int,
+                             max_seq_len: int = 1024,
+                             max_batch_size: int = 16,
+                             step: int = 1,
+                             repeat_round: int = 3,
+                             tokenizer=None):
         """
         Test the running time for different sequence length and batch size on the current machine.
         :param engine: InferenceEngine from energon.engine
@@ -203,7 +227,7 @@ class Batch_Manager(Manager):
         delta_mu = new_mu - self.mu
         self.mu += self.lr * delta_mu
         temp_batch = np.array([i.seq_len - self.mu for i in batch_])
-        new_theta = np.sqrt(np.mean(temp_batch ** 2))
+        new_theta = np.sqrt(np.mean(temp_batch**2))
         delta_theta = new_theta - self.theta
         self.theta += self.lr * delta_theta
         return
@@ -239,15 +263,15 @@ class Batch_Manager(Manager):
         while i > 0:
             end_idx = i
             start_idx = start_idx_list[i]
-            current_batch = self.req_list[start_idx: end_idx]
+            current_batch = self.req_list[start_idx:end_idx]
             current_priority = self.cal_priority(current_batch, cur_timestamp)
             if current_priority > max_priority:
                 max_priority = current_priority
                 res_start = start_idx
                 res_end = end_idx
             i = start_idx - 1
-        result_batch = self.req_list[res_start: res_end]
-        del self.req_list[res_start: res_end]
+        result_batch = self.req_list[res_start:res_end]
+        del self.req_list[res_start:res_end]
         self.write_lock.release()
         return result_batch
 
@@ -261,8 +285,8 @@ class Batch_Manager(Manager):
             if len(self.req_list) > 0:
                 target_batch = self.wrap_batch()
                 pad_len = target_batch[-1].seq_len
-                logging.info("A batch with {} requests and length of {} packed, in-batch length: {}"
-                             .format(len(target_batch), pad_len, [p.seq_len for p in target_batch]))
+                logging.info("A batch with {} requests and length of {} packed, in-batch length: {}".format(
+                    len(target_batch), pad_len, [p.seq_len for p in target_batch]))
                 input_text = [i.text for i in target_batch]
                 if self.tokenizer:
                     input_ids = self.tokenizer(input_text, padding="longest", return_tensors="pt")

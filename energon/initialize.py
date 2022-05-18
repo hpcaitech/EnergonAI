@@ -68,16 +68,14 @@ def launch(rank: int,
 
     if verbose:
         logger = get_dist_logger()
-        logger.info(f'Distributed environment is initialized, '
-                    f'data parallel size: {gpc.data_parallel_size}, pipeline parallel size: {gpc.pipeline_parallel_size}, '
-                    f'tensor parallel size: {gpc.tensor_parallel_size}', ranks=[0])
+        logger.info(
+            f'Distributed environment is initialized, '
+            f'data parallel size: {gpc.data_parallel_size}, pipeline parallel size: {gpc.pipeline_parallel_size}, '
+            f'tensor parallel size: {gpc.tensor_parallel_size}',
+            ranks=[0])
 
 
-def launch_from_torch(tp_size=1,
-                      pp_size=1,
-                      backend: str = 'nccl',
-                      seed: int = 1024,
-                      verbose: bool = True):
+def launch_from_torch(tp_size=1, pp_size=1, backend: str = 'nccl', seed: int = 1024, verbose: bool = True):
     """A wrapper for colossalai.launch for torchrun or torch.distributed.launch by reading rank and world size
     from the environment variables set by PyTorch
     :type config: Union[str, dict, Config]
@@ -114,8 +112,7 @@ def launch_from_multiprocess(tp_size: int = 1,
                              local_rank: int = 0,
                              world_size: int = 1,
                              host: str = '127.0.0.1',
-                             port: int = 29500
-                             ):
+                             port: int = 29500):
     """A wrapper for colossalai.launch for using multiprocessing.
     As it is essential to provide a single entrance of input&&output in the triton,
     here we provide the multiprocess launch.

@@ -38,8 +38,7 @@ def launches(model_class=None,
                f'Worker Server Host: {server_host} \n'
                f'Worker Server Port: {server_port} \n'
                f'Unvicorn Log Level: {log_level} \n'
-               f'Remove padding: {rm_padding} \n'
-               )
+               f'Remove padding: {rm_padding} \n')
 
     if half:
         dtype = torch.half
@@ -51,7 +50,7 @@ def launches(model_class=None,
 
     engine_port = server_port
     worker_port = server_port + 1
-    worker_rank = 1  # start from 1
+    worker_rank = 1    # start from 1
 
     process_list = []
     for i in range(num_worker):
@@ -63,21 +62,23 @@ def launches(model_class=None,
 
     sig_server = inspect.signature(engine_server)
     parameters_server = sig_server.parameters
-    
-    cfg = {'model_class' : model_class,
-        'model_type' : model_type,
-        'max_batch_size' : max_batch_size,
-        'tp_init_size' : tp_init_size,
-        'pp_init_size' : pp_init_size,
-        'host' : host,
-        'port' : port,
-        'dtype' : dtype,
-        'checkpoint' : checkpoint,
-        'tokenizer_path' : tokenizer_path,
-        'server_host' : server_host,
-        'server_port' : engine_port,
-        'log_level' : log_level,
-        'rm_padding' : rm_padding}
+
+    cfg = {
+        'model_class': model_class,
+        'model_type': model_type,
+        'max_batch_size': max_batch_size,
+        'tp_init_size': tp_init_size,
+        'pp_init_size': pp_init_size,
+        'host': host,
+        'port': port,
+        'dtype': dtype,
+        'checkpoint': checkpoint,
+        'tokenizer_path': tokenizer_path,
+        'server_host': server_host,
+        'server_port': engine_port,
+        'log_level': log_level,
+        'rm_padding': rm_padding
+    }
 
     argv = dict()
     for name, _ in parameters_server.items():

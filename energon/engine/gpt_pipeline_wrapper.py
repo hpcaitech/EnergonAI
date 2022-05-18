@@ -11,15 +11,13 @@ from energon.context import ParallelMode
 from energon.core import global_context as gpc
 
 from .pipeline_meta import PipelineMeta
-from .pipeline_msg_dict import PipelineMsgDict, CircleInt  # PipelineMsgPriorityQueue
+from .pipeline_msg_dict import PipelineMsgDict, CircleInt    # PipelineMsgPriorityQueue
 
 
 # The Wrapper is only for Transformer Model.
 class GPTPipelineCommWrapper:
-    def __init__(self,
-                 model: nn.Module,
-                 max_batch_size: int = 1,
-                 dtype=torch.float) -> None:
+
+    def __init__(self, model: nn.Module, max_batch_size: int = 1, dtype=torch.float) -> None:
         # TODO (dujiangsu): to make sample capability for different types. Iteration, Tensor, and others.
         self.model = model
         self.dtype = dtype
@@ -44,23 +42,26 @@ class GPTPipelineCommWrapper:
         with torch.inference_mode():
             recv_tensor_shape = None
             if gpc.is_first_rank(ParallelMode.PIPELINE):
-                output = self.model(hidden_states=None, input_ids=sample['input_ids'],
-                                    attention_mask=sample['attention_mask'])  # ([32, 512, 1600])
+                output = self.model(hidden_states=None,
+                                    input_ids=sample['input_ids'],
+                                    attention_mask=sample['attention_mask'])    # ([32, 512, 1600])
                 send_tensor_meta(output)
                 send_forward(output)
                 self.tensor_dim = output.dim()
                 self.hidden_size = output.size()[-1]
             elif gpc.is_last_rank(ParallelMode.PIPELINE):
                 recv_tensor_shape = recv_tensor_meta(recv_tensor_shape)
-                input_tensor = recv_forward(recv_tensor_shape, dtype=self.dtype)  # only a tensor now
+                input_tensor = recv_forward(recv_tensor_shape, dtype=self.dtype)    # only a tensor now
                 self.tensor_dim = input_tensor.dim()
                 self.hidden_size = input_tensor.size()[-1]
             else:
                 recv_tensor_shape = recv_tensor_meta(recv_tensor_shape)
-                input_tensor = recv_forward(recv_tensor_shape, dtype=self.dtype)  # only a tensor now
+                input_tensor = recv_forward(recv_tensor_shape, dtype=self.dtype)    # only a tensor now
                 self.tensor_dim = input_tensor.dim()
                 self.hidden_size = input_tensor.size()[-1]
-                output = self.model(hidden_states=input_tensor, input_ids=input_tensor, attention_mask=sample['attention_mask'])
+                output = self.model(hidden_states=input_tensor,
+                                    input_ids=input_tensor,
+                                    attention_mask=sample['attention_mask'])
                 send_tensor_meta(output)
                 send_forward(output)
 
@@ -79,9 +80,7 @@ class GPTPipelineCommWrapper:
         cur_key = self.key.val
         sample, pipe_meta = self.pipe_msg_queue.top(cur_key)
         self.key.addOne()
-        output = self.model(hidden_states=None,
-                            input_ids=sample['input_ids'],
-                            attention_mask=sample['attention_mask'])
+        output = self.model(hidden_states=None, input_ids=sample['input_ids'], attention_mask=sample['attention_mask'])
         self.lock.release()
 
         return output, cur_key

@@ -44,7 +44,7 @@ def send_request(input_: str, url_: str, port: str):
 def test_batch():
     global latency
     ip_ = "http://127.0.0.1"
-    port_ = "8010"
+    port_ = "8020"
     req_num = 50
     seq_len = 64
     # req_list = ["test " * 10 for _ in range(req_num)]

@@ -7,7 +7,7 @@ import requests
 
 # pytorch rpc
 import torch.distributed.rpc as rpc
-from .rpc_utils import remote_cls_method, sync_cls_method, async_cls_method  # , get_random_string
+from .rpc_utils import remote_cls_method, sync_cls_method, async_cls_method    # , get_random_string
 from .rpc_worker import RPCWorker
 from .pipeline_msg_dict import CircleInt
 
@@ -20,6 +20,7 @@ from energon.logging import get_dist_logger
 
 
 class InferenceEngine(Module):
+
     def __init__(self,
                  model_class,
                  model_config,
@@ -29,8 +30,7 @@ class InferenceEngine(Module):
                  pp_init_size: int = -1,
                  host: str = 'localhost',
                  port: int = 29500,
-                 dtype=None
-                 ):
+                 dtype=None):
         """
         Args:
             model: torch.nn.Module
@@ -64,21 +64,30 @@ class InferenceEngine(Module):
         r"""
         Based on global_context, init the rpc connection.
         """
-        launch_from_multiprocess(tp_size=self.tp_size, pp_size=self.pp_size, rank=self.rank, local_rank=self.rank,
-                                 world_size=self.global_world_size, host=self.host, port=self.port)
-        rpc_backend_options = rpc.TensorPipeRpcBackendOptions(
-            num_worker_threads=16,
-            # _transports=["uv"] TODO: potentially a bug
-            )
-        rpc.init_rpc(self.WORKER_NAME.format(0), rank=0, world_size=self.global_world_size,
+        launch_from_multiprocess(tp_size=self.tp_size,
+                                 pp_size=self.pp_size,
+                                 rank=self.rank,
+                                 local_rank=self.rank,
+                                 world_size=self.global_world_size,
+                                 host=self.host,
+                                 port=self.port)
+        rpc_backend_options = rpc.TensorPipeRpcBackendOptions(num_worker_threads=16,
+        # _transports=["uv"] TODO: potentially a bug
+                                                             )
+        rpc.init_rpc(self.WORKER_NAME.format(0),
+                     rank=0,
+                     world_size=self.global_world_size,
                      rpc_backend_options=rpc_backend_options)
 
     def _init_model(self):
         for i in range(self.global_world_size):
             print(f'[INFO] rank{self.rank} calls rank{i} to init.')
             ob_info = rpc.get_worker_info(self.WORKER_NAME.format(i))
-            self.rrefs.append(rpc.remote(ob_info, RPCWorker, args=(
-            self.model_class, self.model_config, self.model_type, self.dtype, self.max_batch_size)))
+            self.rrefs.append(
+                rpc.remote(ob_info,
+                           RPCWorker,
+                           args=(self.model_class, self.model_config, self.model_type, self.dtype,
+                                 self.max_batch_size)))
 
     def run(self, inputs):
         res_rref = 0

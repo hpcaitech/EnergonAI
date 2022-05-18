@@ -12,13 +12,12 @@
 
 const unsigned int WARP_REDUCE_MASK = 0xffffffff;
 const unsigned int WARP_SIZE = 32;
-const float CUDA_FLOAT_INF_NEG = -100000000.f;  // FIXME later
-const float CUDA_FLOAT_INF_POS = 100000000.f;   // FIXME later
+const float CUDA_FLOAT_INF_NEG = -100000000.f; // FIXME later
+const float CUDA_FLOAT_INF_POS = 100000000.f;  // FIXME later
 const int CUDA_INT_INF = 2147483647;
 const int MAX_THREADS = 1024;
 
-template <typename T>
-__forceinline__ __device__ T gelu(T x) {
+template <typename T> __forceinline__ __device__ T gelu(T x) {
   float cdf =
       0.5f *
       (1.0f + tanhf((0.7978845608028654f * (x + 0.044715f * x * x * x))));
@@ -26,8 +25,7 @@ __forceinline__ __device__ T gelu(T x) {
 }
 
 /* fp16 gelu */
-template <>
-__forceinline__ __device__ half2 gelu<half2>(half2 val) {
+template <> __forceinline__ __device__ half2 gelu<half2>(half2 val) {
   half2 val_pow3 = __hmul2(val, __hmul2(val, val));
   float2 tmp_pow = __half22float2(val_pow3);
   float2 tmp = __half22float2(val);
@@ -41,37 +39,34 @@ __forceinline__ __device__ half2 gelu<half2>(half2 val) {
   return __hmul2(val, __float22half2_rn(tmp));
 }
 
-template <typename T>
-__forceinline__ __device__ T warpReduceSum(T val) {
+template <typename T> __forceinline__ __device__ T warpReduceSum(T val) {
   for (int mask = (WARP_SIZE >> 1); mask > 0; mask >>= 1)
     val += __shfl_xor_sync(WARP_REDUCE_MASK, val, mask, WARP_SIZE);
   return val;
 }
 
-template <typename T>
-__forceinline__ __device__ T warpReduceMax(T val) {
+template <typename T> __forceinline__ __device__ T warpReduceMax(T val) {
   for (int mask = (WARP_SIZE >> 1); mask > 0; mask >>= 1)
     val = max(val, __shfl_xor_sync(WARP_REDUCE_MASK, val, mask, WARP_SIZE));
   return val;
 }
 
-template <typename T>
-__forceinline__ __device__ T warpReduceMin(T val) {
+template <typename T> __forceinline__ __device__ T warpReduceMin(T val) {
   for (int mask = (WARP_SIZE >> 1); mask > 0; mask >>= 1)
     val = min(val, __shfl_xor_sync(WARP_REDUCE_MASK, val, mask, WARP_SIZE));
   return val;
 }
 
 /* Calculate the sum of all elements in a block */
-template <typename T>
-__forceinline__ __device__ T blockReduceSum(T val) {
+template <typename T> __forceinline__ __device__ T blockReduceSum(T val) {
   static __shared__ T shared[32];
   int lane = threadIdx.x & 0x1f;
   int wid = threadIdx.x >> 5;
 
   val = warpReduceSum<T>(val);
 
-  if (lane == 0) shared[wid] = val;
+  if (lane == 0)
+    shared[wid] = val;
   __syncthreads();
 
   // val = (threadIdx.x < (blockDim.x >> 5 )) ? shared[lane] : (T)0.0f;
@@ -81,15 +76,15 @@ __forceinline__ __device__ T blockReduceSum(T val) {
 }
 
 /* Calculate the maximum of all elements in a block */
-template <typename T>
-__forceinline__ __device__ T blockReduceMax(T val) {
+template <typename T> __forceinline__ __device__ T blockReduceMax(T val) {
   static __shared__ T shared[32];
   int lane = threadIdx.x & 0x1f;
   int wid = threadIdx.x >> 5;
 
   val = warpReduceMax<T>(val);
 
-  if (lane == 0) shared[wid] = val;
+  if (lane == 0)
+    shared[wid] = val;
   __syncthreads();
 
   val = (threadIdx.x < ((blockDim.x + 31) >> 5)) ? shared[lane]
@@ -99,15 +94,15 @@ __forceinline__ __device__ T blockReduceMax(T val) {
 }
 
 /* Calculate the minimum of all elements in a block */
-template <typename T>
-__forceinline__ __device__ T blockReduceMin(T val) {
+template <typename T> __forceinline__ __device__ T blockReduceMin(T val) {
   static __shared__ T shared[32];
   int lane = threadIdx.x & 0x1f;
   int wid = threadIdx.x >> 5;
 
   val = warpReduceMin<T>(val);
 
-  if (lane == 0) shared[wid] = val;
+  if (lane == 0)
+    shared[wid] = val;
   __syncthreads();
 
   val = (threadIdx.x < ((blockDim.x + 31) >> 5)) ? shared[lane]
@@ -124,7 +119,8 @@ __forceinline__ __device__ T blockRoughTopK(T val) {
   int wid = threadIdx.x >> 5;
   val = warpReduceMax(val);
 
-  if (lane == 0) shared[wid] = val;
+  if (lane == 0)
+    shared[wid] = val;
   __syncthreads();
 
   // we do not care about result of threadIdx.x bigger than (blockDim.x >> 5)
@@ -189,11 +185,9 @@ __forceinline__ __host__ __device__ int targetid_5dim(int id1, int id2, int id3,
 }
 
 /* Convert 6-dim tensor index into vector index */
-__forceinline__ __host__ __device__ int targetid_6dim(int id1, int id2, int id3,
-                                                      int id4, int id5, int id6,
-                                                      int dim2, int dim3,
-                                                      int dim4, int dim5,
-                                                      int dim6) {
+__forceinline__ __host__ __device__ int
+targetid_6dim(int id1, int id2, int id3, int id4, int id5, int id6, int dim2,
+              int dim3, int dim4, int dim5, int dim6) {
   // return id1*(dim2*dim3*dim4*dim5*dim6) + id2*(dim3*dim4*dim5*dim6) +
   // id3*(dim4*dim5*dim6) + id4*(dim5*dim6) + id5*dim6 + id6;
   int res = id6;
@@ -242,9 +236,8 @@ __forceinline__ __host__ __device__ int flat_3dim(int id1, int id2, int id3,
 }
 
 /* Convert 4-dim tensor index into vector index */
-__forceinline__ __host__ __device__ int flat_4dim(int id1, int id2, int id3,
-                                                  int id4, int dim2, int dim3,
-                                                  int dim4) {
+__forceinline__ __host__ __device__ int
+flat_4dim(int id1, int id2, int id3, int id4, int dim2, int dim3, int dim4) {
   // return id1*(dim2*dim3*dim4) + id2*(dim3*dim4) + id3*dim4 + id4;
   int res = id4;
 
@@ -312,17 +305,15 @@ __forceinline__ __host__ __device__ int flat_6dim(int id1, int id2, int id3,
 }
 
 /* row major index to col32 index */
-__forceinline__ __host__ __device__ int row_major2flat_col32(int row_id,
-                                                             int col_id,
-                                                             int row_size,
-                                                             int col_size) {
+__forceinline__ __host__ __device__ int
+row_major2flat_col32(int row_id, int col_id, int row_size, int col_size) {
   return ((col_id & 0xffffe0) * row_size) + (row_id << 5) + (col_id & 31);
 }
 
 /* Convert vector index to 6-dim tensor index */
-__forceinline__ __host__ __device__ void decompose_6dim(
-    int src, int dim1, int dim2, int dim3, int dim4, int dim5, int *id0,
-    int *id1, int *id2, int *id3, int *id4, int *id5) {
+__forceinline__ __host__ __device__ void
+decompose_6dim(int src, int dim1, int dim2, int dim3, int dim4, int dim5,
+               int *id0, int *id1, int *id2, int *id3, int *id4, int *id5) {
   *id5 = src % dim5;
   src /= dim5;
 
@@ -340,11 +331,9 @@ __forceinline__ __host__ __device__ void decompose_6dim(
 }
 
 /* Convert vector index to 5-dim tensor index */
-__forceinline__ __host__ __device__ void decompose_5dim(int src, int dim1,
-                                                        int dim2, int dim3,
-                                                        int dim4, int *id0,
-                                                        int *id1, int *id2,
-                                                        int *id3, int *id4) {
+__forceinline__ __host__ __device__ void
+decompose_5dim(int src, int dim1, int dim2, int dim3, int dim4, int *id0,
+               int *id1, int *id2, int *id3, int *id4) {
   *id4 = src % dim4;
   src /= dim4;
 
@@ -374,9 +363,8 @@ __forceinline__ __host__ __device__ void decompose_4dim(int src, int dim1,
 }
 
 /* Convert vector index to 3-dim tensor index */
-__forceinline__ __host__ __device__ void decompose_3dim(int src, int dim1,
-                                                        int dim2, int *id0,
-                                                        int *id1, int *id2) {
+__forceinline__ __host__ __device__ void
+decompose_3dim(int src, int dim1, int dim2, int *id0, int *id1, int *id2) {
   *id2 = src % dim2;
   src /= dim2;
 

@@ -15,17 +15,18 @@ try:
 except ImportError:
     _EXTRA_STATE_KEY_SUFFIX = '_extra_state'
 
-__all__ = ["partition_tensor_parallel_state_dict",
-           "load_checkpoint",
-           "gather_tensor_parallel_state_dict",
-           "save_checkpoint"]
+__all__ = [
+    "partition_tensor_parallel_state_dict", "load_checkpoint", "gather_tensor_parallel_state_dict", "save_checkpoint"
+]
 
-name_map = {'ln_2': 'norm2',
-            'c_attn': 'query_key_value',
-            'attn.c_proj': 'attn.dense',
-            'ln_1': 'norm1',
-            'c_fc': 'dense_1',
-            'mlp.c_proj': 'mlp.dense_2'}
+name_map = {
+    'ln_2': 'norm2',
+    'c_attn': 'query_key_value',
+    'attn.c_proj': 'attn.dense',
+    'ln_1': 'norm1',
+    'c_fc': 'dense_1',
+    'mlp.c_proj': 'mlp.dense_2'
+}
 
 
 def broadcast_state_dict(state_dict, parallel_mode):
@@ -161,13 +162,12 @@ def remove_prefix(state_dict, prefix):
     return res_dict
 
 
-def load_checkpoint(
-        file,
-        model: torch.nn.Module,
-        optimizer: torch.optim.Optimizer = None,
-        lr_scheduler: torch.optim.lr_scheduler._LRScheduler = None,
-        strict: bool = True, **kwargs
-):
+def load_checkpoint(file,
+                    model: torch.nn.Module,
+                    optimizer: torch.optim.Optimizer = None,
+                    lr_scheduler: torch.optim.lr_scheduler._LRScheduler = None,
+                    strict: bool = True,
+                    **kwargs):
     """Loads training states from a checkpoint file.
 
     Args:

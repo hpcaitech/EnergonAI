@@ -9,7 +9,9 @@ from energon.context import ParallelMode
 from .rpc_utils import remote_cls_method, sync_cls_method, async_cls_method
 from .pipeline_wrapper import PipelineCommWrapper
 
+
 class ReturnDict:
+
     def __init__(self):
         self.rd = dict()
 
@@ -24,19 +26,15 @@ class ReturnDict:
 
 
 class RPCWorker:
-    def __init__(self,
-                 model_class,
-                 model_config,
-                 model_type,
-                 dtype,
-                 max_batch_size: int = 1) -> None:
+
+    def __init__(self, model_class, model_config, model_type, dtype, max_batch_size: int = 1) -> None:
         self.model_class = model_class
         self.model_config = model_config
         self.dtype = dtype
         self.max_batch_size = max_batch_size
 
         self.WORKER_NAME = "wok{}"
-        self.model = None  # call the model
+        self.model = None    # call the model
         self.rank = gpc.get_local_rank(ParallelMode.GLOBAL)
 
         torch.cuda.set_device(f'cuda:{gpc.get_local_rank(ParallelMode.GLOBAL)}')
@@ -61,7 +59,7 @@ class RPCWorker:
         torch.cuda.set_device(f'cuda:{gpc.get_local_rank(ParallelMode.GLOBAL)}')
         for k, v in inputs.items():
             if v is not None:
-                inputs[k] = v.cuda()  # non_blocking=True
+                inputs[k] = v.cuda()    # non_blocking=True
 
         if (gpc.is_initialized(ParallelMode.PIPELINE)) and (not gpc.is_last_rank(ParallelMode.PIPELINE)):
             self.model.run(key, inputs)

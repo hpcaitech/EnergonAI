@@ -6,6 +6,7 @@ import torch
 
 _GLOBAL_TIMERS = None
 
+
 class _Timer:
     """Timer."""
 
@@ -77,12 +78,10 @@ class Timers:
         assert normalizer > 0.0
         string = 'time (ms)'
         for name in names:
-            elapsed_time = self.timers[name].elapsed(
-                reset=reset) * 1000.0 / normalizer
+            elapsed_time = self.timers[name].elapsed(reset=reset) * 1000.0 / normalizer
             string += ' | {}: {:.2f}'.format(name, elapsed_time)
         if torch.distributed.is_initialized():
-            if torch.distributed.get_rank() == (
-                    torch.distributed.get_world_size() - 1):
+            if torch.distributed.get_rank() == (torch.distributed.get_world_size() - 1):
                 print(string, flush=True)
         else:
             print(string, flush=True)
@@ -111,6 +110,3 @@ def get_timers():
         _set_timers()
     _ensure_var_is_initialized(_GLOBAL_TIMERS, 'timers')
     return _GLOBAL_TIMERS
-
-
-

@@ -53,10 +53,22 @@ Method 2:
 ```
 
 ### Large-scale Model Inference Performance
+#### Scaling Ability
 
+Here GPT3-12-layers in FP16 is adopted.  
+Here a node with 8 A100 80 GB GPUs is adopted. GPUs are fully connected with NvLink.  
+Energon adopts the redundant computation elimination method from [EffectiveTransformer](https://github.com/bytedance/effective_transformer) and the sequence length is set the half of the padding length.
 <div  align="center">    
     <img src="https://user-images.githubusercontent.com/12018307/168971637-ffd1d6ba-44bb-4043-a275-3dc2a008c048.png" width = "500" height = "200" alt="Architecture" align=center />
-    <div align="center">GPT3-12-layers in FP16. Energon adopts the </div> 
+</div>
+
+#### Latency
+Here GPT3 in FP16 is adopted.  
+Here a node with 8 A100 80 GB GPUs is adopted. Every two GPUs are connected with NvLink.  
+Here the sequence length is set the half of the padding length.  
+FasterTransformer does not support the redundant computation elimination method in distributed execution.
+<div  align="center">    
+    <img src="https://user-images.githubusercontent.com/12018307/168971637-ffd1d6ba-44bb-4043-a275-3dc2a008c048.png" width = "500" height = "200" alt="Architecture" align=center />
 </div>
 
 ### Contributing

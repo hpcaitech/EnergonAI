@@ -11,42 +11,23 @@
 
 A Large-scale Model Inference System.
 Energon provides 3 levels of abstraction for enabling the large-scale model inference:
-- Runtime - distributed operations and customized CUDA kernels 
-- Engine - encapsulate the distributed multi-device execution with the remote procedure call.
-- Serving - batching requests, managing engines.
-  
-At present, we pre-build distributed Bert and GPT models.
+- **Runtime** - tensor parallel operations, pipeline parallel wrapper, distributed message queue, distributed checkpoint loading, customized CUDA kernels.
+- **Engine** - encapsulate the single instance multiple devices (SIMD) execution with the remote procedure call, which acts as the single instance single device (SISD) execution.
+- **Serving** - batching requests, managing engines.
 
-For models trained by [Colossal-AI](https://github.com/hpcaitech/ColossalAI), it can be seamlessly transferred to Energon.
-For single-device models, there still requires manual coding works to introduce tensor parallel and pipeline parallel.
+For models trained by [Colossal-AI](https://github.com/hpcaitech/ColossalAI), they can be seamlessly transferred to Energon.
+For single-device models, they require manual coding works to introduce tensor parallelism and pipeline parallelism.
 
+At present, we pre-build distributed Bert and GPT models.  
+For GPT, it extends to at most 175B parameters, which is called [GPT3](https://arxiv.org/abs/2005.14165).  
+For Bert, Google reports a [super-large Bert with 481B parameters](https://mlcommons.org/en/training-normal-11/) in MLPerf-Training v1.1 open.
 
 ### Installation
---- 
 ``` bash
 $ git clone https://github.com/hpcaitech/ColossalAI-Inference.git
 $ python setup.py install
 ```
 
-### Large-scale Model Inference
-GPT-175B
-
-
-Bert-175B
-
-Google reported a [super-large Bert (481B)](https://mlcommons.org/en/training-normal-11/) in MLPerf-Training v1.1 open, here we produce a 175B bert for displaying the performance.
-
-
-<!-- ``` bash
-# To pack the distributed inference as a service, we rely on Triton python backend.
-$ docker run --gpus all --name=triton_server -v /<host path>/workspace:/opt/tritonserver/host --shm-size=1g --ulimit memlock=-1 -p 10010:8000 -p 10011:8001 -p 10012:8002 --ulimit stack=67108864 -ti nvcr.io/nvidia/tritonserver:21.10-py3
-
-$ git clone https://github.com/triton-inference-server/python_backend -b r<xx.yy>
-
-$ mv /examples/energon /opt/tritonserver/python_backend/models
-
-$ bash run_gpt.sh
-``` -->
 ### Huggingface GPT2 Generation Task Case
 
 ``` bash
@@ -68,11 +49,15 @@ Method 1:
 Method 2:
     curl -X 'GET' \
     'http://127.0.0.1:8005/run_hf_gpt2/I%20do%20not?max_seq_length=16' \
-    -H 'accept: application/json'
+    -H 'accept: application/json' 
 ```
 
+### Large-scale Model Inference Performance
 
-
+<div  align="center">    
+    <img src="https://user-images.githubusercontent.com/12018307/168971637-ffd1d6ba-44bb-4043-a275-3dc2a008c048.png" width = "500" height = "200" alt="Architecture" align=center />
+    <div align="center">GPT3-12-layers in FP16. Energon adopts the </div> 
+</div>
 
 ### Contributing
 
@@ -83,11 +68,11 @@ Thanks so much!
 ### Technical Overview
 
 <div  align="center">    
-    <img src="https://user-images.githubusercontent.com/12018307/158764528-c14538f4-8d9a-4bc8-8c6f-2e1ea82ecb59.png" width = "500" height = "350" alt="Architecture" align=center />
+    <img src="https://user-images.githubusercontent.com/12018307/168971629-6df3232b-85a7-43ce-95df-f067e7e5959c.png" width = "480" height = "500" alt="Architecture" align=center />
 </div>
 
-![图片2](https://user-images.githubusercontent.com/12018307/168971629-6df3232b-85a7-43ce-95df-f067e7e5959c.png)
-![8072cc71-5a6d-4b05-a2ec-11e1ca5d76b4](https://user-images.githubusercontent.com/12018307/168971637-ffd1d6ba-44bb-4043-a275-3dc2a008c048.png)
+<!-- 
+
 ![image (1)](https://user-images.githubusercontent.com/12018307/168971641-aebe986a-7e9d-4c66-9ced-4e8b7a1628e2.png)
-![batch drawio](https://user-images.githubusercontent.com/12018307/168971644-35393802-7d8b-4e13-9428-340f7328616c.png)
+![batch drawio](https://user-images.githubusercontent.com/12018307/168971644-35393802-7d8b-4e13-9428-340f7328616c.png) -->
 

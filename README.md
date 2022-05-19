@@ -25,7 +25,7 @@ For Bert, Google reports a [super-large Bert with 481B parameters](https://mlcom
 ### Installation
 ``` bash
 $ git clone https://github.com/hpcaitech/ColossalAI-Inference.git
-$ python setup.py install
+$ pip install .
 ```
 
 ### Huggingface GPT2 Generation Task Case

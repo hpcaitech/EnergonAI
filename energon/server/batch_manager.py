@@ -103,7 +103,7 @@ class Batch_Manager(Manager):
             self.tokenizer.pad_token = pad_token    # GPT2Tokenizer.eos_token
         self.running_flag = True
         self.publisher = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
-        self.pool = ThreadPoolExecutor(max_workers=16)
+        self.pool = ThreadPoolExecutor(max_workers=pp+1) # a small thread pool can keep the message queue not in a crowded state.
         self.main_thread = threading.Thread(target=self.processing_batch)
         self.main_thread.start()
 
@@ -300,7 +300,7 @@ class Batch_Manager(Manager):
                 # self.publish_result(output, target_batch, start_time)
                 # pub_thread = threading.Thread(target=self.publish_result, args=(output, target_batch, start_time))
                 # pub_thread.start()
-            time.sleep(0.08)
+            time.sleep(0.05)
 
     def publish_result(self, output, target_batch):
         """

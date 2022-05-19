@@ -145,24 +145,29 @@ if build_cuda_ext:
         #                                    ['get_ncclid.cpp'],
         #                                    extra_cuda_flags + cc_flag))
 
-setup(name='energon',
-      version='0.0.1-beta',
-      packages=find_packages(exclude=(
+setup(
+      name='energon',
+      version='0.0.1b0',
+      packages=find_packages(
+          exclude=(
           'benchmark',
           'docker',
           'tests',
           'docs',
-          'example',
+          'examples',
           'tests',
           'scripts',
           'requirements',
           '*.egg-info',
+          'dist',
+          'build',
       )),
       description='Large-scale Model Inference',
+      license='Apache Software License 2.0',
       ext_modules=ext_modules,
       cmdclass={'build_ext': BuildExtension} if ext_modules else {},
       install_requires=fetch_requirements('requirements.txt'),
-      entry_points='''
-        [console_scripts]
-        energon=energon.cli:typer_click_object
-    ''')
+      entry_points={
+          'console_scripts': ['energon=energon.cli:typer_click_object',],
+      },
+      )

@@ -1,6 +1,4 @@
 import torch
-from energon.core import global_context as gpc
-from energon.context import ParallelMode
 
 
 # The class is not multithread safe, there needs a explicite logic for manage multiple calls

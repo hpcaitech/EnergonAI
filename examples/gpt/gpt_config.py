@@ -2,7 +2,7 @@ from gpt import gpt2_small, gpt2_medium, gpt2_large, gpt2_xl, gpt2_8B, gpt3
 from gpt_batch_server import launch_engine
 
 # for engine
-model_class = gpt2_large
+model_class = gpt2_8B
 model_type = "gpt"
 host = "127.0.0.1"
 port = 29401

@@ -3,10 +3,6 @@ import string
 import torch.distributed.rpc as rpc
 from torch.distributed.rpc import RRef, rpc_async, remote
 
-# rpc.rpc_sync(to, func, args=None, kwargs=None, timeout=- 1.0)
-# rpc.rpc_async(to, func, args=None, kwargs=None, timeout=- 1.0)
-# rpc.remote(to, func, args=None, kwargs=None, timeout=- 1.0)
-
 
 def call_method(method, rref, *args, **kwargs):
     return method(rref.local_value(), *args, **kwargs)

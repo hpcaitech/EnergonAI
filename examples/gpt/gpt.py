@@ -6,12 +6,12 @@ import torch
 import random
 from torch import nn as nn, Tensor, dtype
 
-from energon.context import ParallelMode
-from energon.core import global_context as gpc
+from colossalai.context import ParallelMode
+from colossalai.core import global_context as gpc
 from energon.logging import get_dist_logger
-from energon.nn.layer.utils import divide, ACT2FN
-from energon.nn import Linear1D_Col, Linear1D_Row, Classifier1D
-from energon.nn import LayerNorm1D
+from colossalai.nn.layer.utils import divide, ACT2FN
+from colossalai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
+from colossalai.nn import LayerNorm1D
 from energon.nn import VocabParallelEmbedding1D
 from energon.utils import get_current_device, is_using_pp
 from energon.utils.checkpointing import load_checkpoint

@@ -25,6 +25,7 @@ For Bert, Google reports a [super-large Bert with 481B parameters](https://mlcom
 ### Installation
 ``` bash
 $ git clone https://github.com/hpcaitech/ColossalAI-Inference.git
+$ pip install -r requirements.txt
 $ pip install .
 ```
 

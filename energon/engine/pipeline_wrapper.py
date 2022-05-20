@@ -7,8 +7,8 @@ import torch.distributed as dist
 from typing import List, Tuple, Union
 
 from energon.communication import send_forward, recv_forward, send_tensor_meta, recv_tensor_meta
-from energon.context import ParallelMode
-from energon.core import global_context as gpc
+from colossalai.context import ParallelMode
+from colossalai.core import global_context as gpc
 
 from .pipeline_meta import PipelineMeta
 from .pipeline_msg_dict import PipelineMsgDict, CircleInt    # PipelineMsgPriorityQueue

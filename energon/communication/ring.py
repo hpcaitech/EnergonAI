@@ -3,8 +3,8 @@
 
 import torch
 
-from energon.context.parallel_mode import ParallelMode
-from energon.core import global_context as gpc
+from colossalai.core import global_context as gpc
+from colossalai.context import ParallelMode
 from energon.utils import get_current_device, synchronize
 
 

@@ -7,8 +7,8 @@ import torch.distributed as dist
 
 from . import is_using_pp
 from ..communication.collective import scatter_object_list
-from ..context.parallel_mode import ParallelMode
-from ..core import global_context as gpc
+from colossalai.context import ParallelMode
+from colossalai.core import global_context as gpc
 
 try:
     from torch.nn.modules.module import _EXTRA_STATE_KEY_SUFFIX
@@ -199,7 +199,7 @@ def load_checkpoint(file,
     if "prefix" in kwargs.keys():
         if kwargs['prefix'] != '':
             model_state = remove_prefix(model_state, kwargs["prefix"])
-    # print("Rank {}: {}".format(gpc.get_global_rank(), model_state))
+    # print("Rank {}: {}".format(gpc.get_global_rank(), model_state.keys()))
     # print("+"*30)
     # print(model_state.keys())
     try:
@@ -319,7 +319,7 @@ def processing_HF_GPT(state_dict: OrderedDict):
                 prefix = num_.group()
             else:
                 prefix = ''
-            print("prefix: {}".format(prefix))
+            # print("prefix: {}".format(prefix))
             q_, k_, v_ = torch.chunk(new_v, 3, 0)
             new_dict[prefix + "attn.query_.bias"] = q_
             new_dict[prefix + "attn.key_.bias"] = k_

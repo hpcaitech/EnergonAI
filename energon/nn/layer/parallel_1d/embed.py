@@ -5,8 +5,8 @@ import torch.nn.init as init
 from collections import OrderedDict
 from torch.nn.parameter import Parameter
 
-from energon.core import global_context as gpc
-from energon.context import ParallelMode
+from colossalai.core import global_context as gpc
+from colossalai.context import ParallelMode
 from energon.utils import get_current_device
 from energon.utils.checkpointing import partition_tensor_parallel_state_dict, gather_tensor_parallel_state_dict
 from ..base_layer import ParallelLayer

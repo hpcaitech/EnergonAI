@@ -4,8 +4,8 @@ import torch
 import inspect
 import torch.distributed.rpc as rpc
 import sys
-from energon.core import global_context as gpc
-from energon.context import ParallelMode
+from colossalai.core import global_context as gpc
+from colossalai.context import ParallelMode
 from .rpc_utils import remote_cls_method, sync_cls_method, async_cls_method
 from .pipeline_wrapper import PipelineCommWrapper
 

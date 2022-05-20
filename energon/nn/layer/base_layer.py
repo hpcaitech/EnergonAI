@@ -3,8 +3,8 @@
 
 import torch.nn as nn
 
-from energon.context import ParallelMode
-from energon.core import global_context as gpc
+from colossalai.core import global_context as gpc
+from colossalai.context import ParallelMode
 
 __all__ = ['ParallelLayer']
 

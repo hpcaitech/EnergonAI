@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Union
 
-from energon.context.parallel_mode import ParallelMode
+from colossalai.context import ParallelMode
 
 _FORMAT = 'energon - %(name)s - %(asctime)s %(levelname)s: %(message)s'
 logging.basicConfig(level=logging.INFO, format=_FORMAT)

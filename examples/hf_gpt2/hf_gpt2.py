@@ -5,15 +5,18 @@ import random
 from torch import nn as nn, Tensor, dtype
 from typing import Callable
 
-from energon.context import ParallelMode
-from energon.core import global_context as gpc
+
 from energon.logging import get_dist_logger
-from energon.nn.layer.utils import divide, ACT2FN
-from energon.nn import Linear1D_Col, Linear1D_Row, Classifier1D
-from energon.nn import LayerNorm1D
+from colossalai.context import ParallelMode
+from colossalai.core import global_context as gpc
+from colossalai.nn.layer.utils import divide, ACT2FN
+from colossalai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
+from colossalai.nn import LayerNorm1D
 from energon.nn import VocabParallelEmbedding1D
+from torch.nn import Embedding
 from energon.utils import get_current_device, is_using_pp
 from energon.utils.checkpointing_hf_gpt2 import load_checkpoint
+
 
 __all__ = [
     'GPTEmbedding1D'
@@ -34,9 +37,12 @@ class GPTEmbedding1D(nn.Module):
                  dtype: dtype = None) -> None:
         super().__init__()
         self.word_embeddings = VocabParallelEmbedding1D(vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype, skip_tp=True)
+        # self.word_embeddings = Embedding(vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype)
         self.position_embeddings = VocabParallelEmbedding1D(max_position_embeddings, embedding_dim, dtype=dtype, skip_tp=True)
+        # self.position_embeddings = Embedding(max_position_embeddings, embedding_dim, dtype=dtype)
         if num_tokentypes > 0:
             self.tokentype_embeddings = VocabParallelEmbedding1D(num_tokentypes, embedding_dim, dtype=dtype, skip_tp=True)
+            # self.tokentype_embeddings = Embedding(num_tokentypes, embedding_dim, dtype=dtype)
         else:
             self.tokentype_embeddings = None
 
@@ -436,6 +442,7 @@ def _create_gpt_pipeline_model(depth=48, num_chunks=1, layer_partitions=None, **
     logger = get_dist_logger()
     pipeline_size = 0
     pipeline_rank = 0
+
     if gpc.is_initialized(ParallelMode.PIPELINE):
         pipeline_size = gpc.get_world_size(ParallelMode.PIPELINE)
         pipeline_rank = gpc.get_local_rank(ParallelMode.PIPELINE)
@@ -444,7 +451,6 @@ def _create_gpt_pipeline_model(depth=48, num_chunks=1, layer_partitions=None, **
         pipeline_rank = 0
 
     rank = gpc.get_global_rank()
-
     parts = partition_uniform(depth, pipeline_size,
                               num_chunks)[pipeline_rank] if layer_partitions is None else layer_partitions
     models = []

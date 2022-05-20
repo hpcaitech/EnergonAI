@@ -6,8 +6,8 @@ import torch.distributed as dist
 from torch.distributed import ReduceOp
 from torch import Tensor
 
-from energon.context import ParallelMode
-from energon.core import global_context as gpc
+from colossalai.core import global_context as gpc
+from colossalai.context import ParallelMode
 from energon.utils import get_current_device
 
 

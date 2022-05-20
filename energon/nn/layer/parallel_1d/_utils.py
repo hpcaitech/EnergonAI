@@ -5,7 +5,7 @@ import os
 import torch
 import torch.distributed as dist
 from energon.constants import PARALLEL_INPUT_1D
-from energon.core import global_context as gpc
+from colossalai.core import global_context as gpc
 
 from ..utils import divide
 

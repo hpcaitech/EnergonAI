@@ -11,10 +11,9 @@ from typing import Callable, Tuple
 import torch
 import torch.nn.functional as F
 from energon.communication import broadcast
-from energon.context import ParallelMode, seed
-from energon.core import global_context as gpc
+from colossalai.core import global_context as gpc
+from colossalai.context import ParallelMode, seed
 from energon.nn import init as init
-from energon.registry import LAYERS
 from energon.utils import get_current_device
 from torch import Tensor, dtype
 from torch.nn.parameter import Parameter

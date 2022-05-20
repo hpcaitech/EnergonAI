@@ -2,7 +2,7 @@ import click
 import torch
 import inspect
 import energon.server as server
-from multiprocessing import Process
+import multiprocessing as mp
 
 from energon.context import Config
 
@@ -53,8 +53,9 @@ def launches(model_class=None,
     worker_rank = 1    # start from 1
 
     process_list = []
+    mp.set_start_method('spawn')
     for i in range(num_worker):
-        p = Process(target=server.launch_worker,
+        p = mp.Process(target=server.launch_worker,
                     args=(host, port, tp_init_size, pp_init_size, "nccl", 1024, True, worker_rank + i, worker_rank + i,
                           server_host, worker_port + i, log_level))
         p.start()

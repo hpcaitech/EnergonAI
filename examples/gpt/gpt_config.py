@@ -3,7 +3,7 @@ from gpt_batch_server import launch_engine
 
 # for engine
 model_class = gpt2_8B
-model_type = "gpt2_8B"
+model_type = "gpt"
 host = "127.0.0.1"
 port = 29401
 half = True

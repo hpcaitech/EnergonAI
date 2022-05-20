@@ -1,6 +1,6 @@
 import random
-from energon.core import global_context as gpc
-from energon.context.parallel_mode import ParallelMode
+from colossalai.context import ParallelMode
+from colossalai.core import global_context as gpc
 import socket
 
 

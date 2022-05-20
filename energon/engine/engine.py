@@ -11,9 +11,9 @@ from .rpc_utils import remote_cls_method, sync_cls_method, async_cls_method    #
 from .rpc_worker import RPCWorker
 from .pipeline_msg_dict import CircleInt
 
-from energon.core import global_context as gpc
-from energon.context import ParallelMode
-from energon.initialize import launch_from_torch, launch_from_multiprocess
+from colossalai.core import global_context as gpc
+from colossalai.context import ParallelMode
+from energon.initialize import launch_from_multiprocess
 
 from energon.utils import ensure_directory_exists
 from energon.logging import get_dist_logger

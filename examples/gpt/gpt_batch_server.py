@@ -90,7 +90,7 @@ def launch_engine(model_class,
     # cached_cost = generate_cached_cost(engine, max_seq_len=1024, max_batch_size=4, step=8, repeat_round=2, tokenizer=tokenizer)
 
     global batch_manager
-    batch_manager = Batch_Manager(engine, model_name=model_type, pp=4, tp=2,
+    batch_manager = Batch_Manager(engine, model_name=model_class.__name__, pp=4, tp=2,
                                   max_sequence_length=256,
                                   max_batch_size=16, tokenizer=tokenizer,
                                   pad_token=GPT2Tokenizer.eos_token,

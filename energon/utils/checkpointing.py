@@ -7,8 +7,8 @@ import torch.distributed as dist
 
 from . import is_using_pp
 from ..communication.collective import scatter_object_list
-from ..context.parallel_mode import ParallelMode
-from ..core import global_context as gpc
+from colossalai.context import ParallelMode
+from colossalai.core import global_context as gpc
 
 try:
     from torch.nn.modules.module import _EXTRA_STATE_KEY_SUFFIX

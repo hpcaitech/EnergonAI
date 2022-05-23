@@ -69,7 +69,7 @@ Here a node with 8 A100 80 GB GPUs is adopted. Every two GPUs are connected with
 Here the sequence length is set the half of the padding length.  
 Here FasterTransformer is adopted in comparison and it does not support the redundant computation elimination method in distributed execution.
 <div  align="center">    
-    <img src="https://user-images.githubusercontent.com/12018307/168983141-44faad9f-7f44-4296-8be6-63c7f6d76263.png" width = "600" height = "300" alt="Architecture" align=center />
+    <img src="https://user-images.githubusercontent.com/12018307/169728315-8ac95e4f-3e81-44e5-b82b-5873ffe85351.png" width = "600" height = "300" alt="Architecture" align=center />
 </div>
 
 ### Contributing

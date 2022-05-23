@@ -66,8 +66,14 @@ Energon adopts the redundant computation elimination method from [EffectiveTrans
 #### Latency
 Here GPT3 in FP16 is adopted.  
 Here a node with 8 A100 80 GB GPUs is adopted. Every two GPUs are connected with NvLink.  
-Here the sequence length is set the half of the padding length.  
-Here FasterTransformer is adopted in comparison and it does not support the redundant computation elimination method in distributed execution.
+Here the sequence length is set the half of the padding length when using redundant computation elimination method, which is the Energon(RM).
+Here FasterTransformer is adopted in comparison and it does not support the redundant computation elimination method in the distributed execution.
+<div  align="center">    
+    <img src="https://user-images.githubusercontent.com/12018307/169728315-8ac95e4f-3e81-44e5-b82b-5873ffe85351.png" width = "600" height = "300" alt="Architecture" align=center />
+</div>
+
+#### Batching
+Here FIFO batching is selected in comparison.
 <div  align="center">    
     <img src="https://user-images.githubusercontent.com/12018307/169728315-8ac95e4f-3e81-44e5-b82b-5873ffe85351.png" width = "600" height = "300" alt="Architecture" align=center />
 </div>

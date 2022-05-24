@@ -20,7 +20,7 @@ def launches(model_class=None,
              tokenizer_path=None,
              server_host="127.0.0.1",
              server_port=8005,
-             log_level="info",
+             log_level="critical",
              backend="nccl",
              rm_padding=False):
     click.echo(f'*** Energon Init Configurations: *** \n'

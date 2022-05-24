@@ -52,7 +52,7 @@ class RPCWorker:
         self.return_dict = ReturnDict()
 
     def _init_self(self):
-        logger.info("[INFO] init model in rank {}".format(self.rank))
+        logger.info("Init model in rank {}".format(self.rank))
 
         if self.dtype == torch.half:
             self.model = self.model_class(**self.model_config).cuda().half()

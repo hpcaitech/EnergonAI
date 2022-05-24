@@ -16,7 +16,7 @@ def root():
 @app.get("/vit")
 def run():
     # for the performance only
-    img = proc_img('~/ColossalAI-Inference/examples/vit/dataset/n01667114_9985.JPEG')
+    img = proc_img('/home/lcdjs/ColossalAI-Inference/examples/vit/dataset/n01667114_9985.JPEG')
     img = img.half()
     img = torch.unsqueeze(img, 0)
     sample = dict(img=img)

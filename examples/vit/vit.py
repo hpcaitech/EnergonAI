@@ -371,29 +371,29 @@ def vit_tiny_patch4_32(**kwargs):
     model_kwargs = dict(img_size=32, patch_size=4, dim=512, depth=6, num_heads=8, mlp_ratio=1, num_classes=10, **kwargs)
     return build_pipeline_vit(**model_kwargs)
 
-def vit_tiny_patch16_224(**kwargs):
-    model_kwargs = dict(img_size=224, patch_size=16, dim=192, depth=12, num_heads=3, mlp_ratio=4, **kwargs)
-    return build_pipeline_vit(**model_kwargs)
+# def vit_tiny_patch16_224(**kwargs):
+#     model_kwargs = dict(img_size=224, patch_size=16, dim=192, depth=12, num_heads=3, mlp_ratio=4, **kwargs)
+#     return build_pipeline_vit(**model_kwargs)
 
-def vit_tiny_patch16_384(**kwargs):
-    model_kwargs = dict(img_size=384, patch_size=16, dim=192, depth=12, num_heads=3, mlp_ratio=4, **kwargs)
-    return build_pipeline_vit(**model_kwargs)
+# def vit_tiny_patch16_384(**kwargs):
+#     model_kwargs = dict(img_size=384, patch_size=16, dim=192, depth=12, num_heads=3, mlp_ratio=4, **kwargs)
+#     return build_pipeline_vit(**model_kwargs)
 
-def vit_small_patch16_224(**kwargs):
-    model_kwargs = dict(img_size=224, patch_size=16, dim=384, depth=12, num_heads=6, mlp_ratio=4, **kwargs)
-    return build_pipeline_vit(**model_kwargs)
+# def vit_small_patch16_224(**kwargs):
+#     model_kwargs = dict(img_size=224, patch_size=16, dim=384, depth=12, num_heads=6, mlp_ratio=4, **kwargs)
+#     return build_pipeline_vit(**model_kwargs)
 
-def vit_small_patch16_384(**kwargs):
-    model_kwargs = dict(img_size=384, patch_size=16, dim=384, depth=12, num_heads=6, mlp_ratio=4, **kwargs)
-    return build_pipeline_vit(**model_kwargs)
+# def vit_small_patch16_384(**kwargs):
+#     model_kwargs = dict(img_size=384, patch_size=16, dim=384, depth=12, num_heads=6, mlp_ratio=4, **kwargs)
+#     return build_pipeline_vit(**model_kwargs)
 
-def vit_small_patch32_224(**kwargs):
-    model_kwargs = dict(img_size=224, patch_size=32, dim=384, depth=12, num_heads=6, mlp_ratio=4, **kwargs)
-    return build_pipeline_vit(**model_kwargs)
+# def vit_small_patch32_224(**kwargs):
+#     model_kwargs = dict(img_size=224, patch_size=32, dim=384, depth=12, num_heads=6, mlp_ratio=4, **kwargs)
+#     return build_pipeline_vit(**model_kwargs)
 
-def vit_small_patch32_384(**kwargs):
-    model_kwargs = dict(img_size=384, patch_size=32, dim=384, depth=12, num_heads=6, mlp_ratio=4, **kwargs)
-    return build_pipeline_vit(**model_kwargs)
+# def vit_small_patch32_384(**kwargs):
+#     model_kwargs = dict(img_size=384, patch_size=32, dim=384, depth=12, num_heads=6, mlp_ratio=4, **kwargs)
+#     return build_pipeline_vit(**model_kwargs)
 
 def vit_base_patch16_224(**kwargs):
     model_kwargs = dict(img_size=224, patch_size=16, dim=768, depth=12, num_heads=12, mlp_ratio=4, **kwargs)

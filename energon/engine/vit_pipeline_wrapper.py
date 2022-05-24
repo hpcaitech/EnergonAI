@@ -25,10 +25,12 @@ class ViTPipelineCommWrapper:
         self.hidden_shape = 0
         self.max_batch_size = max_batch_size
 
-        if gpc.is_initialized(ParallelMode.PIPELINE) and gpc.get_world_size(ParallelMode.PIPELINE) > 1:
-            img = torch.rand((max_batch_size,3,224,224), dtype = dtype).cuda()
-            sample = dict(img=img)
-            self._init_tensor_meta(sample)
+        # if gpc.is_initialized(ParallelMode.PIPELINE) and gpc.get_world_size(ParallelMode.PIPELINE) > 1:
+        #     img = torch.rand((max_batch_size, 3, 224, 224), dtype = dtype).cuda()
+        #     sample = dict(img=img)
+        #     self._init_tensor_meta(sample)
+
+        self.is_first = True
 
         self.pipe_msg_queue = PipelineMsgDict()
         self.lock = threading.Lock()
@@ -60,6 +62,9 @@ class ViTPipelineCommWrapper:
 
     def run(self, key, inputs):
         if gpc.is_initialized(ParallelMode.PIPELINE):
+            if self.is_first:
+                self.is_first = False
+                self._init_tensor_meta(inputs)
             return self.run_with_pp(key, inputs)
         else:
             return self.run_without_pp(key, inputs)
@@ -80,7 +85,6 @@ class ViTPipelineCommWrapper:
         return output, cur_key
 
     '''
-    hidden_size : ([32, 512, 1600])
     For different model type, fill_meta_tensor is different
     '''
 

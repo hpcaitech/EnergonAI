@@ -16,7 +16,9 @@ from colossalai.context import ParallelMode
 from energon.initialize import launch_from_multiprocess
 
 from energon.utils import ensure_directory_exists
-from energon.logging import get_dist_logger
+from colossalai.logging import get_dist_logger
+
+logger = get_dist_logger('energon')
 
 
 class InferenceEngine(Module):
@@ -78,10 +80,11 @@ class InferenceEngine(Module):
                      rank=0,
                      world_size=self.global_world_size,
                      rpc_backend_options=rpc_backend_options)
+        logger.info(f'RPC STATUS: RPC of Rank: 0 is initialized.')
 
     def _init_model(self):
         for i in range(self.global_world_size):
-            print(f'[INFO] rank{self.rank} calls rank{i} to init.')
+            logger.info(f'RPC STATUS: rank: {self.rank} calls rank: {i} to init model.')
             ob_info = rpc.get_worker_info(self.WORKER_NAME.format(i))
             self.rrefs.append(
                 rpc.remote(ob_info,

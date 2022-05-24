@@ -75,7 +75,7 @@ Here FasterTransformer is adopted in comparison and it does not support the redu
 #### Batching
 Here FIFO batching is selected in comparison.
 <div  align="center">    
-    <img src="https://user-images.githubusercontent.com/12018307/169729579-8735c905-30ed-44f9-af4e-275e021f4266.png" width = "600" height = "300" alt="Architecture" align=center />
+    <img src="https://user-images.githubusercontent.com/12018307/169729579-8735c905-30ed-44f9-af4e-275e021f4266.png" width = "400" height = "130" alt="Architecture" align=center />
 </div>
 
 ### Contributing

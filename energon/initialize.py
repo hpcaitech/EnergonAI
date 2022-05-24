@@ -23,7 +23,6 @@ def launch_from_multiprocess(tp_size: int = 1,
     os.environ['MASTER_PORT'] = f'{port}'
 
     config = dict(parallel=dict(pipeline=dict(size=pp_size), tensor=dict(size=tp_size, mode='1d')))
-    gpc.load_config(config)
 
     launch(config=config,
            local_rank=local_rank,

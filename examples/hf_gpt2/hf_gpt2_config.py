@@ -19,4 +19,4 @@ engine_server = launch_engine
 tokenizer_path = "/home/lcdjs/hf_gpt2"
 server_host = "127.0.0.1"
 server_port = 8020
-log_level = "info"
+log_level = "critical"

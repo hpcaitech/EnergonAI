@@ -11,5 +11,5 @@ port = 29400
 half = False
 server_host = "127.0.0.1"
 server_port = 8010
-log_level = "critical"
+log_level = "info"
 backend = "nccl"

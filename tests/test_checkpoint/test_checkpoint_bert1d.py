@@ -4,20 +4,20 @@
 import pprint
 from functools import partial
 
-import energon.nn as col_nn
+import energonai.nn as col_nn
 import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
 
 from example.gpt.gpt import gpt2_small
-from energon.context.parallel_mode import ParallelMode
-from energon.engine import InferenceEngine
+from energonai.context.parallel_mode import ParallelMode
+from energonai.engine import InferenceEngine
 from example.bert.bert import bert_small
-from energon.core import global_context as gpc
-from energon.initialize import launch
-from energon.logging import disable_existing_loggers
-from energon.utils import free_port, is_using_pp
-from energon.utils.checkpointing import gather_pipeline_parallel_state_dict, load_checkpoint, save_checkpoint
+from energonai.core import global_context as gpc
+from energonai.initialize import launch
+from energonai.logging import disable_existing_loggers
+from energonai.utils import free_port, is_using_pp
+from energonai.utils.checkpointing import gather_pipeline_parallel_state_dict, load_checkpoint, save_checkpoint
 
 
 def check_equal(A, B):

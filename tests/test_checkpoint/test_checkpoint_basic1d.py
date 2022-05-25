@@ -3,19 +3,19 @@
 
 import pprint
 from functools import partial
-from energon.logging import get_dist_logger
+from energonai.logging import get_dist_logger
 
-import energon.nn as col_nn
+import energonai.nn as col_nn
 import pytest
 import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
-from energon.context.parallel_mode import ParallelMode
-from energon.core import global_context as gpc
-from energon.initialize import launch
-from energon.logging import disable_existing_loggers
-from energon.utils import free_port, is_using_pp
-from energon.utils.checkpointing import gather_pipeline_parallel_state_dict, load_checkpoint, save_checkpoint
+from energonai.context.parallel_mode import ParallelMode
+from energonai.core import global_context as gpc
+from energonai.initialize import launch
+from energonai.logging import disable_existing_loggers
+from energonai.utils import free_port, is_using_pp
+from energonai.utils.checkpointing import gather_pipeline_parallel_state_dict, load_checkpoint, save_checkpoint
 
 def partition_uniform(num_items, pipeline_parallel_size, num_chunks):
     assert num_items % num_chunks == 0, \

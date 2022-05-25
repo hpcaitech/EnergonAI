@@ -317,11 +317,11 @@ class PipelineGPT1D(nn.Module):
             if seq_lens is not None:
                 hidden_states = ft_rebuild_padding(hidden_states, self.tmp_mask_offset[0:self.valid_word_num[0].item()], self.valid_word_num[0].item(), self.dim, batch_size, max_padding_size)
             hidden_states = self.head(self.norm(hidden_states))
-            # res = []
-            # for i in range(hidden_states.shape[0]):
-            #     res.append(self.select_top_k(i, hidden_states))
-            # hidden_states = torch.Tensor(res)
-            hidden_states = hidden_states[:, 0:1, 0:1].view(batch_size)
+            res = []
+            for i in range(hidden_states.shape[0]):
+                res.append(self.select_top_k(i, hidden_states))
+            hidden_states = torch.Tensor(res)
+            # hidden_states = hidden_states[:, 0:1, 0:1].view(batch_size)
         return hidden_states
 
 

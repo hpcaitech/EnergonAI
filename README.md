@@ -1,6 +1,5 @@
 <div  align="center">    
-    <img src="https://user-images.githubusercontent.com/12018307/165214566-467a1748-5987-4664-b5b2-d6e3367bb1b9.png" width = "600" height = "200
-    " alt="Architecture" align=center />
+    <img src="https://user-images.githubusercontent.com/12018307/170214566-b611b131-fff1-41c0-9447-786a8a6f0bac.png" width = "600" height = "148" alt="Architecture" align=center />
 </div>
 
 # Energon

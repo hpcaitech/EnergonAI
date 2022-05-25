@@ -17,6 +17,6 @@ pp_init_size = 2
 engine_server = launch_engine
 server_host = "127.0.0.1"
 server_port = 8020
-log_level = "critical"
+log_level = "info"
 tokenizer_path = "/home/lcdjs/hf_gpt2"
 rm_padding = False

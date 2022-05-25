@@ -8,9 +8,9 @@ from transformers import GPT2Tokenizer
 from fastapi import FastAPI
 from fastapi import Response, Body
 import torch.distributed.rpc as rpc
-from energon.engine import InferenceEngine
-from energon.server.batch_manager import Batch_Manager, Manager
-from energon.server.naive_batch_manager import Naive_Batch_Manager
+from energonai.engine import InferenceEngine
+from energonai.server.batch_manager import Batch_Manager, Manager
+from energonai.server.naive_batch_manager import Naive_Batch_Manager
 
 app = FastAPI()
 

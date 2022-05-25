@@ -7,13 +7,13 @@ from torch import nn as nn, Tensor, dtype
 
 from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
-from energon.logging import get_dist_logger
+from energonai.logging import get_dist_logger
 from colossalai.nn.layer.utils import divide, ACT2FN
 from colossalai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
 from colossalai.nn import LayerNorm1D
-from energon.kernel import transpose_pad, transpose_depad, depad
-from energon.nn import VocabParallelEmbedding1D
-from energon.utils import get_current_device, is_using_pp
+from energonai.kernel import transpose_pad, transpose_depad, depad
+from energonai.nn import VocabParallelEmbedding1D
+from energonai.utils import get_current_device, is_using_pp
 
 __all__ = [
     'BertEmbedding1D'
@@ -22,7 +22,7 @@ __all__ = [
     'BertTransformerLayer1D'
 ]
 
-from energon.utils.checkpointing import load_checkpoint
+from energonai.utils.checkpointing import load_checkpoint
 
 
 class BertEmbedding1D(nn.Module):

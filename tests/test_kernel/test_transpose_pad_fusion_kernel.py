@@ -1,7 +1,7 @@
 import torch
 import random
 import pytest
-from energon.kernel import transpose_pad, transpose_depad
+from energonai.kernel import transpose_pad, transpose_depad
 
 seq_lens =  torch.tensor([24,127,31,65,24,127,31,65], dtype=torch.int64).cuda()
 batch_size = 8

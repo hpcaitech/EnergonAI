@@ -4,7 +4,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi import Response
 import torch.distributed.rpc as rpc
-from energon.engine import InferenceEngine
+from energonai.engine import InferenceEngine
 
 app = FastAPI() # 创建 api 对象
 

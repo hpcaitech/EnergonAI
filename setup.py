@@ -106,9 +106,9 @@ if build_cuda_ext:
         def cuda_ext_helper(name, sources, extra_cuda_flags):
             return CUDAExtension(
                 name=name,
-                sources=[os.path.join('energon/kernel/cuda_native/csrc', path) for path in sources],
+                sources=[os.path.join('energonai/kernel/cuda_native/csrc', path) for path in sources],
                 include_dirs=[
-                    os.path.join(this_dir, 'energon/kernel/cuda_native/csrc/kernels/include'),
+                    os.path.join(this_dir, 'energonai/kernel/cuda_native/csrc/kernels/include'),
             #  '/opt/lcsoftware/spack/opt/spack/linux-ubuntu20.04-zen2/gcc-9.3.0/nccl-2.9.6-1'
             #  '-ysovaavjkgjez2fwms4dkvatu5yrxbec/include'
                 ],
@@ -129,24 +129,24 @@ if build_cuda_ext:
             '-U__CUDA_NO_HALF2_OPERATORS__', '-DTHRUST_IGNORE_CUB_VERSION_CHECK'
         ]
         ext_modules.append(
-            cuda_ext_helper('energon_scale_mask', ['scale_mask_softmax_kernel.cu', 'scale_mask_softmax_wrapper.cpp'],
+            cuda_ext_helper('energonai_scale_mask', ['scale_mask_softmax_kernel.cu', 'scale_mask_softmax_wrapper.cpp'],
                             extra_cuda_flags + cc_flag))
 
         ext_modules.append(
-            cuda_ext_helper('energon_layer_norm', ['layer_norm_cuda_kernel.cu', 'layer_norm_cuda.cpp'],
+            cuda_ext_helper('energonai_layer_norm', ['layer_norm_cuda_kernel.cu', 'layer_norm_cuda.cpp'],
                             extra_cuda_flags + cc_flag))
 
         ext_modules.append(
-            cuda_ext_helper('energon_transpose_pad',
+            cuda_ext_helper('energonai_transpose_pad',
                             ['transpose_pad_fusion_wrapper.cpp', 'transpose_pad_fusion_kernel.cu'],
                             extra_cuda_flags + cc_flag))
 
-        # ext_modules.append(cuda_ext_helper('energon_nccl',
+        # ext_modules.append(cuda_ext_helper('energonai_nccl',
         #                                    ['get_ncclid.cpp'],
         #                                    extra_cuda_flags + cc_flag))
 
 setup(
-      name='energon',
+      name='energonai',
       version='0.0.1b0',
       packages=find_packages(
           exclude=(
@@ -168,6 +168,6 @@ setup(
       cmdclass={'build_ext': BuildExtension} if ext_modules else {},
     #   install_requires=fetch_requirements('requirements.txt'),
       entry_points={
-          'console_scripts': ['energon=energon.cli:typer_click_object',],
+          'console_scripts': ['energonai=energonai.cli:typer_click_object',],
       },
       )

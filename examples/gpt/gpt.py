@@ -8,15 +8,15 @@ from torch import nn as nn, Tensor, dtype
 
 from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
-from energon.logging import get_dist_logger
+from energonai.logging import get_dist_logger
 from colossalai.nn.layer.utils import divide, ACT2FN
 from colossalai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
 from colossalai.nn import LayerNorm1D
-from energon.nn import VocabParallelEmbedding1D
-from energon.utils import get_current_device, is_using_pp
-from energon.utils.checkpointing import load_checkpoint
-from energon.kernel import transpose_pad, transpose_depad, depad
-from energon.kernel import ft_build_padding_offsets, ft_remove_padding, ft_rebuild_padding
+from energonai.nn import VocabParallelEmbedding1D
+from energonai.utils import get_current_device, is_using_pp
+from energonai.utils.checkpointing import load_checkpoint
+from energonai.kernel import transpose_pad, transpose_depad, depad
+from energonai.kernel import ft_build_padding_offsets, ft_remove_padding, ft_rebuild_padding
 
 __all__ = [
     'GPTEmbedding1D'

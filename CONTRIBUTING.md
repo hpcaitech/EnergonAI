@@ -1,14 +1,14 @@
 # Contributing
 
-The ColossalAI Inference project is always open for constructive suggestion and contributions from the community. We sincerely invite you to take a part in making this project more friendly and easier to use.
+The EnergonAI project is always open for constructive suggestion and contributions from the community. We sincerely invite you to take a part in making this project more friendly and easier to use.
 
 ## Environment Setup
-The first step of becoming a contributor would be setting up the environment for ColossalAI-Inference.
-Run the following codes to build your own ColossalAI-Inference.
+The first step of becoming a contributor would be setting up the environment for EnergonAI.
+Run the following codes to build your own EnergonAI.
 
 --- 
 ``` bash
-$ git clone https://github.com/hpcaitech/ColossalAI-Inference.git
+$ git clone https://github.com/hpcaitech/EnergonAI.git
 $ python setup.py install or python setup.py develop
 ```
 

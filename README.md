@@ -20,7 +20,7 @@ For single-device models, they require manual coding works to introduce tensor p
 
 At present, we pre-build distributed Bert and GPT models.  
 For GPT, it extends to at most 175B parameters, which is called [GPT3](https://arxiv.org/abs/2005.14165).  
-For Bert, Google reports a [super-large Bert with 481B parameters](https://mlcommons.org/en/training-normal-11/) in MLPerf-Training v1.1 open.
+For Bert, Google reports a [super-large Bert with 481B parameters](https://mlcommons.org/en/training-normal-11/) in MLPerf-Training v1.1 open, indicating that Bert can also extend to large-scale.
 
 ### Installation
 ``` bash

@@ -5,13 +5,14 @@ This code modifies the batch wrapping algorithm of Turbo Transformer.
 ------------------------------------------
 """
 import time
-
+from collections import deque
 import torch.cuda
-from scipy import stats
 import numpy as np
+import scipy.stats as stats
 from energon.engine import InferenceEngine
 import random
 import redis
+import math
 import os
 from tqdm import trange
 import threading
@@ -19,10 +20,28 @@ from readerwriterlock import rwlock
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
+class gamma_dist:
+    def __init__(self, alpha_, loc_, beta_, max_list_len, max_seq_len):
+        self.alpha = alpha_
+        self.loc = loc_
+        self.beta = beta_
+        self.max_list_len = max_list_len
+        self.max_seq_len = max_seq_len
+
+    def complete_req_list(self, req_list):
+        new_size = self.max_list_len - len(req_list)
+        res = stats.gamma.rvs(self.alpha, loc=self.loc, scale=self.beta, size=new_size)
+        res = [math.floor(i) + 1 for i in res]
+        res = [i if i < self.max_seq_len else self.max_seq_len for i in res]
+        new_req = [single_request(None, None, None, i) for i in res]
+        new_req.extend(req_list)
+        new_req.sort(key=lambda x: x.seq_len)
+        return new_req
+
 
 class single_request:
 
-    def __init__(self, input_, time_stamp: float, input_str: str):
+    def __init__(self, input_, time_stamp, input_str, seq_len : int=0):
         """
         class to store related information for a single request.
         :param input_: The output of GPT2Tokenizer.tokenizer, a dict including input_ids and attention_mask
@@ -33,7 +52,10 @@ class single_request:
         self.input_ = input_
         self.text = input_str
         self.time_ = time_stamp
-        self.seq_len = input_['input_ids'].shape[1]
+        if input_:
+            self.seq_len = input_['input_ids'].shape[1]
+        else:
+            self.seq_len = seq_len
 
 
 class Manager:
@@ -48,7 +70,7 @@ class Manager:
         pass
 
 
-class Batch_Manager(Manager):
+class new_Batch_Manager(Manager):
     """
     This batch manager is mainly used for maintaining a queue of request to be processed. The requests in the
     queue is wrapped into batches according to the sequence length and the priority calculated with the equation
@@ -61,15 +83,15 @@ class Batch_Manager(Manager):
                  pp: int,
                  tp: int,
                  max_sequence_length: int,
-                 init_mu: int = 512,
-                 init_theta: int = 180,
                  max_batch_size: int = 32,
-                 lr: float = 0.01,
                  tokenizer=None,
                  pad_token=None,
                  rm_padding=False,
+                 load_history=False,
                  step: int = 1,
-                 repeat_round: int = 3):
+                 repeat_round: int = 3,
+                 max_wait_time=1,
+                 his_len: int = 300):
         """
         :param engine: The InferenceEngine from energon.engine
         :param cached_cost: The output of function generate_cached_cost
@@ -82,11 +104,15 @@ class Batch_Manager(Manager):
         super().__init__()
         self.engine = engine
         self.max_batch_size = max_batch_size
-        self.lr = lr
-        self.mu = init_mu
-        self.theta = init_theta
+        if load_history:
+            self.req_history = self.load_history(his_len)
+        else:
+            self.req_history = deque(maxlen=his_len)
+        self.max_wait_time = max_wait_time
         self.req_list = []
         self.req_list_lock = rwlock.RWLockFair()
+        self.max_his_length = his_len
+        self.gamma_dist_ = self.init_gamma_dist(max_sequence_length)
         self.write_lock = self.req_list_lock.gen_wlock()
         self.cached_cost = self.generate_cached_cost(engine,
                                                      model_name,
@@ -100,12 +126,23 @@ class Batch_Manager(Manager):
         self.tokenizer = tokenizer
         self.rm_padding = rm_padding
         if self.tokenizer and pad_token:
-            self.tokenizer.pad_token = pad_token    # GPT2Tokenizer.eos_token
+            self.tokenizer.pad_token = pad_token  # GPT2Tokenizer.eos_token
         self.running_flag = True
         self.publisher = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
-        self.pool = ThreadPoolExecutor(max_workers=16)
+        self.pool = ThreadPoolExecutor(max_workers=pp + 1)
         self.main_thread = threading.Thread(target=self.processing_batch)
         self.main_thread.start()
+
+    def init_gamma_dist(self, max_seq_len):
+        if len(self.req_history) == 0:
+            return gamma_dist(alpha_=0.022, loc_=11, beta_=3.34,
+                              max_list_len=5 * self.max_batch_size,
+                              max_seq_len=max_seq_len)
+        else:
+            fit_alpha, fit_loc, fit_beta = stats.gamma.fit(self.req_history)
+            return gamma_dist(alpha_=fit_alpha, loc_=fit_loc, beta_=fit_beta,
+                              max_list_len=5 * self.max_batch_size,
+                              max_seq_len=max_seq_len)
 
     def generate_cached_cost(self,
                              engine,
@@ -174,6 +211,17 @@ class Batch_Manager(Manager):
         logging.log(0, "cached cost loaded")
         return cached_cost
 
+    def load_history(self, his_len):
+        try:
+            f = open("req_history.txt", 'r')
+        except Exception as e:
+            print("history file does not exist", e)
+            return
+        his = f.readlines()
+        his = [int(i.replace('\n', '')) for i in his]
+        self.req_history = his[:his_len]
+        return
+
     def subscribe_result(self, time_stamp):
         # red = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
         # sub = red.pubsub()
@@ -194,51 +242,7 @@ class Batch_Manager(Manager):
         tmp_req = single_request(input_ids, time_stamp, input_str)
         self.write_lock.acquire()
         self.req_list.append(tmp_req)
-        self.req_list.sort(key=lambda x: x.seq_len)
         self.write_lock.release()
-
-    def cal_priority(self, batch_list: list, cur_stamp: float):
-        """
-        Given a wrapped batch, calculate its priority to decide which batch to be given to the inference engine.
-        The equation is based on the sequence length, batch size and the max wait time among the batch.
-        We suppose that the length of the requests follows a normal distribution, so for the batches with a
-        length that has a higher possibility to appear, we tend to let it wait a little longer for other requests
-        with similar length in order to increase the batch size.
-        The batches with larger batch size also gains higher priority.
-        In order to avoid starving problem, we use exponential function to raise the priority of batches which
-        have waited for long.
-        """
-        cur_len = batch_list[-1].seq_len
-        earliest_timestamp = min([i.time_ for i in batch_list])
-
-        wait_time = cur_stamp - earliest_timestamp
-        batch_size = len(batch_list)
-        # appear_possibility_weight = 1.0 / self.cal_norm_weight(cur_len)
-
-        # TODO adjust the euqation
-        priority = batch_size * np.exp(2 * wait_time * wait_time)
-        return priority
-
-    def cal_norm_weight(self, seq_len):
-        """
-        Approximately estimate the possibility of a certain sequence length using normal distribution.
-        """
-        return stats.norm(self.mu, self.theta).cdf(seq_len) - \
-               stats.norm(self.mu, self.theta).cdf(seq_len - 1)
-
-    def update_norm(self, batch_: list):
-        """
-        Every time we are done inserting a request into the inference engine, we update mu and theta of our
-        distribution with the current batch and the pre-set learning rate.
-        """
-        new_mu = np.mean([i.seq_len for i in batch_])
-        delta_mu = new_mu - self.mu
-        self.mu += self.lr * delta_mu
-        temp_batch = np.array([i.seq_len - self.mu for i in batch_])
-        new_theta = np.sqrt(np.mean(temp_batch**2))
-        delta_theta = new_theta - self.theta
-        self.theta += self.lr * delta_theta
-        return
 
     def wrap_batch(self):
         """
@@ -247,12 +251,16 @@ class Batch_Manager(Manager):
         The algorithm in this function comes from the paper of Turbo Transformer.
         """
         self.write_lock.acquire()
+        new_req_list = self.gamma_dist_.complete_req_list(self.req_list)
+        print("befor req num: {}".format(len(self.req_list)))
+        self.req_list = []
+        self.write_lock.release()
         states = [0]
         start_idx_list = [0]
-        for i in range(1, len(self.req_list) + 1):
+        for i in range(1, len(new_req_list) + 1):
             j = i - 1
             start_idx = i - 1
-            cur_length = self.req_list[i - 1].seq_len
+            cur_length = new_req_list[i - 1].seq_len
             min_cost = self.cached_cost[cur_length][1] + states[j]
             while j > max(0, i - self.max_batch_size):
                 tmp_cost = states[j - 1] + \
@@ -263,34 +271,62 @@ class Batch_Manager(Manager):
                 j -= 1
             states.append(min_cost)
             start_idx_list.append(start_idx)
-        i = len(self.req_list)
+        i = len(new_req_list)
         res_start = -1
         res_end = -1
-        max_priority = -1
+        max_priority = 0
         cur_timestamp = time.time()
         while i > 0:
             end_idx = i
             start_idx = start_idx_list[i]
-            current_batch = self.req_list[start_idx:end_idx]
+            current_batch = new_req_list[start_idx:end_idx]
             current_priority = self.cal_priority(current_batch, cur_timestamp)
             if current_priority > max_priority:
                 max_priority = current_priority
                 res_start = start_idx
                 res_end = end_idx
             i = start_idx - 1
-        result_batch = self.req_list[res_start:res_end]
-        del self.req_list[res_start:res_end]
+        temp_batch = new_req_list[res_start:res_end]
+        del new_req_list[res_start:res_end]
+
+        result_batch = []
+        for req in temp_batch:
+            if req.input_:
+                result_batch.append(req)
+        print("a fake batch of {} is wrapped".format(len(temp_batch)))
+        print("a batch of {} req is wrapped".format(len(result_batch)))
+        self.write_lock.acquire()
+        print("meanwhile, {} new req came".format(len(self.req_list)))
+        for req_ in new_req_list:
+            if req_.input_:
+                self.req_list.append(req_)
+        print("after, {} req is left".format(len(self.req_list)))
         self.write_lock.release()
         return result_batch
+
+    def cal_priority(self, batch, cur_time):
+        completeness = np.sum([1 if i.input_ else 0 for i in batch]) / len(batch)
+        earliest_time_stamp = min([j.time_ if j.time_ else cur_time for j in batch])
+        if cur_time - earliest_time_stamp > self.max_wait_time:
+            completeness = 1.1
+        return completeness
+
+    def update_distribution(self):
+        fit_alpha, fit_loc, fit_beta = stats.gamma.fit(self.req_history)
+        self.gamma_dist_.alpha = fit_alpha
+        self.gamma_dist_.loc = fit_loc
+        self.gamma_dist_.beta = fit_beta
+        return
 
     def processing_batch(self):
         """
         The background process that continuously calls wrap_batch, puts the batch into the inference engine,
         and starts new processes that wait for and publish the inference result.
         """
+        round_cnt = 0
         while self.running_flag:
-
             if len(self.req_list) > 0:
+                round_cnt += 1
                 target_batch = self.wrap_batch()
                 pad_len = target_batch[-1].seq_len
                 logging.info("A batch with {} requests and length of {} packed, in-batch length: {}".format(
@@ -308,6 +344,9 @@ class Batch_Manager(Manager):
                 # self.publish_result(output, target_batch, start_time)
                 # pub_thread = threading.Thread(target=self.publish_result, args=(output, target_batch, start_time))
                 # pub_thread.start()
+                if round_cnt == 10 and len(self.req_history) >= self.max_his_length - 1:
+                    round_cnt = 0
+                    self.update_distribution()
             time.sleep(0.08)
 
     def publish_result(self, output, target_batch):
@@ -318,6 +357,7 @@ class Batch_Manager(Manager):
         :param target_batch: the input batch
         """
         predictions = output.to_here()
+        print("sending back the results of {} req".format(len(target_batch)))
         for i in range(len(target_batch)):
             temp_st = target_batch[i].time_
             chosen_pred = predictions[i]

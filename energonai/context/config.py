@@ -109,10 +109,16 @@ from colossalai.context.singleton_meta import SingletonMeta
 class MetaConfig(metaclass=SingletonMeta):
     def __init__(self):
         self._config = None
-    
+
     @property
     def config(self):
         return self._config
+    
+    def __iter__(self):
+        return self._config.__iter__()
+
+    def __getitem__(self, key):
+        return self._config[key]
 
     def load_config(self, config: Union[dict, str]):
         """Loads the configuration from either a dict or a file.

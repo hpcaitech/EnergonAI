@@ -4,7 +4,7 @@ import inspect
 import energonai.server as server
 import multiprocessing as mp
 
-from energonai.context import Config, mcfg
+from energonai.context import mcfg
 
 
 def launches(model_class=None,
@@ -104,6 +104,6 @@ def init(config_file):
 
     argv = dict()
     for name, _ in parameters.items():
-        if name in mcfg.config:
-            argv[name] = mcfg.config[name]
+        if name in mcfg:
+            argv[name] = mcfg[name]
     launches(**argv)

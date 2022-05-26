@@ -4,12 +4,16 @@ import torch
 import inspect
 import torch.distributed.rpc as rpc
 import sys
+
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
+from colossalai.logging import get_dist_logger
+
 from .rpc_utils import remote_cls_method, sync_cls_method, async_cls_method
 from .pipeline_wrapper import PipelineCommWrapper
 from .vit_pipeline_wrapper import ViTPipelineCommWrapper
-from colossalai.logging import get_dist_logger
+
+# from torch2trt import torch2trt
 
 logger = get_dist_logger('energonai')
 
@@ -48,6 +52,8 @@ class RPCWorker:
         self.model = None    # call the model
         self.rank = gpc.get_local_rank(ParallelMode.GLOBAL)
         torch.cuda.set_device(f'cuda:{gpc.get_local_rank(ParallelMode.GLOBAL)}')
+
+        # self.trt_sample = None
         self._init_self()
         self.return_dict = ReturnDict()
 
@@ -58,8 +64,13 @@ class RPCWorker:
             self.model = self.model_class(**self.model_config).cuda().half()
         else:
             self.model = self.model_class(**self.model_config).cuda()
-            
+        
         self.model.eval()
+
+        # if trt_sample is not None and gpc.get_world_size(ParallelMode.MODEL) > 1:
+        #     logger.error("Tensor Parallelism does not support TensorRT convert")
+        # elif trt_sample is not None and gpc.get_world_size(ParallelMode.MODEL) == 1:
+        #     model = torch2trt(model, [self.trt_sample])
         
         try:        
             self.model = pipe_wrapper[self.model_type](model=self.model, max_batch_size=self.max_batch_size, dtype=self.dtype)

@@ -1,1 +1,1 @@
-from .config import Config, ConfigException
+from .config import Config, ConfigException, mcfg

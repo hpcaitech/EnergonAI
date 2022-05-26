@@ -3,6 +3,7 @@
 
 import inspect
 import sys
+from typing import Union
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from energonai.logging import get_dist_logger
@@ -102,3 +103,30 @@ class Config(dict):
 
 class ConfigException(Exception):
     pass
+
+from colossalai.context.singleton_meta import SingletonMeta
+
+class MetaConfig(metaclass=SingletonMeta):
+    def __init__(self):
+        self._config = None
+    
+    @property
+    def config(self):
+        return self._config
+
+    def load_config(self, config: Union[dict, str]):
+        """Loads the configuration from either a dict or a file.
+        Args:
+            config (dict or str): Either a dict containing the configuration information or the filename
+                of a file containing the configuration information.
+        Raises:
+            TypeError: Raises a TypeError if `config` is neither a dict nor a str.
+        """
+        if isinstance(config, str):
+            self._config = Config.from_file(config)
+        elif isinstance(config, dict):
+            self._config = Config(config)
+        else:
+            raise TypeError("Invalid type for config, only dictionary or string is supported")
+
+mcfg = MetaConfig()

@@ -55,7 +55,7 @@ class Naive_Batch_Manager(Manager):
     in function cal_priority and then sent into the inference engine.
     """
 
-    def __init__(self, engine: InferenceEngine, max_batch_size: int = 32, tokenizer=None, pad_token=None):
+    def __init__(self, engine: InferenceEngine, pp, tp, max_batch_size: int = 32, tokenizer=None, pad_token=None):
         """
         :param engine: The InferenceEngine from energonai.engine
         :param max_batch_size: the max number of requests that can be wrapped into one batch.
@@ -71,7 +71,7 @@ class Naive_Batch_Manager(Manager):
             self.tokenizer.pad_token = pad_token    # GPT2Tokenizer.eos_token
         self.running_flag = True
         self.publisher = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
-        self.pool = ThreadPoolExecutor(max_workers=16)
+        self.pool = ThreadPoolExecutor(max_workers=pp+1)
         self.main_thread = threading.Thread(target=self.processing_batch)
         self.main_thread.start()
 

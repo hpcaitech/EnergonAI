@@ -9,7 +9,7 @@ from collections import deque
 import torch.cuda
 import numpy as np
 import scipy.stats as stats
-from energon.engine import InferenceEngine
+from energonai.engine import InferenceEngine
 import random
 import redis
 import math

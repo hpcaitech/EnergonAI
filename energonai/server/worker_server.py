@@ -3,6 +3,7 @@ from fastapi import FastAPI
 import torch.distributed.rpc as rpc
 from energonai.initialize import launch_from_multiprocess
 from colossalai.logging import get_dist_logger
+from energonai.context import mcfg
 
 logger = get_dist_logger('energonai')
 
@@ -21,23 +22,20 @@ async def shutdown():
     await server.shutdown()
 
 
-def launch_worker(host="127.0.0.1",
-                  port=29500,
-                  tp_init_size=1,
-                  pp_init_size=1,
-                  backend="nccl",
-                  seed=1024,
-                  verbose=True,
+def launch_worker(config_file,   
                   rank=0,
                   local_rank=0,
                   server_host="127.0.0.1",
-                  server_port=8005,
-                  log_level="info"):
+                  server_port=8005):
+    mcfg.load_config(config_file)
+    
+    world_size = mcfg['tp_init_size'] * mcfg['pp_init_size']
 
-    world_size = tp_init_size * pp_init_size
+    launch_from_multiprocess(mcfg['tp_init_size'], mcfg['pp_init_size'], mcfg['backend'], 
+                            mcfg['seed'], mcfg['verbose'], rank, local_rank, world_size, 
+                            mcfg['host'], mcfg['port'])
 
-    launch_from_multiprocess(tp_init_size, pp_init_size, backend, seed, verbose, rank, local_rank, world_size, host,
-                             port)
+                            
     WORKER_NAME = "wok{}"
     rpc_backend_options = rpc.TensorPipeRpcBackendOptions(num_worker_threads=16,
     _transports=["uv"] #TODO: potentially a bug
@@ -47,6 +45,6 @@ def launch_worker(host="127.0.0.1",
     logger.info(f'RPC STATUS: RPC of Rank: {rank} is initialized.')
 
     global server
-    config = uvicorn.Config(app, host=server_host, port=server_port, log_level=log_level)
+    config = uvicorn.Config(app, host=server_host, port=server_port, log_level=mcfg['log_level'])
     server = uvicorn.Server(config=config)
     server.run()

@@ -64,7 +64,7 @@ def launch_engine(model_class,
         model_config = {'dtype': dtype, 'checkpoint': True, 'checkpoint_path': checkpoint}
     else:
         model_config = {'dtype': dtype}
-
+    
     global engine
     engine = InferenceEngine(model_class, 
                             model_config,

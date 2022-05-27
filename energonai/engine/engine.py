@@ -11,12 +11,15 @@ from .rpc_utils import remote_cls_method, sync_cls_method, async_cls_method    #
 from .rpc_worker import RPCWorker
 from .pipeline_msg_dict import CircleInt
 
+# for TP
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
-from energonai.initialize import launch_from_multiprocess
-
-from energonai.utils import ensure_directory_exists
 from colossalai.logging import get_dist_logger
+
+from energonai.initialize import launch_from_multiprocess
+from energonai.utils import ensure_directory_exists
+
+
 
 logger = get_dist_logger('energonai')
 

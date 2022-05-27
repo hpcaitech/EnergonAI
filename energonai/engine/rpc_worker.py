@@ -1,19 +1,14 @@
-import os
 import time
 import torch
-import inspect
-import torch.distributed.rpc as rpc
-import sys
 
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
 from colossalai.logging import get_dist_logger
 
-from .rpc_utils import remote_cls_method, sync_cls_method, async_cls_method
 from .pipeline_wrapper import PipelineCommWrapper
 from .vit_pipeline_wrapper import ViTPipelineCommWrapper
 
-# from torch2trt import torch2trt
+from energonai.context import mcfg
 
 logger = get_dist_logger('energonai')
 
@@ -39,9 +34,12 @@ class ReturnDict:
         return output
 
 
+
+
 class RPCWorker:
 
     def __init__(self, model_class, model_config, model_type, dtype, max_batch_size: int = 1) -> None:
+
         self.model_class = model_class
         self.model_config = model_config
         self.dtype = dtype
@@ -55,7 +53,7 @@ class RPCWorker:
 
         # self.trt_sample = None
         self._init_self()
-        self.return_dict = ReturnDict()
+        self.return_dict = ReturnDict()        
 
     def _init_self(self):
         logger.info("Init model in rank {}".format(self.rank))
@@ -67,10 +65,21 @@ class RPCWorker:
         
         self.model.eval()
 
-        # if trt_sample is not None and gpc.get_world_size(ParallelMode.MODEL) > 1:
-        #     logger.error("Tensor Parallelism does not support TensorRT convert")
-        # elif trt_sample is not None and gpc.get_world_size(ParallelMode.MODEL) == 1:
-        #     model = torch2trt(model, [self.trt_sample])
+        if mcfg['trt_sample'] is not None:
+            try:
+                logger.info('Import Torch2Trt')
+                from torch2trt import torch2trt 
+                from energonai.engine import trt_converter            
+            except:
+                logger.error("Installation Required, \n \
+                    follow https://docs.nvidia.com/deeplearning/tensorrt/install-guide/index.html \
+                    and https://github.com/NVIDIA-AI-IOT/torch2trt")
+
+        if mcfg['trt_sample'] is not None and gpc.get_world_size(ParallelMode.MODEL) > 1:
+            logger.error("Tensor Parallelism does not support TensorRT convert")
+        elif mcfg['trt_sample'] is not None and gpc.get_world_size(ParallelMode.MODEL) == 1:
+            self.model = torch2trt(self.model, mcfg['trt_sample'])
+            logger.info("TensorRT convert complete.")
         
         try:        
             self.model = pipe_wrapper[self.model_type](model=self.model, max_batch_size=self.max_batch_size, dtype=self.dtype)

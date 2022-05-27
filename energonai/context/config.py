@@ -27,7 +27,8 @@ nec_args = {
         'backend':"nccl",
         'rm_padding': False,
         'seed' : 1024,
-        'verbose' : True
+        'verbose' : True,
+        'trt_sample' : None
 }
 
 

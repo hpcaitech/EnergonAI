@@ -7,40 +7,38 @@ import uvicorn
 from transformers import GPT2Tokenizer
 from fastapi import FastAPI
 from fastapi import Response, Body
+from energonai.context import mcfg
 import torch.distributed.rpc as rpc
 from energonai.engine import InferenceEngine
 from energonai.server.batch_manager import Batch_Manager, Manager
-from energonai.server.naive_batch_manager import Naive_Batch_Manager
+from energonai.server.batch_manager_ViT import Batch_Manager_ViT
+from energonai.server.batch_manager_with_padding import new_Batch_Manager
 
 app = FastAPI()
 
+def forward_func(input_list: list=[], seq_len: int=0, batch_size: int=0):
+    if len(input_list) == 0:
+        input_list = [("test " * seq_len)[:-1] for _ in range(batch_size)]
+    input_ = tokenizer(input_list, return_tensors="pt", padding="longest")
+    output_ = engine.run(input_)
+    return output_
+
+def result_process(output_):
+    result = tokenizer.decode(int(output_))
+    return result
 
 @app.get("/")  # 根路由
 def root():
     return {"200"}
 
-@app.post("/model_with_padding_naive")
-def run_without_batch(input_str: str = Body(..., title="input_str", embed=True)):
+@app.post("/new_batch_manager")
+def run_new_batch(input_str: str = Body(..., title="input_str", embed=True)):
+    global new_manager
     input_token = tokenizer(input_str, return_tensors="pt")
     time_stamp = time.time()
-    naive_manager.insert_req(time_stamp, input_token, input_str)
-    predictions = naive_manager.subscribe_result(time_stamp)
+    new_manager.insert_req(time_stamp, input_token, input_str)
+    predictions = new_manager.subscribe_result(time_stamp)
     return {predictions}
-
-@app.post("/model_with_padding")
-def run(
-        input_str: str = Body(..., title="input_str", embed=True)
-):
-    """Receive user request with post function. The input string is sent to the batch manager
-    and then the result will be sent back with Redis pub-sub. The time stamp is used as the
-    channel name that the current request process subscribes."""
-    input_token = tokenizer(input_str, return_tensors="pt")
-    time_stamp = time.time()
-    batch_manager.insert_req(time_stamp, input_token, input_str)
-    predictions = batch_manager.subscribe_result(time_stamp)
-    return {predictions}
-
-
 
 @app.get("/shutdown")
 async def shutdown():
@@ -74,6 +72,7 @@ def launch_engine(model_class,
 
     global tokenizer
     tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_path)
+    tokenizer.pad_token = GPT2Tokenizer.eos_token
 
     global engine
     engine = InferenceEngine(model_class,
@@ -86,19 +85,8 @@ def launch_engine(model_class,
                              port=port,
                              dtype=dtype)
 
-    # global cached_cost
-    # cached_cost = generate_cached_cost(engine, max_seq_len=1024, max_batch_size=4, step=8, repeat_round=2, tokenizer=tokenizer)
-
-    global batch_manager
-    batch_manager = Batch_Manager(engine, model_name=model_class.__name__, pp=4, tp=2,
-                                  max_sequence_length=256,
-                                  max_batch_size=16, tokenizer=tokenizer,
-                                  pad_token=GPT2Tokenizer.eos_token,
-                                  step=8, repeat_round=2)
-
-    global naive_manager
-    naive_manager = Naive_Batch_Manager(engine, max_batch_size=4, tokenizer=tokenizer,
-                                        pad_token=GPT2Tokenizer.eos_token)
+    global new_manager
+    new_manager = new_Batch_Manager(forward_func=forward_func, result_process=result_process)
 
     global server
     config = uvicorn.Config(app, host=server_host, port=server_port, log_level=log_level)

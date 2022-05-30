@@ -12,6 +12,7 @@ import numpy as np
 from energonai.engine import InferenceEngine
 import random
 import redis
+from energonai.context import mcfg
 import os
 from tqdm import trange
 import threading
@@ -48,30 +49,30 @@ class Manager:
         pass
 
 
-class Naive_Batch_Manager(Manager):
+class Batch_Manager_ViT(Manager):
     """
     This batch manager is mainly used for maintaining a queue of request to be processed. The requests in the
     queue is wrapped into batches according to the sequence length and the priority calculated with the equation
     in function cal_priority and then sent into the inference engine.
     """
 
-    def __init__(self, engine: InferenceEngine, pp, tp, max_batch_size: int = 32, tokenizer=None, pad_token=None):
+    def __init__(self, forward_func,
+                 result_process):
         """
         :param engine: The InferenceEngine from energonai.engine
         :param max_batch_size: the max number of requests that can be wrapped into one batch.
         """
         super().__init__()
-        self.engine = engine
-        self.max_batch_size = max_batch_size
         self.req_list = []
+        self.max_batch_size = mcfg['max_batch_size']
+        self.max_sequence_length = mcfg['max_sequence_length']
         self.req_list_lock = rwlock.RWLockFair()
         self.write_lock = self.req_list_lock.gen_wlock()
-        self.tokenizer = tokenizer
-        if self.tokenizer and pad_token:
-            self.tokenizer.pad_token = pad_token    # GPT2Tokenizer.eos_token
         self.running_flag = True
         self.publisher = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
-        self.pool = ThreadPoolExecutor(max_workers=pp+1)
+        self.pool = ThreadPoolExecutor(max_workers=mcfg['pp_init_size'] + 1)
+        self.forward_func = forward_func
+        self.result_process = result_process
         self.main_thread = threading.Thread(target=self.processing_batch)
         self.main_thread.start()
 
@@ -85,8 +86,6 @@ class Naive_Batch_Manager(Manager):
         self.write_lock.release()
 
     def subscribe_result(self, time_stamp):
-        # red = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
-        # sub = red.pubsub()
         sub = self.publisher.pubsub()
         sub.subscribe(str(time_stamp))
         predictions = ''
@@ -117,22 +116,13 @@ class Naive_Batch_Manager(Manager):
         while self.running_flag:
 
             if len(self.req_list) > 0:
-                st_ = time.time()
                 target_batch = self.wrap_batch()
                 pad_len = max([p.seq_len for p in target_batch])
                 logging.info("A batch with {} requests and length of {} packed, in-batch length: {}".format(
                     len(target_batch), pad_len, [p.seq_len for p in target_batch]))
                 input_text = [i.text for i in target_batch]
-                if self.tokenizer:
-                    input_ids = self.tokenizer(input_text, padding="longest", return_tensors="pt")
-                else:
-                    input_ids = input_text
-                print(time.time() - st_)
-                output = self.engine.run(input_ids)
-                self.pool.submit(self.publish_result, output, target_batch)
-                # self.publish_result(output, target_batch, start_time)
-                # pub_thread = threading.Thread(target=self.publish_result, args=(output, target_batch, start_time))
-                # pub_thread.start()
+                output_ = self.forward_func(input_list=input_text)
+                self.pool.submit(self.publish_result, output_, target_batch)
             time.sleep(0.08)
 
     def publish_result(self, output, target_batch):
@@ -146,8 +136,6 @@ class Naive_Batch_Manager(Manager):
         for i in range(len(target_batch)):
             temp_st = target_batch[i].time_
             chosen_pred = predictions[i]
-            if self.tokenizer:
-                text_ = self.tokenizer.decode(int(chosen_pred))
-            else:
-                text_ = chosen_pred
-            self.publisher.publish(str(temp_st), text_)
+            result = self.result_process(chosen_pred)
+            self.publisher.publish(str(temp_st), result)
+

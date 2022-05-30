@@ -33,7 +33,7 @@ class gamma_dist:
         res = stats.gamma.rvs(self.alpha, loc=self.loc, scale=self.beta, size=new_size)
         res = [math.floor(i) + 1 for i in res]
         res = [i if i < self.max_seq_len else self.max_seq_len for i in res]
-        new_req = [single_request(input_=None, time_stamp=None, seq_len=i) for i in res]
+        new_req = [single_request(input_=None, time_stamp=None, seq_len=i, input_str=None) for i in res]
         new_req.extend(req_list)
         new_req.sort(key=lambda x: x.seq_len)
         return new_req
@@ -41,7 +41,7 @@ class gamma_dist:
 
 class single_request:
 
-    def __init__(self, input_, time_stamp, **kwargs):
+    def __init__(self, input_, time_stamp, input_str, seq_len=None):
         """
         class to store related information for a single request.
         :param input_: The output of GPT2Tokenizer.tokenizer, a dict including input_ids and attention_mask
@@ -50,15 +50,14 @@ class single_request:
         """
         self.input_ = input_
         self.time_ = time_stamp
-        if 'seq_len' not in kwargs.keys():
+        if seq_len is None:
             if mcfg['model_type'] in ['gpt', 'bert']:
                 self.seq_len = input_['input_ids'].shape[1]
             elif mcfg['model_type'] == 'vit':
                 self.seq_len = input_.shape[-1]
         else:
-            self.seq_len = kwargs['seq_len']
-        if 'input_str' in kwargs.keys():
-            self.text = kwargs['input_str']
+            self.seq_len = seq_len
+        self.text = input_str
 
 
 class Manager:
@@ -69,7 +68,7 @@ class Manager:
     def __init__(self):
         pass
 
-    def insert_req(self, time_stamp: float, input_ids):
+    def insert_req(self, time_stamp: float, input_ids, input_str):
         pass
 
 
@@ -86,8 +85,12 @@ class new_Batch_Manager(Manager):
                  load_history=False,
                  his_len: int = 300, **kwargs):
         super().__init__()
+        print(mcfg.config)
         self.max_batch_size = mcfg['max_batch_size']
         self.max_sequence_length = mcfg['max_sequence_length']
+        self.forward_func = forward_func
+        self.publisher = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
+        self.result_process = result_process
         if load_history:
             self.load_history(his_len)
         else:
@@ -99,11 +102,8 @@ class new_Batch_Manager(Manager):
         self.gamma_dist_ = self.init_gamma_dist(self.max_sequence_length)
         self.cached_cost = self.generate_cached_cost()
         self.running_flag = True
-        self.publisher = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
         self.pool = ThreadPoolExecutor(max_workers=mcfg['pp_init_size'] + 1)
         self.main_thread = threading.Thread(target=self.processing_batch)
-        self.forward_func = forward_func
-        self.result_process = result_process
         self.main_thread.start()
 
     def init_gamma_dist(self, max_seq_len):
@@ -125,7 +125,7 @@ class new_Batch_Manager(Manager):
         """
         logging.log(0, "fetching cached cost")
         cached_name = "cached_cost_{}_pp{}_tp{}_{}_{}_{}_{}.npy"\
-            .format(mcfg['model_name'], mcfg['pp_init_size'], mcfg['tp_init_size'],
+            .format(mcfg['model_class'].__name__, mcfg['pp_init_size'], mcfg['tp_init_size'],
                     mcfg['max_sequence_length'], mcfg['max_batch_size'],
                     mcfg['step'], mcfg['repeat_round'])
         if os.path.exists(cached_name):
@@ -135,19 +135,21 @@ class new_Batch_Manager(Manager):
             logging.log(0, "generating new cached cost")
             cached_cost = [[0 for i in range(mcfg['max_batch_size'] + 1)] for j in range(mcfg['max_sequence_length'] + 1)]
             for tt in range(5):
-                output_ = self.forward_func(mcfg['max_sequence_length'] - 1, mcfg['max_batch_size'] - 1)
-                output_.to_here()
-                result = self.result_process(output_)
+                output_ = self.forward_func(seq_len=mcfg['max_sequence_length'] - 1, batch_size=mcfg['max_batch_size'] - 1)
+                pred = output_.to_here()
+                for bs in range(mcfg['max_batch_size'] - 1):
+                    res = self.result_process(int(pred[bs]))
             input_text = ""
             for tmp_len in trange(1, mcfg['max_sequence_length'] + 1, mcfg['step']):
                 input_text += "test "
                 for tmp_batch in range(1, mcfg['max_batch_size'] + 1):
-                    self.forward_func(tmp_len, tmp_batch)
+                    self.forward_func(seq_len=tmp_len, batch_size=tmp_batch)
                     start_time = time.time()
                     for k in range(mcfg['repeat_round']):
-                        output_ = self.forward_func(tmp_len, tmp_batch)
-                        output_.to_here()
-                        result = self.result_process(output_)
+                        output_ = self.forward_func(seq_len=tmp_len, batch_size=tmp_batch)
+                        pred = output_.to_here()
+                        for bs in range(tmp_batch):
+                            res = self.result_process(int(pred[bs]))
                     time_cost = (time.time() - start_time) / mcfg['repeat_round']
                     cached_cost[tmp_len][tmp_batch] = time_cost
                     for k in range(1, mcfg['step']):
@@ -180,11 +182,11 @@ class new_Batch_Manager(Manager):
                     break
         return predictions
 
-    def insert_req(self, time_stamp: float, input_ids):
+    def insert_req(self, time_stamp: float, input_ids, input_str: str):
         """
         Build a single_request class with the input string and then insert it into the queue.
         """
-        tmp_req = single_request(input_ids, time_stamp)
+        tmp_req = single_request(input_ids, time_stamp, input_str)
         self.write_lock.acquire()
         self.req_list.append(tmp_req)
         self.write_lock.release()
@@ -272,7 +274,7 @@ class new_Batch_Manager(Manager):
                 logging.info("A batch with {} requests and length of {} packed, in-batch length: {}".format(
                     len(target_batch), pad_len, [p.seq_len for p in target_batch]))
                 input_text = [i.text for i in target_batch]
-                output_ = self.forward_func(input_text)
+                output_ = self.forward_func(input_list=input_text)
                 self.pool.submit(self.publish_result, output_, target_batch)
                 if round_cnt == 10 and len(self.req_history) >= self.max_his_length - 1:
                     round_cnt = 0
@@ -287,7 +289,6 @@ class new_Batch_Manager(Manager):
         :param target_batch: the input batch
         """
         predictions = output.to_here()
-        print("sending back the results of {} req".format(len(target_batch)))
         for i in range(len(target_batch)):
             temp_st = target_batch[i].time_
             chosen_pred = predictions[i]

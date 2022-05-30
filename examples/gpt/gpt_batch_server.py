@@ -5,7 +5,7 @@ from transformers import GPT2Tokenizer
 from fastapi import FastAPI
 from fastapi import Response, Body
 from energonai.engine import InferenceEngine
-from energonai.server.batch_manager_with_padding import Batch_Manager_padding
+from energonai.server.dynamic_batch_manager import Dynamic_Batch_Manager
 
 app = FastAPI()
 
@@ -90,7 +90,7 @@ def launch_engine(model_class,
                              dtype=dtype)
 
     global batch_manager
-    batch_manager = Batch_Manager_padding(forward_func=forward_func, result_process=result_process)
+    batch_manager = Dynamic_Batch_Manager(forward_func=forward_func, result_process=result_process)
 
     global server
     config = uvicorn.Config(app, host=server_host, port=server_port, log_level=log_level)

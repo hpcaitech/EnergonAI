@@ -78,7 +78,7 @@ class Manager:
         pass
 
 
-class Batch_Manager_padding(Manager):
+class Dynamic_Batch_Manager(Manager):
     """
     This batch manager is mainly used for maintaining a queue of request to be processed. The requests in the
     queue is wrapped into batches and then sent into the inference engine.

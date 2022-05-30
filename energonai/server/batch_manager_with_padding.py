@@ -1,15 +1,13 @@
 """
 ------------------------------------------
 Class Batch Manager and the function for generating cached cost.
-This code modifies the batch wrapping algorithm of Turbo Transformer.
+Part of the algorithm comes from Turbo Transformer.
 ------------------------------------------
 """
 import time
 from collections import deque
-import torch.cuda
 import numpy as np
 import scipy.stats as stats
-import random
 import redis
 import math
 import os
@@ -21,6 +19,9 @@ from concurrent.futures import ThreadPoolExecutor
 from energonai.context import mcfg
 
 class gamma_dist:
+    """
+    Data structure for recording the distribution of the requests
+    """
     def __init__(self, alpha_, loc_, beta_):
         self.alpha = alpha_
         self.loc = loc_
@@ -29,6 +30,11 @@ class gamma_dist:
         self.max_seq_len = mcfg['max_sequence_length']
 
     def complete_req_list(self, req_list):
+        """
+        Use fake requests to fill the req list to a certain number so that the scheduler
+        can perform better. The length of the fake requests is generated with the current
+        recorded distribution.
+        """
         new_size = self.max_list_len - len(req_list)
         res = stats.gamma.rvs(self.alpha, loc=self.loc, scale=self.beta, size=new_size)
         res = [math.floor(i) + 1 for i in res]
@@ -72,11 +78,10 @@ class Manager:
         pass
 
 
-class new_Batch_Manager(Manager):
+class Batch_Manager_padding(Manager):
     """
     This batch manager is mainly used for maintaining a queue of request to be processed. The requests in the
-    queue is wrapped into batches according to the sequence length and the priority calculated with the equation
-    in function cal_priority and then sent into the inference engine.
+    queue is wrapped into batches and then sent into the inference engine.
     """
 
     def __init__(self,
@@ -116,12 +121,6 @@ class new_Batch_Manager(Manager):
     def generate_cached_cost(self):
         """
         Test the running time for different sequence length and batch size on the current machine.
-        :param engine: InferenceEngine from energon.engine
-        :type engine: InferenceEngine
-        :param max_seq_len: The max sequence length that is measured.
-        :param max_batch_size: The max batch size that is measured.
-        :param step: Run time is measured every other 'step' of sequence length
-        :param repeat_round: We inference current batch 'repeat_round' times and take average.
         """
         logging.log(0, "fetching cached cost")
         cached_name = "cached_cost_{}_pp{}_tp{}_{}_{}_{}_{}.npy"\
@@ -159,6 +158,9 @@ class new_Batch_Manager(Manager):
         return cached_cost
 
     def load_history(self, his_len):
+        """
+        load the distribution history
+        """
         try:
             f = open("req_history.txt", 'r')
         except Exception as e:
@@ -170,8 +172,9 @@ class new_Batch_Manager(Manager):
         return
 
     def subscribe_result(self, time_stamp):
-        # red = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
-        # sub = red.pubsub()
+        """
+        waiting for the result and send back.
+        """
         sub = self.publisher.pubsub()
         sub.subscribe(str(time_stamp))
         predictions = ''
@@ -189,13 +192,14 @@ class new_Batch_Manager(Manager):
         tmp_req = single_request(input_ids, time_stamp, input_str)
         self.write_lock.acquire()
         self.req_list.append(tmp_req)
+        self.req_history.append(tmp_req.seq_len)
         self.write_lock.release()
 
     def wrap_batch(self):
         """
         Given a sorted sequence list, calculate the best way to wrap the batch with DP according to the
         cached cost.
-        The algorithm in this function comes from the paper of Turbo Transformer.
+        Part of this function comes from the paper of Turbo Transformer.
         """
         self.write_lock.acquire()
         new_req_list = self.gamma_dist_.complete_req_list(self.req_list)
@@ -258,6 +262,9 @@ class new_Batch_Manager(Manager):
         self.gamma_dist_.alpha = fit_alpha
         self.gamma_dist_.loc = fit_loc
         self.gamma_dist_.beta = fit_beta
+        f = open("req_history.txt", 'w')
+        for i in self.req_history:
+            f.write(i)
         return
 
     def processing_batch(self):

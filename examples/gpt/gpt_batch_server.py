@@ -1,44 +1,48 @@
-import os
 import time
-
-import redis
 import torch
 import uvicorn
 from transformers import GPT2Tokenizer
 from fastapi import FastAPI
 from fastapi import Response, Body
-from energonai.context import mcfg
-import torch.distributed.rpc as rpc
 from energonai.engine import InferenceEngine
-from energonai.server.batch_manager import Batch_Manager, Manager
-from energonai.server.batch_manager_ViT import Batch_Manager_ViT
-from energonai.server.batch_manager_with_padding import new_Batch_Manager
+from energonai.server.batch_manager_with_padding import Batch_Manager_padding
 
 app = FastAPI()
 
-def forward_func(input_list: list=[], seq_len: int=0, batch_size: int=0):
+
+def forward_func(input_list: list = [], seq_len: int = 0, batch_size: int = 0):
+    """
+    Forward run function needed for batch manager
+    """
     if len(input_list) == 0:
         input_list = [("test " * seq_len)[:-1] for _ in range(batch_size)]
     input_ = tokenizer(input_list, return_tensors="pt", padding="longest")
     output_ = engine.run(input_)
     return output_
 
+
 def result_process(output_):
+    """
+    Decode the output of the model
+    """
     result = tokenizer.decode(int(output_))
     return result
+
 
 @app.get("/")  # 根路由
 def root():
     return {"200"}
 
-@app.post("/new_batch_manager")
+
+@app.post("/gpt")
 def run_new_batch(input_str: str = Body(..., title="input_str", embed=True)):
-    global new_manager
+    global batch_manager
     input_token = tokenizer(input_str, return_tensors="pt")
     time_stamp = time.time()
-    new_manager.insert_req(time_stamp, input_token, input_str)
-    predictions = new_manager.subscribe_result(time_stamp)
+    batch_manager.insert_req(time_stamp, input_token, input_str)
+    predictions = batch_manager.subscribe_result(time_stamp)
     return {predictions}
+
 
 @app.get("/shutdown")
 async def shutdown():
@@ -85,8 +89,8 @@ def launch_engine(model_class,
                              port=port,
                              dtype=dtype)
 
-    global new_manager
-    new_manager = new_Batch_Manager(forward_func=forward_func, result_process=result_process)
+    global batch_manager
+    batch_manager = Batch_Manager_padding(forward_func=forward_func, result_process=result_process)
 
     global server
     config = uvicorn.Config(app, host=server_host, port=server_port, log_level=log_level)

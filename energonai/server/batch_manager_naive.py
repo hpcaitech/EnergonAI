@@ -1,20 +1,12 @@
 """
 ------------------------------------------
-Class Batch Manager and the function for generating cached cost.
-This code modifies the batch wrapping algorithm of Turbo Transformer.
+Class Batch Manager.
+a naive version that is used for cases in which padding is not needed.
 ------------------------------------------
 """
 import time
-
-import torch.cuda
-from scipy import stats
-import numpy as np
-from energonai.engine import InferenceEngine
-import random
 import redis
 from energonai.context import mcfg
-import os
-from tqdm import trange
 import threading
 from readerwriterlock import rwlock
 import logging
@@ -49,18 +41,17 @@ class Manager:
         pass
 
 
-class Batch_Manager_ViT(Manager):
+class Batch_Manager_naive(Manager):
     """
     This batch manager is mainly used for maintaining a queue of request to be processed. The requests in the
-    queue is wrapped into batches according to the sequence length and the priority calculated with the equation
-    in function cal_priority and then sent into the inference engine.
+    queue is wrapped into batches and then sent into the inference engine.
     """
 
     def __init__(self, forward_func,
                  result_process):
         """
-        :param engine: The InferenceEngine from energonai.engine
-        :param max_batch_size: the max number of requests that can be wrapped into one batch.
+        :param forward_func a function of calling a forward propagation, returning a RPC ref.
+        :param result_process a function to process the output of the model before returning the result.
         """
         super().__init__()
         self.req_list = []
@@ -86,6 +77,9 @@ class Batch_Manager_ViT(Manager):
         self.write_lock.release()
 
     def subscribe_result(self, time_stamp):
+        """
+        waiting for the result and send back.
+        """
         sub = self.publisher.pubsub()
         sub.subscribe(str(time_stamp))
         predictions = ''
@@ -98,9 +92,7 @@ class Batch_Manager_ViT(Manager):
 
     def wrap_batch(self):
         """
-        Given a sorted sequence list, calculate the best way to wrap the batch with DP according to the
-        cached cost.
-        The algorithm in this function comes from the paper of Turbo Transformer.
+        Simply wrap batches by the order of insertion.
         """
         self.write_lock.acquire()
         result_batch = self.req_list[0:min(self.max_batch_size, len(self.req_list))]

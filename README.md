@@ -16,7 +16,7 @@ Energon-AI provides 3 levels of abstraction for enabling the large-scale model i
 For models trained by [Colossal-AI](https://github.com/hpcaitech/ColossalAI), they can be seamlessly transferred to Energon-AI.
 For single-device models, they require manual coding works to introduce tensor parallelism and pipeline parallelism.
 
-At present, we pre-build distributed Bert, GPT, and ViT models.
+At present, we pre-build distributed Bert, GPT, and ViT models.  
 For GPT, it extends to at most 175B parameters, which is called [GPT3](https://arxiv.org/abs/2005.14165).  
 For Bert, Google reports a [super-large Bert with 481B parameters](https://mlcommons.org/en/training-normal-11/) in MLPerf-Training v1.1 open, indicating that Bert can also extend to large-scale.
 
@@ -55,8 +55,9 @@ Method 2:
 #### Scaling Ability
 
 Here GPT3-12-layers in FP16 is adopted.  
-Here a node with 8 A100 80 GB GPUs is adopted. GPUs are fully connected with NvLink.  
-Energon-AI adopts the redundant computation elimination method from [EffectiveTransformer](https://github.com/bytedance/effective_transformer) and the sequence length is set the half of the padding length.
+Here a node with 8 A100 80 GB GPUs is adopted. GPUs are fully connected with NvLink.   
+Energon-AI adopts the redundant computation elimination method. The method is first raised in [EffectiveTransformer](https://github.com/bytedance/effective_transformer), and our implementation refers to [TurboTransformer](https://github.com/Tencent/TurboTransformers/blob/master/turbo_transformers/layers/kernels/gpu_transpose_kernel.cu).  
+Here the sequence length is set the half of the padding length.
 <div  align="center">    
     <img src="https://user-images.githubusercontent.com/12018307/168971637-ffd1d6ba-44bb-4043-a275-3dc2a008c048.png" width = "600" height = "240" alt="Architecture" align=center />
 </div>
@@ -64,13 +65,15 @@ Energon-AI adopts the redundant computation elimination method from [EffectiveTr
 #### Latency
 Here GPT3 in FP16 is adopted.  
 Here a node with 8 A100 80 GB GPUs is adopted. Every two GPUs are connected with NvLink.  
-Here the sequence length is set the half of the padding length when using redundant computation elimination method, which is the Energon-AI(RM).
+Here the sequence length is set the half of the padding length when using redundant computation elimination method, which is the Energon-AI(RM).  
 Here FasterTransformer is adopted in comparison and it does not support the redundant computation elimination method in the distributed execution.
 <div  align="center">    
     <img src="https://user-images.githubusercontent.com/12018307/169728315-8ac95e4f-3e81-44e5-b82b-5873ffe85351.png" width = "600" height = "300" alt="Architecture" align=center />
 </div>
 
 #### Batching
+Energon-AI dynamically selects the batch processing with the highest priority regarding the waiting time, batch size, batch expansion possibility (based on the sentence length after padding).
+Our dynamic batching method is inspired by the DP algorithm from [TurboTransformer](https://dl.acm.org/doi/10.1145/3437801.3441578).  
 Here FIFO batching is selected in comparison.
 <div  align="center">    
     <img src="https://user-images.githubusercontent.com/12018307/170616782-18fae36f-75cd-4e7b-bc0b-c8998be1e540.png" width = "400" height = "100" alt="Architecture" align=center />

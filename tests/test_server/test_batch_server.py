@@ -114,7 +114,7 @@ def test_batch():
     pool = ThreadPoolExecutor(max_workers=32)
     ip_ = "http://127.0.0.1"
     port_ = "8016"
-    req_num = 300
+    req_num = 100
     seq_len = 1024
     # req_list = ["test " * 10 for _ in range(req_num)]
     # req_list = generate_test_dataset(req_num, seq_len)
@@ -132,7 +132,7 @@ def test_batch():
         # temp_thread.start()
         # print(i)
         pool.submit(send_request, req_list[i], ip_, port_, i, True)
-    time.sleep(80)
+    time.sleep(10)
     print(latency)
     print(np.mean(latency))
     print(req_num / (max(finish_time) - st__))

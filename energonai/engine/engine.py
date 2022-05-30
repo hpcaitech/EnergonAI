@@ -77,8 +77,7 @@ class InferenceEngine(Module):
                                  host=self.host,
                                  port=self.port)
         rpc_backend_options = rpc.TensorPipeRpcBackendOptions(num_worker_threads=16,
-        _transports=["uv"]
-        # TODO: potentially a bug
+        # _transports=["uv"] TODO: potentially a bug
                                                              )
         rpc.init_rpc(self.WORKER_NAME.format(0),
                      rank=0,

@@ -17,7 +17,6 @@ from colossalai.context import ParallelMode
 from colossalai.logging import get_dist_logger
 
 from energonai.initialize import launch_from_multiprocess
-from energonai.utils import ensure_directory_exists
 
 
 
@@ -33,9 +32,11 @@ class InferenceEngine(Module):
                  max_batch_size: int = 1,
                  tp_init_size: int = -1,
                  pp_init_size: int = -1,
+                 auto_pp: bool = False,
                  host: str = 'localhost',
                  port: int = 29500,
-                 dtype=None):
+                 dtype=None,
+                 ):
         """
         Args:
             model: torch.nn.Module
@@ -57,8 +58,10 @@ class InferenceEngine(Module):
         self.tp_size = tp_init_size
         self.pp_size = pp_init_size
 
-        # for TP
+        # for TP, PP
         self.rrefs = []
+        self.auto_pp = auto_pp
+        
         # for rpc
         self.WORKER_NAME = "wok{}"
         self._init_dist_rpc()
@@ -93,7 +96,7 @@ class InferenceEngine(Module):
                 rpc.remote(ob_info,
                            RPCWorker,
                            args=(self.model_class, self.model_config, self.model_type, self.dtype,
-                                 self.max_batch_size)))
+                                 self.max_batch_size, self.auto_pp)))
 
     def run(self, inputs):
         res_rref = 0

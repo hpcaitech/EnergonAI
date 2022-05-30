@@ -148,6 +148,14 @@ class Batch_Manager(Manager):
                 input_text += "test "
                 for tmp_batch in range(1, max_batch_size + 1):
                     batched_text = [input_text for _ in range(tmp_batch)]
+                    if tokenizer:
+                        input_token = tokenizer(batched_text, return_tensors="pt")
+                    else:
+                        input_token = batched_text
+                    output = engine.run(input_token)
+                    predictions = output.to_here()
+                    if tokenizer:
+                        tokenizer.decode(predictions)
                     start_time = time.time()
                     for k in range(repeat_round):
                         if tokenizer:

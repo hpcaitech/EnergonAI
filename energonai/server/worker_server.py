@@ -38,7 +38,7 @@ def launch_worker(config_file,
                             
     WORKER_NAME = "wok{}"
     rpc_backend_options = rpc.TensorPipeRpcBackendOptions(num_worker_threads=16,
-                                                          _transports=["uv"]  # TODO: potentially a bug
+                                                          # _transports=["uv"] TODO: potentially a bug
                                                           )
     rpc.init_rpc(WORKER_NAME.format(rank), rank=rank, world_size=world_size, rpc_backend_options=rpc_backend_options)
 

@@ -8,12 +8,12 @@
 
 
 A Large-scale Model Inference System.
-EnergonAI provides 3 levels of abstraction for enabling the large-scale model inference:
+Energon-AI provides 3 levels of abstraction for enabling the large-scale model inference:
 - **Runtime** - tensor parallel operations, pipeline parallel wrapper, distributed message queue, distributed checkpoint loading, customized CUDA kernels.
 - **Engine** - encapsulate the single instance multiple devices (SIMD) execution with the remote procedure call, which acts as the single instance single device (SISD) execution.
 - **Serving** - batching requests, managing engines.
 
-For models trained by [Colossal-AI](https://github.com/hpcaitech/ColossalAI), they can be seamlessly transferred to EnergonAI.
+For models trained by [Colossal-AI](https://github.com/hpcaitech/ColossalAI), they can be seamlessly transferred to Energon-AI.
 For single-device models, they require manual coding works to introduce tensor parallelism and pipeline parallelism.
 
 At present, we pre-build distributed Bert and GPT models.  
@@ -22,7 +22,7 @@ For Bert, Google reports a [super-large Bert with 481B parameters](https://mlcom
 
 ### Installation
 ``` bash
-$ git clone https://github.com/hpcaitech/ColossalAI-Inference.git
+$ git clone git@github.com:hpcaitech/EnergonAI.git
 $ pip install -r requirements.txt
 $ pip install .
 ```
@@ -56,7 +56,7 @@ Method 2:
 
 Here GPT3-12-layers in FP16 is adopted.  
 Here a node with 8 A100 80 GB GPUs is adopted. GPUs are fully connected with NvLink.  
-EnergonAI adopts the redundant computation elimination method from [EffectiveTransformer](https://github.com/bytedance/effective_transformer) and the sequence length is set the half of the padding length.
+Energon-AI adopts the redundant computation elimination method from [EffectiveTransformer](https://github.com/bytedance/effective_transformer) and the sequence length is set the half of the padding length.
 <div  align="center">    
     <img src="https://user-images.githubusercontent.com/12018307/168971637-ffd1d6ba-44bb-4043-a275-3dc2a008c048.png" width = "600" height = "240" alt="Architecture" align=center />
 </div>
@@ -64,7 +64,7 @@ EnergonAI adopts the redundant computation elimination method from [EffectiveTra
 #### Latency
 Here GPT3 in FP16 is adopted.  
 Here a node with 8 A100 80 GB GPUs is adopted. Every two GPUs are connected with NvLink.  
-Here the sequence length is set the half of the padding length when using redundant computation elimination method, which is the EnergonAI(RM).
+Here the sequence length is set the half of the padding length when using redundant computation elimination method, which is the Energon-AI(RM).
 Here FasterTransformer is adopted in comparison and it does not support the redundant computation elimination method in the distributed execution.
 <div  align="center">    
     <img src="https://user-images.githubusercontent.com/12018307/169728315-8ac95e4f-3e81-44e5-b82b-5873ffe85351.png" width = "600" height = "300" alt="Architecture" align=center />

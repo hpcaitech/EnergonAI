@@ -7,6 +7,9 @@ from colossalai.logging import get_dist_logger
 
 from .pipeline_wrapper import PipelineCommWrapper
 from .vit_pipeline_wrapper import ViTPipelineCommWrapper
+from .auto_pipeline_wrapper import AutoPipelineCommWrapper
+
+from energonai.pipelinable import split_transformer_into_partitions
 
 from energonai.context import mcfg
 
@@ -15,8 +18,14 @@ logger = get_dist_logger('energonai')
 pipe_wrapper = {
                 'vit': ViTPipelineCommWrapper,
                 'bert': PipelineCommWrapper,
-                'gpt': PipelineCommWrapper  
+                'gpt': PipelineCommWrapper,
+                'auto': AutoPipelineCommWrapper,
                }
+
+pipe_split = {
+                'bert': split_transformer_into_partitions,
+                'gpt': split_transformer_into_partitions,
+            }
 
 
 class ReturnDict:
@@ -38,13 +47,14 @@ class ReturnDict:
 
 class RPCWorker:
 
-    def __init__(self, model_class, model_config, model_type, dtype, max_batch_size: int = 1) -> None:
+    def __init__(self, model_class, model_config, model_type, dtype, max_batch_size: int = 1, auto_pp: bool = False) -> None:
 
         self.model_class = model_class
         self.model_config = model_config
         self.dtype = dtype
         self.max_batch_size = max_batch_size
         self.model_type = model_type
+        # self.auto_pp = auto_pp
 
         self.WORKER_NAME = "wok{}"
         self.model = None    # call the model
@@ -52,8 +62,19 @@ class RPCWorker:
         torch.cuda.set_device(f'cuda:{gpc.get_local_rank(ParallelMode.GLOBAL)}')
 
         # self.trt_sample = None
-        self._init_self()
-        self.return_dict = ReturnDict()        
+        if auto_pp:
+            self._auto_pp_init_model()
+        else:
+            self._init_self()
+        self.return_dict = ReturnDict() 
+
+    def _auto_pp_init_model(self):
+        logger.info("Init automatic pipeline model in rank {}".format(self.rank))
+        submodules = pipe_split[self.model_type](self.model_class)
+        self.model = submodules.get_submodule(f'submod_{gpc.get_local_rank(ParallelMode.PIPELINE)}')
+        del submodules
+        self.model = pipe_wrapper['auto'](model=self.model, max_batch_size=self.max_batch_size, dtype=self.dtype)
+
 
     def _init_self(self):
         logger.info("Init model in rank {}".format(self.rank))
@@ -69,7 +90,7 @@ class RPCWorker:
             try:
                 logger.info('Import Torch2Trt')
                 from torch2trt import torch2trt 
-                from energonai.engine import trt_converter            
+                from energonai.engine import trt_converter       
             except:
                 logger.error("Installation Required, \n \
                     follow https://docs.nvidia.com/deeplearning/tensorrt/install-guide/index.html \
@@ -100,4 +121,4 @@ class RPCWorker:
             self.return_dict.enqueue(cur_key, output.cpu())
             return self.return_dict.top(key)
 
-        return None
+        # return None

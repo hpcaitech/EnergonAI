@@ -107,7 +107,9 @@ class Dynamic_Batch_Manager(Manager):
         self.gamma_dist_ = self.init_gamma_dist(self.max_sequence_length)
         self.cached_cost = self.generate_cached_cost()
         self.running_flag = True
-        self.pool = ThreadPoolExecutor(max_workers=mcfg['pp_init_size'] + 1)
+        self.max_workers = mcfg['pp_init_size'] + 2
+        self.pool = ThreadPoolExecutor(max_workers=self.max_workers)
+        self.working_workers = 0
         self.main_thread = threading.Thread(target=self.processing_batch)
         self.main_thread.start()
 
@@ -274,19 +276,20 @@ class Dynamic_Batch_Manager(Manager):
         """
         round_cnt = 0
         while self.running_flag:
-            if len(self.req_list) > 0:
+            if (self.working_workers < self.max_workers) and (len(self.req_list) > 0):
                 round_cnt += 1
                 target_batch = self.wrap_batch()
                 pad_len = target_batch[-1].seq_len
                 logging.info("A batch with {} requests and length of {} packed, in-batch length: {}".format(
                     len(target_batch), pad_len, [p.seq_len for p in target_batch]))
                 input_text = [i.text for i in target_batch]
+                self.working_workers = self.working_workers + 1
                 output_ = self.forward_func(input_list=input_text)
                 self.pool.submit(self.publish_result, output_, target_batch)
                 if round_cnt == 10 and len(self.req_history) >= self.max_his_length - 1:
                     round_cnt = 0
                     self.update_distribution()
-            time.sleep(0.08)
+            time.sleep(0.001)
 
     def publish_result(self, output, target_batch):
         """
@@ -301,3 +304,5 @@ class Dynamic_Batch_Manager(Manager):
             chosen_pred = predictions[i]
             result = self.result_process(chosen_pred)
             self.publisher.publish(str(temp_st), result)
+        
+        self.working_workers = self.working_workers - 1

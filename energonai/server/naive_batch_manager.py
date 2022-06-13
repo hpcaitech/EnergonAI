@@ -41,7 +41,7 @@ class Manager:
         pass
 
 
-class Batch_Manager_naive(Manager):
+class Naive_Batch_Manager(Manager):
     """
     This batch manager is mainly used for maintaining a queue of request to be processed. The requests in the
     queue is wrapped into batches and then sent into the inference engine.
@@ -61,7 +61,9 @@ class Batch_Manager_naive(Manager):
         self.write_lock = self.req_list_lock.gen_wlock()
         self.running_flag = True
         self.publisher = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
-        self.pool = ThreadPoolExecutor(max_workers=mcfg['pp_init_size'] + 1)
+        self.max_workers = mcfg['pp_init_size'] + 2
+        self.pool = ThreadPoolExecutor(max_workers=self.max_workers)
+        self.working_workers = 0
         self.forward_func = forward_func
         self.result_process = result_process
         self.main_thread = threading.Thread(target=self.processing_batch)
@@ -106,16 +108,16 @@ class Batch_Manager_naive(Manager):
         and starts new processes that wait for and publish the inference result.
         """
         while self.running_flag:
-
-            if len(self.req_list) > 0:
+            if (self.working_workers < self.max_workers) and (len(self.req_list) > 0):
                 target_batch = self.wrap_batch()
                 pad_len = max([p.seq_len for p in target_batch])
                 logging.info("A batch with {} requests and length of {} packed, in-batch length: {}".format(
                     len(target_batch), pad_len, [p.seq_len for p in target_batch]))
                 input_text = [i.text for i in target_batch]
+                self.working_workers = self.working_workers + 1
                 output_ = self.forward_func(input_list=input_text)
                 self.pool.submit(self.publish_result, output_, target_batch)
-            time.sleep(0.08)
+            time.sleep(0.001)
 
     def publish_result(self, output, target_batch):
         """
@@ -130,4 +132,6 @@ class Batch_Manager_naive(Manager):
             chosen_pred = predictions[i]
             result = self.result_process(chosen_pred)
             self.publisher.publish(str(temp_st), result)
+
+        self.working_workers = self.working_workers - 1
 

@@ -36,6 +36,9 @@ class gamma_dist:
         recorded distribution.
         """
         new_size = self.max_list_len - len(req_list)
+        if new_size <= 0:
+            req_list.sort(key=lambda x: x.seq_len)
+            return req_list
         res = stats.gamma.rvs(self.alpha, loc=self.loc, scale=self.beta, size=new_size)
         res = [math.floor(i) + 1 for i in res]
         res = [i if i < self.max_seq_len else self.max_seq_len for i in res]

@@ -47,7 +47,8 @@ class MultiHeadAttention1D(nn.Module):
 
     def forward(self, 
                 hidden_states, 
-                attention_mask=None):
+                attention_mask=None,
+                seq_lens=None):
 
         if self.fused_qkv:
             qkv = self.query_key_value(hidden_states)

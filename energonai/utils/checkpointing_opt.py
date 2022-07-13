@@ -20,12 +20,17 @@ __all__ = [
 ]
 
 name_map = {
-    'ln_2': 'norm2',
-    'c_attn': 'query_key_value',
-    'attn.c_proj': 'attn.dense',
-    'ln_1': 'norm1',
-    'c_fc': 'dense_1',
-    'mlp.c_proj': 'mlp.dense_2'
+    'embed_tokens': 'embed.word_embeddings',
+    'embed_positions': 'position_embeddings',
+    # 'layers': 'blocks',
+    'self_attn.q_proj': 'attn.query_',
+    'self_attn.k_proj': 'attn.key_',
+    'self_attn.v_proj': 'attn.value_',
+    'self_attn.out_proj':'attn.dense',
+    'self_attn_layer_norm': 'norm1',
+    'final_layer_norm': 'norm2',
+    'fc1': 'mlp.dense_1',
+    'fc2': 'mlp.dense_2'
 }
 
 
@@ -164,8 +169,6 @@ def remove_prefix(state_dict, prefix):
 
 def load_checkpoint(file,
                     model: torch.nn.Module,
-                    optimizer: torch.optim.Optimizer = None,
-                    lr_scheduler: torch.optim.lr_scheduler._LRScheduler = None,
                     strict: bool = True,
                     **kwargs):
     """Loads training states from a checkpoint file.
@@ -191,8 +194,11 @@ def load_checkpoint(file,
 
     # model states
     if state_dict is not None:
-        state_dict = processing_HF_GPT(state_dict)
-    model_state = state_dict.pop("model") if state_dict is not None else dict()
+        model_state = state_dict.pop("model")
+        model_state = processing_OPT(model_state)
+    else:
+        model_state = dict()
+
     # pipeline
     if is_using_pp():
         model_state = partition_pipeline_parallel_state_dict(model, model_state, **kwargs)
@@ -288,48 +294,66 @@ def judge_t(key_):
             return True
     return False
 
+def module_name_mapping(ori_name: str):
+    # print(ori_name)
+    if ori_name == 'decoder.embed_tokens.weight':
+        return "embed.word_embeddings.weight"
+    elif ori_name == 'decoder.embed_positions.weight':
+        return "embed.position_embeddings.weight"
+    elif "decoder.layer_norm" in ori_name:
+        return ori_name.replace('decoder.layer_norm', 'norm')
+    # elif ".attn.bias" in ori_name:
+    #     return ""
+    else:
+        res = re.sub(r"decoder.layers\.(?P<value>\d+)?\.", id_map, ori_name)
+        for k_ in name_map.keys():
+            res = res.replace(k_, name_map[k_])
+        return res
 
-def processing_HF_GPT(state_dict: OrderedDict):
+def processing_OPT(state_dict: OrderedDict):
     new_dict = OrderedDict()
     for k_ in state_dict.keys():
         new_k = module_name_mapping(k_)
         if new_k == "":
             continue
-
         new_v = state_dict[k_]
-        if judge_t(new_k):
-            new_v = torch.transpose(new_v, 0, 1)
-        if "attn.query_key_value.weight" in new_k:
-            num_ = re.search(r"blocks\.\d+?\.", new_k)
-            if num_:
-                prefix = num_.group()
-            else:
-                prefix = ''
-            # print("prefix: {}".format(prefix))
-            q_, k_, v_ = torch.chunk(new_v, 3, 0)
-            # new_dict[prefix + "attn.query_.weight"] = torch.transpose(q_, 0, 1)
-            # new_dict[prefix + "attn.key_.weight"] = torch.transpose(k_, 0, 1)
-            # new_dict[prefix + "attn.value_.weight"] = torch.transpose(v_, 0, 1)
-            new_dict[prefix + "attn.query_.weight"] = q_
-            new_dict[prefix + "attn.key_.weight"] = k_
-            new_dict[prefix + "attn.value_.weight"] = v_
-        elif "attn.query_key_value.bias" in new_k:
-            num_ = re.search(r"blocks\.\d+?\.", new_k)
-            if num_:
-                prefix = num_.group()
-            else:
-                prefix = ''
-            # print("prefix: {}".format(prefix))
-            q_, k_, v_ = torch.chunk(new_v, 3, 0)
-            new_dict[prefix + "attn.query_.bias"] = q_
-            new_dict[prefix + "attn.key_.bias"] = k_
-            new_dict[prefix + "attn.value_.bias"] = v_
-        else:
-            new_dict[new_k] = new_v
+        new_dict[new_k] = new_v
+        # if judge_t(new_k):
+        #     new_v = torch.transpose(new_v, 0, 1)
+        # if "attn.query_key_value.weight" in new_k:
+        #     num_ = re.search(r"blocks\.\d+?\.", new_k)
+        #     if num_:
+        #         prefix = num_.group()
+        #     else:
+        #         prefix = ''
+        #     # print("prefix: {}".format(prefix))
+        #     q_, k_, v_ = torch.chunk(new_v, 3, 0)
+        #     # new_dict[prefix + "attn.query_.weight"] = torch.transpose(q_, 0, 1)
+        #     # new_dict[prefix + "attn.key_.weight"] = torch.transpose(k_, 0, 1)
+        #     # new_dict[prefix + "attn.value_.weight"] = torch.transpose(v_, 0, 1)
+        #     new_dict[prefix + "attn.query_.weight"] = q_
+        #     new_dict[prefix + "attn.key_.weight"] = k_
+        #     new_dict[prefix + "attn.value_.weight"] = v_
+        # elif "attn.query_key_value.bias" in new_k:
+        #     num_ = re.search(r"blocks\.\d+?\.", new_k)
+        #     if num_:
+        #         prefix = num_.group()
+        #     else:
+        #         prefix = ''
+        #     # print("prefix: {}".format(prefix))
+        #     q_, k_, v_ = torch.chunk(new_v, 3, 0)
+        #     new_dict[prefix + "attn.query_.bias"] = q_
+        #     new_dict[prefix + "attn.key_.bias"] = k_
+        #     new_dict[prefix + "attn.value_.bias"] = v_
+        # else:
+        #     new_dict[new_k] = new_v
+    # print(new_dict.keys())
     new_dict['head.dense.weight'] = new_dict['embed.word_embeddings.weight'].clone()
+    del new_dict['decoder.version']
     # print("="*100)
     # print(new_dict.keys())
-    return {"model": new_dict, "epoch": 0}
+    # print("---------------------------")
+    return new_dict #{"model": new_dict, "epoch": 0}
 
 
 def id_map(matched):
@@ -337,17 +361,4 @@ def id_map(matched):
     return "blocks.{}.".format(value)
 
 
-def module_name_mapping(ori_name: str):
-    if ori_name == 'wte.weight':
-        return "embed.word_embeddings.weight"
-    elif ori_name == 'wpe.weight':
-        return "embed.position_embeddings.weight"
-    elif "ln_f" in ori_name:
-        return ori_name.replace('ln_f', 'norm')
-    elif ".attn.bias" in ori_name:
-        return ""
-    else:
-        res = re.sub(r"h\.(?P<value>\d+)?\.", id_map, ori_name)
-        for k_ in name_map.keys():
-            res = res.replace(k_, name_map[k_])
-        return res
+

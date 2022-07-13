@@ -42,7 +42,7 @@ class Block1D(nn.Module):
                          activation = activation,
                          dtype = dtype,
                          bias = bias)
-    def forward(self, hidden_states, attention_mask=None):
+    def forward(self, hidden_states, attention_mask=None, seq_lens=None):
         
         if not self.apply_post_layernorm:
             residual = hidden_states

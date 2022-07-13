@@ -65,7 +65,7 @@ class PipelineModel(nn.Module):
         self.blocks = nn.ModuleList()
         self.pp_rank = gpc.get_local_rank(ParallelMode.PIPELINE) if is_using_pp() else 0
         for id_ in range(depth):
-            self.blocks.add_module(f'blk_{id_ + self.pp_rank * depth}',
+            self.blocks.add_module(f'{id_ + self.pp_rank * depth}',
                                     Block1D(hidden_size=hidden_size,
                                             num_heads=num_heads,
                                             mlp_ratio=mlp_ratio,
@@ -94,7 +94,7 @@ class PipelineModel(nn.Module):
             attention_mask = (1.0 - attention_mask) * -10000.0
 
         for block in self.blocks:
-            hidden_states = block(hidden_states, attention_mask)
+            hidden_states = block(hidden_states, attention_mask) # seq_lens
         
         if self.last:
             hidden_states = self.head(self.norm(hidden_states))
@@ -157,6 +157,9 @@ def create_pipeline_model(depth:int = 48,
         if model_kwargs["model_name"] == "hf_gpt2":
             from energonai.utils.checkpointing_hf_gpt2 import load_checkpoint
             load_checkpoint(model_kwargs["checkpoint"], model, **model_kwargs)
+        if model_kwargs["model_name"] == "opt":
+            from energonai.utils.checkpointing_opt import load_checkpoint
+            load_checkpoint(model_kwargs["checkpoint"], model, **model_kwargs)
 
     return model
 
@@ -205,14 +208,47 @@ def bert_175B(**kwargs):
     model_kwargs = dict(hidden_size=12288, depth=96, num_heads=96, is_decoder = False, **kwargs)
     return create_pipeline_model(**model_kwargs)
 
+def opt_125M(**kwargs):
+    model_kwargs = dict(vocab_size=50272,
+                        hidden_size=768, 
+                        depth=12, 
+                        max_seq_len=2050,
+                        num_heads=12, 
+                        activation=nn.functional.relu, 
+                        is_decoder = True, 
+                        fused_qkv=False, 
+                        model_name = "opt",
+                        **kwargs)
+    return create_pipeline_model(**model_kwargs)
+
 def opt_30B(**kwargs):
-    model_kwargs = dict(hidden_size=12288, depth=96, num_heads=96, is_decoder = True, **kwargs)
+    model_kwargs = dict(vocab_size=50272,
+                        hidden_size=7168, 
+                        depth=48, 
+                        max_seq_len=2050,
+                        num_heads=56, 
+                        activation=nn.functional.relu, 
+                        is_decoder = True, 
+                        fused_qkv=False, 
+                        model_name = "opt", 
+                        **kwargs)
     return create_pipeline_model(**model_kwargs)
 
 def opt_66B(**kwargs):
-    model_kwargs = dict(hidden_size=12288, depth=96, num_heads=96, is_decoder = True, **kwargs)
+    model_kwargs = dict(vocab_size=50272,
+                        hidden_size=9216, 
+                        depth=64, 
+                        max_seq_len=2050,
+                        num_heads=72, 
+                        activation=nn.functional.relu, 
+                        is_decoder = True, 
+                        fused_qkv=False, 
+                        model_name = "opt",
+                        **kwargs)
     return create_pipeline_model(**model_kwargs)
 
-def opt_175B(**kwargs):
-    model_kwargs = dict(hidden_size=12288, depth=96, num_heads=96, is_decoder = True, **kwargs)
-    return create_pipeline_model(**model_kwargs)
+
+
+# def opt_175B(**kwargs):
+#     model_kwargs = dict(hidden_size=12288, depth=96, num_heads=96, activation=nn.functional.relu, is_decoder = True, **kwargs)
+#     return create_pipeline_model(**model_kwargs)

@@ -240,7 +240,7 @@ class Dynamic_Batch_Manager(Manager):
                 max_priority = current_priority
                 res_start = start_idx
                 res_end = end_idx
-            i = start_idx - 1
+            i = start_idx
         temp_batch = new_req_list[res_start:res_end]
         del new_req_list[res_start:res_end]
 

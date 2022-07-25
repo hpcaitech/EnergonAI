@@ -10,25 +10,35 @@ _GLOBAL_TIMERS = None
 class _Timer:
     """Timer."""
 
-    def __init__(self, name):
+    def __init__(self, name, ignore_first):
         self.name_ = name
         self.elapsed_ = 0.0
         self.started_ = False
         self.start_time = time.time()
+        if ignore_first:
+            self.times = 2
+        else:
+            self.times = 0
 
     def start(self):
         """Start the timer."""
-        assert not self.started_, 'timer has already been started'
-        torch.cuda.synchronize()
-        self.start_time = time.time()
-        self.started_ = True
+        if(self.times != 0):
+            self.times = self.times - 1
+        else: 
+            assert not self.started_, 'timer has already been started'
+            torch.cuda.synchronize()
+            self.start_time = time.time()
+            self.started_ = True
 
     def stop(self):
         """Stop the timer."""
-        assert self.started_, 'timer is not started'
-        torch.cuda.synchronize()
-        self.elapsed_ += (time.time() - self.start_time)
-        self.started_ = False
+        if(self.times != 0):
+            self.times = self.times - 1
+        else: 
+            assert self.started_, 'timer is not started'
+            torch.cuda.synchronize()
+            self.elapsed_ += (time.time() - self.start_time)
+            self.started_ = False
 
     def reset(self):
         """Reset timer."""
@@ -55,12 +65,13 @@ class _Timer:
 class Timers:
     """Group of timers."""
 
-    def __init__(self):
+    def __init__(self, ignore_first):
         self.timers = {}
+        self.ignore_first = ignore_first
 
-    def __call__(self, name):
+    def __call__(self, name):        
         if name not in self.timers:
-            self.timers[name] = _Timer(name)
+            self.timers[name] = _Timer(name, self.ignore_first)
         return self.timers[name]
 
     def write(self, names, writer, iteration, normalizer=1.0, reset=False):
@@ -76,15 +87,18 @@ class Timers:
     def log(self, names, normalizer=1.0, reset=True):
         """Log a group of timers."""
         assert normalizer > 0.0
-        string = 'time (ms)'
+        string0 = ''
+        string1 = ''
         for name in names:
             elapsed_time = self.timers[name].elapsed(reset=reset) * 1000.0 / normalizer
-            string += ' | {}: {:.2f}'.format(name, elapsed_time)
+            string0 += ' : {}'.format(name)
+            string1 += ' : {:.2f}'.format(elapsed_time)
+
         if torch.distributed.is_initialized():
             if torch.distributed.get_rank() == (torch.distributed.get_world_size() - 1):
-                print(string, flush=True)
+                print(f'{string0} \n {string1}', flush=True)
         else:
-            print(string, flush=True)
+            print(f'{string0} \n {string1}', flush=True)
 
 
 def _ensure_var_is_not_initialized(var, name):
@@ -92,11 +106,11 @@ def _ensure_var_is_not_initialized(var, name):
     assert var is None, '{} is already initialized.'.format(name)
 
 
-def _set_timers():
+def _set_timers(ignore_first):
     """Initialize timers."""
     global _GLOBAL_TIMERS
     _ensure_var_is_not_initialized(_GLOBAL_TIMERS, 'timers')
-    _GLOBAL_TIMERS = Timers()
+    _GLOBAL_TIMERS = Timers(ignore_first)
 
 
 def _ensure_var_is_initialized(var, name):
@@ -104,9 +118,9 @@ def _ensure_var_is_initialized(var, name):
     assert var is not None, '{} is not initialized.'.format(name)
 
 
-def get_timers():
+def get_timers(ignore_first = False):
     """Return timers."""
     if _GLOBAL_TIMERS is None:
-        _set_timers()
+        _set_timers(ignore_first)
     _ensure_var_is_initialized(_GLOBAL_TIMERS, 'timers')
     return _GLOBAL_TIMERS

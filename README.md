@@ -16,7 +16,7 @@ Energon-AI provides 3 levels of abstraction for enabling the large-scale model i
 For models trained by [Colossal-AI](https://github.com/hpcaitech/ColossalAI), they can be seamlessly transferred to Energon-AI.
 For single-device models, they require manual coding works to introduce tensor parallelism and pipeline parallelism.
 
-At present, we pre-build distributed Bert, GPT, and ViT models.  
+At present, we provide distributed Bert, GPT, and ViT models.  
 For GPT, it extends to at most 175B parameters, which is called [GPT3](https://arxiv.org/abs/2005.14165).  
 For Bert, Google reports a [super-large Bert with 481B parameters](https://mlcommons.org/en/training-normal-11/) in MLPerf-Training v1.1 open, indicating that Bert can also extend to large-scale.
 

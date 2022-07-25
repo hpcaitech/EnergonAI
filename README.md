@@ -38,8 +38,8 @@ $ wget https://huggingface.co/gpt2/blob/main/vocab.json
 $ wget https://huggingface.co/gpt2/blob/main/merges.txt
 
 # Launch the service
-export PYTHONPATH=~/ColossalAI-Inference/examples/hf_gpt2
-energonai service init --config_file=~/ColossalAI-Inference/hf_gpt2/hf_gpt2_config.py
+export PYTHONPATH=~/EnergonAI/examples/hf_gpt2
+energonai service init --config_file=~/EnergonAI/hf_gpt2/hf_gpt2_config.py
 
 # Request for the service
 Method 1: 

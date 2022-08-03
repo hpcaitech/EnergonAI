@@ -108,7 +108,7 @@ if build_cuda_ext:
                 name=name,
                 sources=[os.path.join('energonai/kernel/cuda_native/csrc', path) for path in sources],
                 include_dirs=[
-                    os.path.join(this_dir, 'energonai/kernel/cuda_native/csrc/kernels/include'),
+                    os.path.join(this_dir, 'energonai/kernel/cuda_native/csrc'),
             #  '/opt/lcsoftware/spack/opt/spack/linux-ubuntu20.04-zen2/gcc-9.3.0/nccl-2.9.6-1'
             #  '-ysovaavjkgjez2fwms4dkvatu5yrxbec/include'
                 ],
@@ -139,6 +139,10 @@ if build_cuda_ext:
         ext_modules.append(
             cuda_ext_helper('energonai_transpose_pad',
                             ['transpose_pad_fusion_wrapper.cpp', 'transpose_pad_fusion_kernel.cu'],
+                            extra_cuda_flags + cc_flag))
+
+        ext_modules.append(
+            cuda_ext_helper('energonai_linear_func', ['linear_wrapper.cpp'],
                             extra_cuda_flags + cc_flag))
 
         # ext_modules.append(cuda_ext_helper('energonai_nccl',

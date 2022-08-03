@@ -1,134 +1,93 @@
-#include "compat.h"
-#include <cassert>
-#include <torch/extension.h>
-#include <vector>
-#include <cublasLt.h>
-#include <cublas_v2.h>
-#include <iostream>
-// #include <cuda_bf16.h>
-static const char* _cudaGetErrorEnum(cublasStatus_t error)
+#include "linear_wrapper.h"
+#include <time.h>
+
+EnergonLinear::EnergonLinear()
 {
-    switch (error) {
-        case CUBLAS_STATUS_SUCCESS:
-            return "CUBLAS_STATUS_SUCCESS";
-
-        case CUBLAS_STATUS_NOT_INITIALIZED:
-            return "CUBLAS_STATUS_NOT_INITIALIZED";
-
-        case CUBLAS_STATUS_ALLOC_FAILED:
-            return "CUBLAS_STATUS_ALLOC_FAILED";
-
-        case CUBLAS_STATUS_INVALID_VALUE:
-            return "CUBLAS_STATUS_INVALID_VALUE";
-
-        case CUBLAS_STATUS_ARCH_MISMATCH:
-            return "CUBLAS_STATUS_ARCH_MISMATCH";
-
-        case CUBLAS_STATUS_MAPPING_ERROR:
-            return "CUBLAS_STATUS_MAPPING_ERROR";
-
-        case CUBLAS_STATUS_EXECUTION_FAILED:
-            return "CUBLAS_STATUS_EXECUTION_FAILED";
-
-        case CUBLAS_STATUS_INTERNAL_ERROR:
-            return "CUBLAS_STATUS_INTERNAL_ERROR";
-
-        case CUBLAS_STATUS_NOT_SUPPORTED:
-            return "CUBLAS_STATUS_NOT_SUPPORTED";
-
-        case CUBLAS_STATUS_LICENSE_ERROR:
-            return "CUBLAS_STATUS_LICENSE_ERROR";
-    }
-    return "<unknown>";
+  cublasCreate(&(this->cublas_handle));
 }
 
-#define CHECK_CUDA(x)                                                          \
-  AT_ASSERTM(x.type().is_cuda(), #x " must be a CUDA tensor")
-#define CHECK_CONTIGUOUS(x)                                                    \
-  AT_ASSERTM(x.is_contiguous(), #x " must be contiguous")
-#define CHECK_FP32(x)                                                          \
-  AT_ASSERTM(x.dtype() == torch::kFloat32, "Datatype not implemented")
-#define CHECK_FP16(x)                                                          \
-  AT_ASSERTM(x.dtype() == torch::kFloat16, "Datatype not implemented")
-#define CHECK_FP16_INPUT(x)                                                    \
-  CHECK_CUDA(x);                                                               \
-  CHECK_CONTIGUOUS(x);                                                         \
-  CHECK_FP16(x)
-#define CHECK_FP32_INPUT(x)                                                    \
-  CHECK_CUDA(x);                                                               \
-  CHECK_CONTIGUOUS(x);                                                         \
-  CHECK_FP32(x)
-#define CHECK_INPUT(x)                                                         \
-  CHECK_CUDA(x);                                                               \
-  CHECK_CONTIGUOUS(x)
-
-template<typename T>
-void check(T result, char const* const func, const char* const file, int const line)
+EnergonLinear::~EnergonLinear()
 {
-    if (result) {
-        throw std::runtime_error(std::string("[FT][ERROR] CUDA runtime error: ") + (_cudaGetErrorEnum(result)) + " "
-                                 + file + ":" + std::to_string(line) + " \n");
-    }
+  cublasDestroy(this->cublas_handle);
 }
-#define check_cuda_error(val) check((val), #val, __FILE__, __LINE__)
 
-
-
-
-torch::Tensor func_linear(torch::Tensor input_tensor, torch::Tensor weights)
+torch::Tensor EnergonLinear::mlp_gemm(torch::Tensor input_tensor, torch::Tensor weights, int algo)
 {
-    CHECK_FP16_INPUT(input_tensor);
-    CHECK_FP16_INPUT(weights);
-    // CHECK_FP32_INPUT(input_tensor);
-    // CHECK_FP32_INPUT(weights);
+  clock_t start, end, head;
+  head = clock();
 
-    float f_alpha = 1.0f;
-    float f_beta =  0.0f;
-    half h_alpha = (half)f_alpha;
-    half h_beta = (half)f_beta;
+  start = clock();
+  CHECK_FP16_INPUT(input_tensor);
+  CHECK_FP16_INPUT(weights);
+  // CHECK_FP32_INPUT(input_tensor);
+  // CHECK_FP32_INPUT(weights);
+  end = clock();
+  std::cout << "check time = " << double(end - start) / CLOCKS_PER_SEC << "s" << std::endl;
 
-    const void* alpha = reinterpret_cast<void*>(&h_alpha);
-    const void* beta = reinterpret_cast<void*>(&h_beta);
-    // const void* alpha = reinterpret_cast<void*>(&f_alpha);
-    // const void* beta = reinterpret_cast<void*>(&f_beta);
-    cublasHandle_t cublas_handle;
-    cublasCreate(&cublas_handle);
-
-    auto options = torch::TensorOptions()
+  start = clock();
+  int batch_size = input_tensor.sizes()[0];
+  int m = input_tensor.sizes()[1];
+  int k = input_tensor.sizes()[2];
+  int n = weights.sizes()[1];
+  auto options = torch::TensorOptions()
                      .dtype(input_tensor.dtype())
                      .device(torch::kCUDA)
                      .requires_grad(false);
+  end = clock();
+  std::cout << "define time = " << double(end - start) / CLOCKS_PER_SEC << "s" << std::endl;
 
-    int batch_size = input_tensor.sizes()[0]; // 32
-    int m = input_tensor.sizes()[1]; // 64
-    int n = input_tensor.sizes()[2]; //12288
-    int k = weights.sizes()[0]; // 49152
-    auto output = torch::zeros({batch_size, m, k}, options);
+  start = clock();
+  auto output = torch::zeros({batch_size, m, n}, options);
+  end = clock();
+  std::cout << "allocate time = " << double(end - start) / CLOCKS_PER_SEC << "s" << std::endl;
 
+  start = clock();
+  check_cuda_error(
+      cublasGemmStridedBatchedEx(
+          this->cublas_handle, CUBLAS_OP_N, CUBLAS_OP_N,
+          n, m, k,
+          &this->h_alpha,
+          weights.data_ptr(), CUDA_R_16F, n, 0,
+          input_tensor.data_ptr(), CUDA_R_16F, k, m * k,
+          &this->h_beta,
+          output.data_ptr(), CUDA_R_16F, n, m * n,
+          batch_size,
+          CUBLAS_COMPUTE_16F,
+          static_cast<cublasGemmAlgo_t>(algo)));
+  end = clock();
+  std::cout << "compute time = " << double(end - start) / CLOCKS_PER_SEC << "s algo:" << algo << std::endl;
+  std::cout << "function time = " << double(end - head) / CLOCKS_PER_SEC << "s" << std::endl;
 
-    check_cuda_error(cublasGemmEx(cublas_handle,
-                 CUBLAS_OP_N,
-                 CUBLAS_OP_T,
-                 m,
-                 k,
-                 n,
-                 alpha,
-                 input_tensor.data_ptr(),
-                 CUDA_R_16F,
-                 n,
-                 weights.data_ptr(),
-                 CUDA_R_16F,
-                 k,
-                 beta,
-                 output.data_ptr(),
-                 CUDA_R_16F,
-                 k,
-                 CUBLAS_COMPUTE_16F ,
-                 CUBLAS_GEMM_DEFAULT));
-    return output;
+  return output;
 }
 
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("func_linear", &func_linear,
-        "cublas wrapper for linear layer, only fp16");
+int EnergonLinear::get_start_algo()
+{
+  return this->start_algo;
+}
+
+int EnergonLinear::get_end_algo()
+{
+  return this->end_algo;
+}
+
+int EnergonLinear::get_start_algo_t_op()
+{
+  return this->start_algo_t_op;
+}
+
+int EnergonLinear::get_end_algo_t_op()
+{
+  return this->end_algo_t_op;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
+{
+  py::class_<EnergonLinear>(m, "EnergonLinear")
+      .def(py::init<>())
+      .def("mlp_gemm", &EnergonLinear::mlp_gemm, py::arg("tensor"), py::arg("tensor"), py::arg("int") = (int)CUBLAS_GEMM_DEFAULT)
+      .def("get_start_algo", &EnergonLinear::get_start_algo)
+      .def("get_end_algo", &EnergonLinear::get_end_algo)
+      .def("get_start_algo_t_op", &EnergonLinear::get_start_algo_t_op)
+      .def("get_end_algo_t_op", &EnergonLinear::get_end_algo_t_op);
 }

@@ -1,41 +1,73 @@
 from energonai.kernel import EnergonLinearFunc
 import torch
 import time
-import pytest
 
 
-batch_size = 64
-seq_len = 2048
-din = 12288
-dout = 12288
-
-
+@torch.no_grad()
 def test_linear_func():
-    linear = EnergonLinearFunc()
+    batch_size = 2
+    seq_len = 3
+    din = 4
+    dout = 5
+    
+    energon_linear = EnergonLinearFunc()
 
-    tensor1 = torch.rand(batch_size, seq_len, din).half().cuda()
-    tensor2 = torch.rand(din, dout).half().cuda()
+    inputs = torch.randn(batch_size, seq_len, din).half().cuda()
+    params = torch.randn(din, dout).half().cuda()
+    tensor_target = torch.matmul(inputs, params)
+    tensor_output = energon_linear.mlp_gemm(inputs, params, energon_linear.get_start_algo())
+    
+    diff = torch.abs(tensor_output - tensor_target)
+    diff = torch.mean(diff) / din / dout
+    if diff > 5e-5:
+        print(torch.mean(torch.abs(tensor_output - tensor_target)))
+        print('target:', tensor_target, '\n')
+        print('output:', tensor_output, '\n')
+        raise AssertionError("Wrong value!")
 
-    warmup = 5
-    loop = 5
-    for i in range(warmup):
-        linear.mlp_gemm(tensor1, tensor2)
-        tensor_target = torch.matmul(tensor1, tensor2)
+    print('Tests pass!')
 
-    start_time = time.time()
+
+@torch.no_grad()
+def benchmark_linear_func():
+    batch_size = 16
+    seq_len = 64
+    din = 12288
+    dout = 49152
+    
+    loop = 15
+    energon_linear = EnergonLinearFunc()
+    
+    input_list_1 = []
+    param_list_1 = []
+    input_list_2 = []
+    param_list_2 = []
     for i in range(loop):
-        tensor_target = torch.matmul(tensor1, tensor2)
-    print("==> torch time: %.6f" % ((time.time() - start_time) / loop))
+        input_list_1.append(torch.randn(batch_size, seq_len, din).half().cuda())
+        param_list_1.append(torch.randn(din, dout).half().cuda())
+        input_list_2.append(input_list_1[-1].clone().detach())
+        param_list_2.append(param_list_1[-1].clone().detach().T)
 
-    start_time = time.time()
-    for algo in range(linear.get_start_algo(), linear.get_end_algo() + 1):
-        for i in range(loop):
-            tensor_output = linear.mlp_gemm(tensor1, tensor2, algo)
-        print("==> cublas time: %.6f algo:%d" % ((time.time() - start_time) / loop, algo))
+    energon_count = 0
+    torch_count = 0
+    for i in range(loop):
+        _ = torch.nn.functional.linear(input_list_2[i], param_list_2[i])
+        _ = energon_linear.mlp_gemm(input_list_1[i], param_list_1[i], 17)
+        _ = torch.nn.functional.linear(input_list_2[i], param_list_2[i])
+        _ = energon_linear.mlp_gemm(input_list_1[i], param_list_1[i], 17)
+        
+        start_time = time.time()
+        _ = torch.nn.functional.linear(input_list_2[i], param_list_2[i])
+        torch_count += time.time() - start_time
+        
+        start_time = time.time()
+        _ = energon_linear.mlp_gemm(input_list_1[i], param_list_1[i], 17)
+        energon_count += time.time() - start_time
+    
+    print("==> torch time: %.6f" % (torch_count / loop))
+    print("==> cublas time: %.6f algo:%d" % (energon_count / loop, 17))
 
-    print('target:', tensor_target, '\n')
-    print('output:', tensor_output, '\n')
-    # assert torch.equal(tensor_target, tensor_output)
-
+    
 if __name__ == '__main__':
     test_linear_func()
+    benchmark_linear_func()

@@ -13,18 +13,13 @@ EnergonLinear::~EnergonLinear()
 
 torch::Tensor EnergonLinear::mlp_gemm(torch::Tensor input_tensor, torch::Tensor weights, int algo)
 {
-  clock_t start, end, head;
-  head = clock();
+  // clock_t start, end, head;
+  // head = clock();
 
-  start = clock();
   CHECK_FP16_INPUT(input_tensor);
   CHECK_FP16_INPUT(weights);
   // CHECK_FP32_INPUT(input_tensor);
   // CHECK_FP32_INPUT(weights);
-  end = clock();
-  std::cout << "check time = " << double(end - start) / CLOCKS_PER_SEC << "s" << std::endl;
-
-  start = clock();
   int batch_size = input_tensor.sizes()[0];
   int m = input_tensor.sizes()[1];
   int k = input_tensor.sizes()[2];
@@ -33,15 +28,13 @@ torch::Tensor EnergonLinear::mlp_gemm(torch::Tensor input_tensor, torch::Tensor 
                      .dtype(input_tensor.dtype())
                      .device(torch::kCUDA)
                      .requires_grad(false);
-  end = clock();
-  std::cout << "define time = " << double(end - start) / CLOCKS_PER_SEC << "s" << std::endl;
 
-  start = clock();
+  // start = clock();
   auto output = torch::zeros({batch_size, m, n}, options);
-  end = clock();
-  std::cout << "allocate time = " << double(end - start) / CLOCKS_PER_SEC << "s" << std::endl;
+  // end = clock();
+  // std::cout << "allocate=" << double(end - start) / CLOCKS_PER_SEC << "s, ";
 
-  start = clock();
+  // start = clock();
   check_cuda_error(
       cublasGemmStridedBatchedEx(
           this->cublas_handle, CUBLAS_OP_N, CUBLAS_OP_N,
@@ -54,9 +47,9 @@ torch::Tensor EnergonLinear::mlp_gemm(torch::Tensor input_tensor, torch::Tensor 
           batch_size,
           CUBLAS_COMPUTE_16F,
           static_cast<cublasGemmAlgo_t>(algo)));
-  end = clock();
-  std::cout << "compute time = " << double(end - start) / CLOCKS_PER_SEC << "s algo:" << algo << std::endl;
-  std::cout << "function time = " << double(end - head) / CLOCKS_PER_SEC << "s" << std::endl;
+  // end = clock();
+  // std::cout << "compute=" << double(end - start) / CLOCKS_PER_SEC << "s algo:" << algo << ", ";
+  // std::cout << "all=" << double(end - head) / CLOCKS_PER_SEC << "s" << std::endl;
 
   return output;
 }

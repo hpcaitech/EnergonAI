@@ -7,6 +7,7 @@
 #include <cublasLt.h>
 #include <cublas_v2.h>
 #include <iostream>
+#include "cuda_runtime.h"
 
 class EnergonLinear
 {

@@ -1,4 +1,4 @@
-from energonai.kernel import MLPGemm
+from energonai.kernel import linear
 import torch
 import time
 
@@ -9,13 +9,11 @@ def test_linear_func():
     seq_len = 64
     din = 12288
     dout = 49152
-    mlp = MLPGemm()
 
     inputs = torch.randn(batch_size, seq_len, din).half().cuda()
-    params = torch.randn(din, dout).half().cuda()
-    tensor_target = torch.nn.functional.linear(inputs, params.T)
-    tensor_output = mlp.mlp_gemm(inputs, params, mlp.start_algo)
-
+    params = torch.randn(dout, din).half().cuda()
+    tensor_target = torch.nn.functional.linear(inputs, params)
+    tensor_output = linear(inputs, params)
     diff = torch.abs(tensor_output - tensor_target)
     max_diff = torch.max(diff)
     mean_diff = torch.mean(diff)
@@ -41,35 +39,37 @@ def find_algo():
     dout = 49152
 
     inner_loop = 10
-
-    mlp = MLPGemm()
     
     input_list = []
     param_list = []
     for i in range(inner_loop):
         input_list.append(torch.randn(batch_size, seq_len, din).half().cuda())
-        param_list.append(torch.randn(din, dout).half().cuda())
+        param_list.append(torch.randn(dout, din).half().cuda())
 
+    start_algo = -1
+    end_algo = 23
+    start_algo_t_op = 99
+    end_algo_t_op = 115
     algo_map = {}
-    for algo in range(mlp.start_algo, mlp.end_algo + 1):
+    for algo in range(start_algo, end_algo + 1):
         algo_map[algo] = 0
-    for algo in range(mlp.start_algo_t_op, mlp.end_algo_t_op + 1):
+    for algo in range(start_algo_t_op, end_algo_t_op + 1):
         algo_map[algo] = 0
 
     for i in range(inner_loop):
-        _ = mlp.mlp_gemm(input_list[i], param_list[i], mlp.start_algo)
+        _ = linear(input_list[i], param_list[i], start_algo)
 
-        for algo in range(mlp.start_algo, mlp.end_algo + 1):
+        for algo in range(start_algo, end_algo + 1):
             torch.cuda.synchronize()
             start_time = time.time()
-            _ = mlp.mlp_gemm(input_list[i], param_list[i], algo)
+            _ = linear(input_list[i], param_list[i], algo)
             torch.cuda.synchronize()
             algo_map[algo] += time.time() - start_time
 
-        for algo in range(mlp.start_algo_t_op, mlp.end_algo_t_op + 1):
+        for algo in range(start_algo_t_op, end_algo_t_op + 1):
             torch.cuda.synchronize()
             start_time = time.time()
-            _ = mlp.mlp_gemm(input_list[i], param_list[i], algo)
+            _ = linear(input_list[i], param_list[i], algo)
             torch.cuda.synchronize()
             algo_map[algo] += time.time() - start_time
 
@@ -94,7 +94,6 @@ def benchmark_linear_func():
 
     inner_loop = 8
     outer_loop = 20
-    mlp = MLPGemm()
 
     input_list_1 = []
     param_list_1 = []
@@ -102,22 +101,22 @@ def benchmark_linear_func():
     param_list_2 = []
     for i in range(inner_loop):
         input_list_1.append(torch.randn(batch_size, seq_len, din).half().cuda())
-        param_list_1.append(torch.randn(din, dout).half().cuda())
+        param_list_1.append(torch.randn(dout, din).half().cuda())
         input_list_2.append(input_list_1[-1].clone().detach())
-        param_list_2.append(param_list_1[-1].clone().detach().T)
+        param_list_2.append(param_list_1[-1].clone().detach())
 
-    energon_count = 0
     torch_count = 0        
+    cublas_count = 0
 
     for _ in range(outer_loop):
         for i in range(inner_loop):
             _ = torch.nn.functional.linear(input_list_2[i], param_list_2[i])
             torch.cuda.synchronize()
-            _ = mlp.mlp_gemm(input_list_1[i], param_list_1[i], algo)
+            _ = linear(input_list_1[i], param_list_1[i], algo)
             torch.cuda.synchronize()
             _ = torch.nn.functional.linear(input_list_2[i], param_list_2[i])
             torch.cuda.synchronize()
-            _ = mlp.mlp_gemm(input_list_1[i], param_list_1[i], algo)
+            _ = linear(input_list_1[i], param_list_1[i], algo)
             torch.cuda.synchronize()
 
             torch.cuda.synchronize()
@@ -128,12 +127,14 @@ def benchmark_linear_func():
             
             torch.cuda.synchronize()
             start_time = time.time()
-            _ = mlp.mlp_gemm(input_list_1[i], param_list_1[i], algo)
+            _ = linear(input_list_1[i], param_list_1[i], algo)
             torch.cuda.synchronize()
-            energon_count += time.time() - start_time
-            
-    print("==> torch time: %.6f" % (torch_count / inner_loop / outer_loop))
-    print("==> cublas time: %.6f " % (energon_count / inner_loop / outer_loop))
+            cublas_count += time.time() - start_time
+    
+    torch_time = torch_count / inner_loop / outer_loop
+    cublas_time = (cublas_count / inner_loop / outer_loop)
+    print("==>  torch time: %.6f" % torch_time)
+    print("==> cublas time: %.6f, speedup: %.4f%%" % (cublas_time, (torch_time - cublas_time) / torch_time * 100))
 
 
 if __name__ == '__main__':

@@ -1,4 +1,3 @@
-from typing_extensions import Self
 import torch
 import importlib
 
@@ -8,12 +7,20 @@ except ImportError:
     raise RuntimeError('energonai_linear_func requires cuda extensions')
 
 
-class MLPGemm(object):
-    def __init__(self):
-        self.start_algo = energonai_linear.get_start_algo()
-        self.end_algo = energonai_linear.get_end_algo()
-        self.start_algo_t_op = energonai_linear.get_start_algo_t_op()
-        self.end_algo_t_op = energonai_linear.get_end_algo_t_op()
+def linear(inputs, param, algo=energonai_linear.get_start_algo()):
+    """
+    linear function using Cublas
     
-    def mlp_gemm(self, tensor1, tensor2, algo):
-        return energonai_linear.mlp_gemm(tensor1, tensor2, algo)
+    Args:
+        inputs (tensor): (batch, seq_len, din)
+        param (tensor): (dout, din)
+        algo (int): Cublas GEMM algorithms, defaults to CUBLAS_GEMM_DEFAULT. No effect for Ampere architecture gpu or above.
+    Returns:
+        tensor: (batch, seq_len, dout)
+    """
+    assert inputs.is_contiguous()
+    assert param.is_contiguous()
+    assert len(inputs.shape) == 3
+    assert len(param.shape) == 2
+    assert inputs.shape[2] == param.shape[1]
+    return energonai_linear.mlp_gemm(inputs, param, algo)

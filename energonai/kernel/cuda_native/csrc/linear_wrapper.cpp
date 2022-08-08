@@ -82,79 +82,31 @@ void check(T result, char const *const func, const char *const file, int const l
 
 torch::Tensor mlp_gemm(torch::Tensor input_tensor, torch::Tensor weights, int algo = CUBLAS_GEMM_DEFAULT)
 {
-  // cudaEvent_t start1, stop1, start2, stop2, start3, stop3;
-  // float time;
-  // cudaEventCreate(&start1);
-  // cudaEventCreate(&stop1);
-  // cudaEventCreate(&start2);
-  // cudaEventCreate(&stop2);
-  // cudaEventCreate(&start3);
-  // cudaEventCreate(&stop3);
-
-  // cudaEventRecord(start1);
   CHECK_FP16_INPUT(input_tensor);
   CHECK_FP16_INPUT(weights);
+  static half h_alpha = (half)1.0f;
+  static half h_beta = (half)0.0f;
   cublasHandle_t handle = at::cuda::getCurrentCUDABlasHandle();
 
   int batch_size = input_tensor.sizes()[0];
-  // int m = input_tensor.sizes()[1];
-  // int k = input_tensor.sizes()[2];
-  // int n = weights.sizes()[1];
-  int m = input_tensor.sizes()[1] * batch_size;
-  int k = input_tensor.sizes()[2];
-  int n = weights.sizes()[1];
-  half h_alpha = (half)1.0f;
-  half h_beta = (half)0.0f;
-  auto options = torch::TensorOptions()
-                     .dtype(input_tensor.dtype())
-                     .device(torch::kCUDA)
-                     .requires_grad(false);
+  int seq_len = input_tensor.sizes()[1];
+  int din = input_tensor.sizes()[2];
+  int dout = weights.sizes()[0];
 
-  // cudaEventRecord(start2);
-  auto output = torch::zeros({batch_size, input_tensor.sizes()[1], n}, options);
-  // cudaEventRecord(stop2);
-  // cudaEventSynchronize(start2);
-  // cudaEventSynchronize(stop2);
-  // cudaEventElapsedTime(&time, start2, stop2);
-  // printf("allocate:%fms ", time);
-
-  // cudaEventRecord(start3);
-  // check_cuda_error(
-  //     cublasGemmStridedBatchedEx(
-  //         this->cublas_handle, CUBLAS_OP_N, CUBLAS_OP_N,
-  //         n, m, k,
-  //         &this->h_alpha,
-  //         weights.data_ptr(), CUDA_R_16F, n, 0,
-  //         input_tensor.data_ptr(), CUDA_R_16F, k, m * k,
-  //         &this->h_beta,
-  //         output.data_ptr(), CUDA_R_16F, n, m * n,
-  //         batch_size,
-  //         CUBLAS_COMPUTE_16F,
-  //         static_cast<cublasGemmAlgo_t>(algo)));
+  auto options = torch::TensorOptions().dtype(input_tensor.dtype()).device(torch::kCUDA).requires_grad(false);
+  auto output = torch::empty({batch_size, seq_len, dout}, options);
 
   check_cuda_error(
       cublasGemmEx(
-          handle, CUBLAS_OP_N, CUBLAS_OP_N,
-          n, m, k,
+          handle, CUBLAS_OP_T, CUBLAS_OP_N,
+          dout, seq_len * batch_size, din,
           &h_alpha,
-          weights.data_ptr(), CUDA_R_16F, n,
-          input_tensor.data_ptr(), CUDA_R_16F, k,
+          weights.data_ptr(), CUDA_R_16F, din,
+          input_tensor.data_ptr(), CUDA_R_16F, din,
           &h_beta,
-          output.data_ptr(), CUDA_R_16F, n,
+          output.data_ptr(), CUDA_R_16F, dout,
           CUBLAS_COMPUTE_16F,
           static_cast<cublasGemmAlgo_t>(algo)));
-
-  // cudaEventRecord(stop3);
-  // cudaEventSynchronize(start3);
-  // cudaEventSynchronize(stop3);
-  // cudaEventElapsedTime(&time, start3, stop3);
-  // printf("compute:%fms ", time);
-
-  // cudaEventRecord(stop1);
-  // cudaEventSynchronize(start1);
-  // cudaEventSynchronize(stop1);
-  // cudaEventElapsedTime(&time, start1, stop1);
-  // printf("total:%fms\n", time);
 
   return output;
 }

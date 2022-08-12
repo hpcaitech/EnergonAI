@@ -8,7 +8,7 @@ except ImportError:
     raise RuntimeError('energonai_linear_func requires cuda extensions')
 
 
-def linear(inputs, param, algo=energonai_linear.get_start_algo()):
+def linear(inputs, param, algo=-1):
     """
     Linear function using Cublas
 

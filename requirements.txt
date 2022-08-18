@@ -16,5 +16,4 @@ readerwriterlock
 torch
 torchvision
 torchaudio 
--f https://release.colossalai.org
-colossalai==0.1.5+torch1.11cu11.3
+colossalai==0.1.8

@@ -7,7 +7,7 @@ model_type = "gpt"
 host = "127.0.0.1"
 port = 29401
 half = True
-checkpoint = "/home/lcdjs/hf_gpt2/GPT2.bin"
+checkpoint = "/workspace/hf_gpt2/GPT2.bin"
 backend = "nccl"
 
 # for parallel 
@@ -16,7 +16,7 @@ pp_init_size = 2
 
 # for server
 engine_server = launch_engine
-tokenizer_path = "/home/lcdjs/hf_gpt2"
+tokenizer_path = "/workspace/hf_gpt2"
 server_host = "127.0.0.1"
 server_port = 8020
 log_level = "info"

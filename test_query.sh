@@ -1,8 +1,7 @@
 set -x
 
 # Launch a docker container in this way
-# docker run --gpus all  --rm -it -p 8090:8020 -v /data:/data --ipc=host energonai:lastest /bin/bash
-# bash /workspace/EnergonAI/server.sh
+# docker run --gpus all  --rm -it -p 8090:8020 -v /data:/data --ipc=host energonai:lastest
 
 # run this script in the host machine.
 curl -X 'GET' \

@@ -79,9 +79,9 @@ class InferenceEngine(Module):
                                  world_size=self.global_world_size,
                                  host=self.host,
                                  port=self.port)
-        rpc_backend_options = rpc.TensorPipeRpcBackendOptions(num_worker_threads=16,
+        rpc_backend_options = rpc.TensorPipeRpcBackendOptions(num_worker_threads=16, rpc_timeout=6000)
         # _transports=["uv"] TODO: potentially a bug
-                                                             )
+                                                             
         rpc.init_rpc(self.WORKER_NAME.format(0),
                      rank=0,
                      world_size=self.global_world_size,

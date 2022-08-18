@@ -36,10 +36,9 @@ def launch_worker(config_file,
                             mcfg['host'], mcfg['port'])
 
                             
-    WORKER_NAME = "wok{}"
-    rpc_backend_options = rpc.TensorPipeRpcBackendOptions(num_worker_threads=16,
-                                                          # _transports=["uv"] TODO: potentially a bug
-                                                          )
+    WORKER_NAME = "wok{}"    
+    # _transports=["uv"] TODO: potentially a bug
+    rpc_backend_options = rpc.TensorPipeRpcBackendOptions(num_worker_threads=16, rpc_timeout=6000)
     rpc.init_rpc(WORKER_NAME.format(rank), rank=rank, world_size=world_size, rpc_backend_options=rpc_backend_options)
 
     logger.info(f'RPC STATUS: RPC of Rank: {rank} is initialized.')

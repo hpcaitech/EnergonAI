@@ -16,4 +16,5 @@ readerwriterlock
 torch
 torchvision
 torchaudio 
-colossalai==0.1.8
+colossalai
+omegaconf

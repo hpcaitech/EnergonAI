@@ -16,7 +16,7 @@ import threading
 from readerwriterlock import rwlock
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from energonai.context import mcfg
+from energonai.context import MEATCONFIG
 
 class gamma_dist:
     """
@@ -26,8 +26,8 @@ class gamma_dist:
         self.alpha = alpha_
         self.loc = loc_
         self.beta = beta_
-        self.max_list_len = 5 * mcfg['max_batch_size']
-        self.max_seq_len = mcfg['max_sequence_length']
+        self.max_list_len = 5 * MEATCONFIG['max_batch_size']
+        self.max_seq_len = MEATCONFIG['max_sequence_length']
 
     def complete_req_list(self, req_list):
         """
@@ -60,9 +60,9 @@ class single_request:
         self.input_ = input_
         self.time_ = time_stamp
         if seq_len is None:
-            if mcfg['model_type'] in ['gpt', 'bert']:
+            if MEATCONFIG['model_type'] in ['gpt', 'bert']:
                 self.seq_len = input_['input_ids'].shape[1]
-            elif mcfg['model_type'] == 'vit':
+            elif MEATCONFIG['model_type'] == 'vit':
                 self.seq_len = input_.shape[-1]
         else:
             self.seq_len = seq_len
@@ -93,9 +93,9 @@ class Dynamic_Batch_Manager(Manager):
                  load_history=False,
                  his_len: int = 300, **kwargs):
         super().__init__()
-        print(mcfg.config)
-        self.max_batch_size = mcfg['max_batch_size']
-        self.max_sequence_length = mcfg['max_sequence_length']
+        print(MEATCONFIG.config)
+        self.max_batch_size = MEATCONFIG['max_batch_size']
+        self.max_sequence_length = MEATCONFIG['max_sequence_length']
         self.forward_func = forward_func
         self.publisher = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
         self.result_process = result_process
@@ -110,7 +110,7 @@ class Dynamic_Batch_Manager(Manager):
         self.gamma_dist_ = self.init_gamma_dist(self.max_sequence_length)
         self.cached_cost = self.generate_cached_cost()
         self.running_flag = True
-        self.max_workers = mcfg['pp_init_size'] + 2
+        self.max_workers = MEATCONFIG['pp_init_size'] + 2
         self.pool = ThreadPoolExecutor(max_workers=self.max_workers)
         self.working_workers = 0
         self.main_thread = threading.Thread(target=self.processing_batch)
@@ -129,34 +129,34 @@ class Dynamic_Batch_Manager(Manager):
         """
         logging.log(0, "fetching cached cost")
         cached_name = "cached_cost_{}_pp{}_tp{}_{}_{}_{}_{}.npy"\
-            .format(mcfg['model_class'].__name__, mcfg['pp_init_size'], mcfg['tp_init_size'],
-                    mcfg['max_sequence_length'], mcfg['max_batch_size'],
-                    mcfg['step'], mcfg['repeat_round'])
+            .format(MEATCONFIG['model_class'].__name__, MEATCONFIG['pp_init_size'], MEATCONFIG['tp_init_size'],
+                    MEATCONFIG['max_sequence_length'], MEATCONFIG['max_batch_size'],
+                    MEATCONFIG['step'], MEATCONFIG['repeat_round'])
         if os.path.exists(cached_name):
             logging.log(0, "loading cached cost from file")
             cached_cost = np.load(cached_name).tolist()
         else:
             logging.log(0, "generating new cached cost")
-            cached_cost = [[0 for i in range(mcfg['max_batch_size'] + 1)] for j in range(mcfg['max_sequence_length'] + 1)]
+            cached_cost = [[0 for i in range(MEATCONFIG['max_batch_size'] + 1)] for j in range(MEATCONFIG['max_sequence_length'] + 1)]
             for tt in range(5):
-                output_ = self.forward_func(seq_len=mcfg['max_sequence_length'] - 1, batch_size=mcfg['max_batch_size'] - 1)
+                output_ = self.forward_func(seq_len=MEATCONFIG['max_sequence_length'] - 1, batch_size=MEATCONFIG['max_batch_size'] - 1)
                 pred = output_.to_here()
-                for bs in range(mcfg['max_batch_size'] - 1):
+                for bs in range(MEATCONFIG['max_batch_size'] - 1):
                     res = self.result_process(int(pred[bs]))
             input_text = ""
-            for tmp_len in trange(1, mcfg['max_sequence_length'] + 1, mcfg['step']):
+            for tmp_len in trange(1, MEATCONFIG['max_sequence_length'] + 1, MEATCONFIG['step']):
                 input_text += "test "
-                for tmp_batch in range(1, mcfg['max_batch_size'] + 1):
+                for tmp_batch in range(1, MEATCONFIG['max_batch_size'] + 1):
                     self.forward_func(seq_len=tmp_len, batch_size=tmp_batch)
                     start_time = time.time()
-                    for k in range(mcfg['repeat_round']):
+                    for k in range(MEATCONFIG['repeat_round']):
                         output_ = self.forward_func(seq_len=tmp_len, batch_size=tmp_batch)
                         pred = output_.to_here()
                         for bs in range(tmp_batch):
                             res = self.result_process(int(pred[bs]))
-                    time_cost = (time.time() - start_time) / mcfg['repeat_round']
+                    time_cost = (time.time() - start_time) / MEATCONFIG['repeat_round']
                     cached_cost[tmp_len][tmp_batch] = time_cost
-                    for k in range(1, mcfg['step']):
+                    for k in range(1, MEATCONFIG['step']):
                         cached_cost[tmp_len + k][tmp_batch] = time_cost
             np.save(cached_name, np.array(cached_cost))
         logging.log(0, "cached cost loaded")
@@ -258,7 +258,7 @@ class Dynamic_Batch_Manager(Manager):
     def cal_priority(self, batch, cur_time):
         completeness = np.sum([1 if i.input_ else 0 for i in batch]) / len(batch)
         earliest_time_stamp = min([j.time_ if j.time_ else cur_time for j in batch])
-        if cur_time - earliest_time_stamp > mcfg['max_wait_time']:
+        if cur_time - earliest_time_stamp > MEATCONFIG['max_wait_time']:
             completeness = 1.1
         return completeness
 

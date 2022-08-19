@@ -1,6 +1,6 @@
 import functools
 from torch.fx.node import Node
-from energonai.context import mcfg
+from energonai.context import MEATCONFIG
 
 
 partition_counter_0 = 0

@@ -3,7 +3,7 @@ from fastapi import FastAPI
 import torch.distributed.rpc as rpc
 from energonai.initialize import launch_from_multiprocess
 from colossalai.logging import get_dist_logger
-from energonai.context import mcfg
+from energonai.context import MEATCONFIG
 
 logger = get_dist_logger('energonai')
 
@@ -27,13 +27,13 @@ def launch_worker(config_file,
                   local_rank=0,
                   server_host="127.0.0.1",
                   server_port=8005):
-    mcfg.load_config(config_file)
+    MEATCONFIG.load_config(config_file)
     
-    world_size = mcfg['tp_init_size'] * mcfg['pp_init_size']
+    world_size = MEATCONFIG['tp_init_size'] * MEATCONFIG['pp_init_size']
 
-    launch_from_multiprocess(mcfg['tp_init_size'], mcfg['pp_init_size'], mcfg['backend'], 
-                            mcfg['seed'], mcfg['verbose'], rank, local_rank, world_size, 
-                            mcfg['host'], mcfg['port'])
+    launch_from_multiprocess(MEATCONFIG['tp_init_size'], MEATCONFIG['pp_init_size'], MEATCONFIG['backend'], 
+                            MEATCONFIG['seed'], MEATCONFIG['verbose'], rank, local_rank, world_size, 
+                            MEATCONFIG['host'], MEATCONFIG['port'])
 
                             
     WORKER_NAME = "wok{}"
@@ -45,6 +45,6 @@ def launch_worker(config_file,
     logger.info(f'RPC STATUS: RPC of Rank: {rank} is initialized.')
 
     global server
-    config = uvicorn.Config(app, host=server_host, port=server_port, log_level=mcfg['log_level'])
+    config = uvicorn.Config(app, host=server_host, port=server_port, log_level=MEATCONFIG['log_level'])
     server = uvicorn.Server(config=config)
     server.run()

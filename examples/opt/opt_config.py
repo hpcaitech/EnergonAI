@@ -8,10 +8,10 @@ host = "127.0.0.1"
 port = 29402
 half = True
 checkpoint = "/data/user/djs_model_checkpoint/opt_metaseq_125m/model/restored.pt"
-#"/data/user/djs_model_checkpoint/opt-30B-singleton/opt_metaseq_30000m/model/restored.pt"
+# "/data/user/djs_model_checkpoint/opt-30B-singleton/opt_metaseq_30000m/model/restored.pt"
 backend = "nccl"
 
-# for parallel 
+# for parallel
 tp_init_size = 2
 pp_init_size = 2
 

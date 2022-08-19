@@ -15,6 +15,30 @@ try:
 except ImportError:
     _EXTRA_STATE_KEY_SUFFIX = '_extra_state'
 
+import os
+from multiprocessing import Pool
+from time import time
+
+
+def load_state_dict(path: str):
+    if os.path.isfile(path):
+        return torch.load(path)
+    assert os.path.isdir(path)
+    state_dict = {}
+    files = []
+    for filename in os.listdir(path):
+        filepath = os.path.join(path, filename)
+        if os.path.isfile(filepath):
+            files.append(filepath)
+    threads = torch.get_num_threads()
+    print(f'load {len(files)} files using {threads} threads')
+    with Pool(threads) as pool:
+        state_dicts = pool.map(torch.load, files)
+    for sd in state_dicts:
+        state_dict.update(sd)
+    return state_dict
+
+
 __all__ = [
     "partition_tensor_parallel_state_dict", "load_checkpoint", "gather_tensor_parallel_state_dict", "save_checkpoint"
 ]
@@ -26,7 +50,7 @@ name_map = {
     'self_attn.q_proj': 'attn.query_',
     'self_attn.k_proj': 'attn.key_',
     'self_attn.v_proj': 'attn.value_',
-    'self_attn.out_proj':'attn.dense',
+    'self_attn.out_proj': 'attn.dense',
     'self_attn_layer_norm': 'norm1',
     'final_layer_norm': 'norm2',
     'fc1': 'mlp.dense_1',
@@ -189,25 +213,21 @@ def load_checkpoint(file,
     Raises:
         RuntimeError: Raise error if the model/optimizer cannot successfully be recuperated
     """
-    state_dict = (torch.load(file, map_location=torch.device("cpu"))
-                  if gpc.get_local_rank(ParallelMode.MODEL) == 0 else None)
-
-    # model states
-    if state_dict is not None:
-        model_state = state_dict.pop("model")
+    start = time()
+    if gpc.get_local_rank(ParallelMode.MODEL) == 0:
+        model_state = load_state_dict(file)
         model_state = processing_OPT(model_state)
     else:
         model_state = dict()
-
+    dist.barrier()
+    print(f'Load file time: {time()-start:.3f} s')
     # pipeline
     if is_using_pp():
         model_state = partition_pipeline_parallel_state_dict(model, model_state, **kwargs)
     if "prefix" in kwargs.keys():
         if kwargs['prefix'] != '':
             model_state = remove_prefix(model_state, kwargs["prefix"])
-    # print("Rank {}: {}".format(gpc.get_global_rank(), model_state.keys()))
-    # print("+"*30)
-    # print(model_state.keys())
+
     try:
         model.load_state_dict(model_state, strict=strict)
     except RuntimeError as e:
@@ -224,21 +244,7 @@ def load_checkpoint(file,
         else:
             raise e
 
-    # broadcast the rest states
-    state_dict = broadcast_state_dict(state_dict, ParallelMode.MODEL)
-
-    # # optimizer states
-    # if optimizer is not None and 'optimizer' in state_dict:
-    #     optimizer.load_state_dict(state_dict['optimizer'])
-
-    # # lr scheduler states
-    # if lr_scheduler is not None and 'lr_scheduler' in state_dict:
-    #     lr_scheduler.load_state_dict(state_dict['lr_scheduler'])
-
-    # last epoch
-    last_epoch = state_dict.pop("epoch", -1)
-
-    return last_epoch
+    return -1
 
 
 def save_checkpoint(file,
@@ -294,6 +300,7 @@ def judge_t(key_):
             return True
     return False
 
+
 def module_name_mapping(ori_name: str):
     # print(ori_name)
     if ori_name == 'decoder.embed_tokens.weight':
@@ -309,6 +316,7 @@ def module_name_mapping(ori_name: str):
         for k_ in name_map.keys():
             res = res.replace(k_, name_map[k_])
         return res
+
 
 def processing_OPT(state_dict: OrderedDict):
     new_dict = OrderedDict()
@@ -353,12 +361,9 @@ def processing_OPT(state_dict: OrderedDict):
     # print("="*100)
     # print(new_dict.keys())
     # print("---------------------------")
-    return new_dict #{"model": new_dict, "epoch": 0}
+    return new_dict  # {"model": new_dict, "epoch": 0}
 
 
 def id_map(matched):
     value = matched.group('value')
     return "blocks.{}.".format(value)
-
-
-

@@ -3,7 +3,7 @@ import torch
 import uvicorn
 from fastapi import FastAPI
 from energonai.engine import InferenceEngine
-from energonai.context import mcfg
+from energonai.context import MEATCONFIG
 
 app = FastAPI() # 创建 api 对象
 
@@ -81,7 +81,7 @@ def launch_engine(model_class,
                             max_batch_size = max_batch_size, 
                             tp_init_size = tp_init_size, 
                             pp_init_size = pp_init_size, 
-                            auto_pp = mcfg['auto_pp'],
+                            auto_pp = MEATCONFIG['auto_pp'],
                             host = host,
                             port = port,
                             dtype = dtype)

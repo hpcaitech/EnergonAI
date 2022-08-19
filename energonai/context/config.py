@@ -168,10 +168,10 @@ class MetaConfig(metaclass=SingletonMeta):
             if k not in self._config:
                 self._config[k] = v
         
-        if mcfg['half']:
-            mcfg['dtype'] = torch.half
+        if MEATCONFIG['half']:
+            MEATCONFIG['dtype'] = torch.half
         else:
-            mcfg['dtype'] = torch.float
+            MEATCONFIG['dtype'] = torch.float
 
-mcfg = MetaConfig()
+MEATCONFIG = MetaConfig()
 

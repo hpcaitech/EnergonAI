@@ -6,7 +6,7 @@ a naive version that is used for cases in which padding is not needed.
 """
 import time
 import redis
-from energonai.context import mcfg
+from energonai.context import MEATCONFIG
 import threading
 from readerwriterlock import rwlock
 import logging
@@ -55,13 +55,13 @@ class Naive_Batch_Manager(Manager):
         """
         super().__init__()
         self.req_list = []
-        self.max_batch_size = mcfg['max_batch_size']
-        self.max_sequence_length = mcfg['max_sequence_length']
+        self.max_batch_size = MEATCONFIG['max_batch_size']
+        self.max_sequence_length = MEATCONFIG['max_sequence_length']
         self.req_list_lock = rwlock.RWLockFair()
         self.write_lock = self.req_list_lock.gen_wlock()
         self.running_flag = True
         self.publisher = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
-        self.max_workers = mcfg['pp_init_size'] + 2
+        self.max_workers = MEATCONFIG['pp_init_size'] + 2
         self.pool = ThreadPoolExecutor(max_workers=self.max_workers)
         self.working_workers = 0
         self.forward_func = forward_func

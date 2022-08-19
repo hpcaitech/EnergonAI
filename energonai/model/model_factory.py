@@ -14,6 +14,9 @@ from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
 from energonai.utils import is_using_pp, get_current_device
 from energonai.logging import get_dist_logger
+from energonai.utils.checkpointing import load_checkpoint
+from energonai.utils.checkpointing_hf_gpt2 import processing_HF_GPT
+from energonai.utils.checkpointing_opt import processing_OPT
 
 
 def gelu_impl(x):
@@ -160,12 +163,12 @@ def create_pipeline_model(depth: int = 48,
     if "checkpoint" in model_kwargs.keys() and "model_name" in model_kwargs.keys():
         start = time.time()
         assert os.path.exists(model_kwargs["checkpoint"]), "Checkpoint file not found"
+        preprocess_fn = None
         if model_kwargs["model_name"] == "hf_gpt2":
-            from energonai.utils.checkpointing_hf_gpt2 import load_checkpoint
-            load_checkpoint(model_kwargs["checkpoint"], model, **model_kwargs)
-        if model_kwargs["model_name"] == "opt":
-            from energonai.utils.checkpointing_opt import load_checkpoint
-            load_checkpoint(model_kwargs["checkpoint"], model, **model_kwargs)
+            preprocess_fn = processing_HF_GPT
+        elif model_kwargs["model_name"] == "opt":
+            preprocess_fn = processing_OPT
+        load_checkpoint(model_kwargs["checkpoint"], model, preprocess_fn=preprocess_fn, **model_kwargs)
         logger.info(f'Load time: {time.time() - start:.3f} s')
 
     return model

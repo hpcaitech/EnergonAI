@@ -7,7 +7,7 @@ from torch import dtype, nn
 from colossalai.nn.layer.utils import CheckpointModule
 import colossalai.nn as col_nn
 from colossalai.nn import PatchEmbedding1D, DropPath
-from colossalai.nn import Linear1D_Col, Linear1D_Row, Dropout1D, LayerNorm1D, Classifier1D
+from energonai.nn import Linear1D_Col, Linear1D_Row, Dropout1D, LayerNorm1D, Classifier1D
 
 from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
@@ -67,6 +67,7 @@ _init_rules = dict(
     ),
 )
 
+
 class ViTEmbedding(nn.Module):
     def __init__(self,
                  img_size: int,
@@ -78,19 +79,20 @@ class ViTEmbedding(nn.Module):
                  flatten: bool = True,
                  init_method: str = 'torch'):
         super().__init__()
-        self.patch_embed = PatchEmbedding1D(img_size, 
-                                          patch_size, 
-                                          in_chans,
-                                          embedding_dim,
-                                          dtype=dtype,
-                                          flatten=flatten,
-                                          **_init_rules[init_method]['embed'])
+        self.patch_embed = PatchEmbedding1D(img_size,
+                                            patch_size,
+                                            in_chans,
+                                            embedding_dim,
+                                            dtype=dtype,
+                                            flatten=flatten,
+                                            **_init_rules[init_method]['embed'])
         self.dropout = Dropout1D(dropout)
 
     def forward(self, x):
         x = self.patch_embed(x)
         x = self.dropout(x)
         return x
+
 
 class ViTSelfAttention(nn.Module):
     def __init__(self,
@@ -104,11 +106,11 @@ class ViTSelfAttention(nn.Module):
         super().__init__()
         self.attention_head_size = dim // num_heads
         self.query_key_value = Linear1D_Col(dim,
-                                             3 * dim,
-                                             dtype=dtype,
-                                             bias=bias,
-                                             **_init_rules[init_method]['transformer'])
-        
+                                            3 * dim,
+                                            dtype=dtype,
+                                            bias=bias,
+                                            **_init_rules[init_method]['transformer'])
+
         self.attention_dropout = Dropout1D(attention_dropout)
         self.dense = Linear1D_Row(dim, dim, dtype=dtype, bias=True, **_init_rules[init_method]['transformer'])
 
@@ -152,17 +154,17 @@ class ViTMLP(nn.Module):
                  init_method: str = 'torch'):
         super().__init__()
         self.dense_1 = Linear1D_Col(dim,
-                                     mlp_ratio * dim,
-                                     dtype=dtype,
-                                     bias=bias,
-                                     **_init_rules[init_method]['transformer'])
+                                    mlp_ratio * dim,
+                                    dtype=dtype,
+                                    bias=bias,
+                                    **_init_rules[init_method]['transformer'])
         self.activation = activation
         self.dropout_1 = Dropout1D(dropout)
         self.dense_2 = Linear1D_Row(mlp_ratio * dim,
-                                     dim,
-                                     dtype=dtype,
-                                     bias=bias,
-                                     **_init_rules[init_method]['transformer'])
+                                    dim,
+                                    dtype=dtype,
+                                    bias=bias,
+                                    **_init_rules[init_method]['transformer'])
         self.dropout_2 = Dropout1D(dropout)
 
     def forward(self, x):
@@ -172,7 +174,8 @@ class ViTMLP(nn.Module):
         x = self.dense_2(x)
         x = self.dropout_2(x)
         return x
-    
+
+
 class ViTHead(nn.Module):
     def __init__(self,
                  dim: int,
@@ -184,20 +187,19 @@ class ViTHead(nn.Module):
         super().__init__()
         if representation_size:
             self.representation = Linear1D_Col(dim,
-                                                representation_size,
-                                                bias=bias,
-                                                dtype=dtype,
-                                                **_init_rules[init_method]['head'])
+                                               representation_size,
+                                               bias=bias,
+                                               dtype=dtype,
+                                               **_init_rules[init_method]['head'])
         else:
             self.representation = None
             representation_size = dim
 
-
         self.dense = Classifier1D(representation_size,
-                                       num_classes,
-                                       dtype=dtype,
-                                       bias=bias,
-                                       **_init_rules[init_method]['head'])
+                                  num_classes,
+                                  dtype=dtype,
+                                  bias=bias,
+                                  **_init_rules[init_method]['head'])
 
     def forward(self, x):
         x = x[:, 0]
@@ -205,6 +207,7 @@ class ViTHead(nn.Module):
             x = self.representation(x)
         x = self.dense(x)
         return x
+
 
 class ViTBlock(CheckpointModule):
     def __init__(self,
@@ -243,6 +246,7 @@ class ViTBlock(CheckpointModule):
         x = x + self.drop_path(self.attn(self.norm1(x)))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
+
 
 class PipelineVisionTransformer(nn.Module):
     def __init__(self,
@@ -367,6 +371,7 @@ def vit_lite_depth7_patch4_32(**kwargs):
     model_kwargs = dict(img_size=32, patch_size=4, dim=256, depth=7, num_heads=4, mlp_ratio=2, num_classes=10, **kwargs)
     return build_pipeline_vit(**model_kwargs)
 
+
 def vit_tiny_patch4_32(**kwargs):
     model_kwargs = dict(img_size=32, patch_size=4, dim=512, depth=6, num_heads=8, mlp_ratio=1, num_classes=10, **kwargs)
     return build_pipeline_vit(**model_kwargs)
@@ -395,13 +400,16 @@ def vit_tiny_patch4_32(**kwargs):
 #     model_kwargs = dict(img_size=384, patch_size=32, dim=384, depth=12, num_heads=6, mlp_ratio=4, **kwargs)
 #     return build_pipeline_vit(**model_kwargs)
 
+
 def vit_base_patch16_224(**kwargs):
     model_kwargs = dict(img_size=224, patch_size=16, dim=768, depth=12, num_heads=12, mlp_ratio=4, **kwargs)
     return build_pipeline_vit(**model_kwargs)
 
+
 def vit_base_patch16_384(**kwargs):
     model_kwargs = dict(img_size=384, patch_size=16, dim=768, depth=12, num_heads=12, mlp_ratio=4, **kwargs)
     return build_pipeline_vit(**model_kwargs)
+
 
 def vit_base_patch32_224(**kwargs):
     model_kwargs = dict(img_size=224, patch_size=32, dim=768, depth=12, num_heads=12, mlp_ratio=4, **kwargs)
@@ -417,13 +425,16 @@ def vit_large_patch16_224(**kwargs):
     model_kwargs = dict(img_size=224, patch_size=16, dim=1024, depth=24, num_heads=16, mlp_ratio=4, **kwargs)
     return build_pipeline_vit(**model_kwargs)
 
+
 def vit_large_patch16_384(**kwargs):
     model_kwargs = dict(img_size=384, patch_size=16, dim=1024, depth=24, num_heads=16, mlp_ratio=4, **kwargs)
     return build_pipeline_vit(**model_kwargs)
 
+
 def vit_large_patch32_224(**kwargs):
     model_kwargs = dict(img_size=224, patch_size=32, dim=1024, depth=24, num_heads=16, mlp_ratio=4, **kwargs)
     return build_pipeline_vit(**model_kwargs)
+
 
 def vit_large_patch32_384(**kwargs):
     model_kwargs = dict(img_size=384, patch_size=32, dim=1024, depth=24, num_heads=16, mlp_ratio=4, **kwargs)

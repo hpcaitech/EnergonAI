@@ -10,8 +10,8 @@ from energonai.logging import get_dist_logger
 from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
 from colossalai.nn.layer.utils import divide, ACT2FN
-from colossalai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
-from colossalai.nn import LayerNorm1D
+from energonai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
+from energonai.nn import LayerNorm1D
 from energonai.nn import VocabParallelEmbedding1D
 from torch.nn import Embedding
 from energonai.utils import get_current_device, is_using_pp
@@ -36,12 +36,15 @@ class GPTEmbedding1D(nn.Module):
                  padding_idx: int = 0,
                  dtype: dtype = None) -> None:
         super().__init__()
-        self.word_embeddings = VocabParallelEmbedding1D(vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype, skip_tp=True)
+        self.word_embeddings = VocabParallelEmbedding1D(
+            vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype, skip_tp=True)
         # self.word_embeddings = Embedding(vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype)
-        self.position_embeddings = VocabParallelEmbedding1D(max_position_embeddings, embedding_dim, dtype=dtype, skip_tp=True)
+        self.position_embeddings = VocabParallelEmbedding1D(
+            max_position_embeddings, embedding_dim, dtype=dtype, skip_tp=True)
         # self.position_embeddings = Embedding(max_position_embeddings, embedding_dim, dtype=dtype)
         if num_tokentypes > 0:
-            self.tokentype_embeddings = VocabParallelEmbedding1D(num_tokentypes, embedding_dim, dtype=dtype, skip_tp=True)
+            self.tokentype_embeddings = VocabParallelEmbedding1D(
+                num_tokentypes, embedding_dim, dtype=dtype, skip_tp=True)
             # self.tokentype_embeddings = Embedding(num_tokentypes, embedding_dim, dtype=dtype)
         else:
             self.tokentype_embeddings = None
@@ -94,12 +97,10 @@ class GPTSelfAttention1D(nn.Module):
             self.softmax = nn.Softmax(dim=-1)
         self.dense = Linear1D_Row(dim, dim, bias=True, dtype=dtype, parallel_input=True)
 
-
     def _split_heads(self, tensor, num_heads, attn_head_size):
         new_shape = tensor.size()[:-1] + (num_heads, attn_head_size)
         tensor = tensor.view(new_shape)
         return tensor.permute(0, 2, 1, 3)  # (batch, head, seq_length, head_features)
-
 
     def forward(self, x, attention_mask=None):
         # print("x: {}".format(x.shape))
@@ -277,8 +278,8 @@ class GPT1D(nn.Module):
                                             bias=bias,
                                             apply_post_layernorm=apply_post_layernorm,
                                             fuse_scale_mask_softmax=fuse_scale_mask_softmax,
-                                        )
-                                        )
+            )
+            )
         # self.blocks = nn.ModuleList([
         #     GPTBlock1D(
         #         dim=dim,
@@ -316,9 +317,11 @@ class GPT1D(nn.Module):
 
         return x
 
+
 def select_top_k(predictions, k=5):
-    predicted_index = random.choice(predictions[0, -1, :].sort(descending=True)[1][:10]) #.item()
+    predicted_index = random.choice(predictions[0, -1, :].sort(descending=True)[1][:10])  # .item()
     return predicted_index
+
 
 class PipelineGPT1D(nn.Module):
 
@@ -337,7 +340,7 @@ class PipelineGPT1D(nn.Module):
                  apply_post_layernorm: bool = False,
                  fuse_scale_mask_softmax: bool = False,
                  first: bool = False,
-                 last: bool = False, 
+                 last: bool = False,
                  **kwargs):
         super().__init__()
         self.first = first
@@ -362,8 +365,8 @@ class PipelineGPT1D(nn.Module):
                                             bias=bias,
                                             apply_post_layernorm=apply_post_layernorm,
                                             fuse_scale_mask_softmax=fuse_scale_mask_softmax,
-                                        )
-                                        )
+            )
+            )
         # self.blocks = nn.ModuleList([
         #     GPTBlock1D(
         #         dim=dim,
@@ -384,7 +387,7 @@ class PipelineGPT1D(nn.Module):
                                     dtype=dtype)  # word_embeeding_weight=self.embed.word_embedding_weight not in the same process
 
     def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None):
-        topk = 5 # TODO: add as a parameter
+        topk = 5  # TODO: add as a parameter
         if self.first:
             hidden_states = self.embed(input_ids)
 

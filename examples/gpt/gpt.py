@@ -10,8 +10,8 @@ from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
 from energonai.logging import get_dist_logger
 from colossalai.nn.layer.utils import divide, ACT2FN
-from colossalai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
-from colossalai.nn import LayerNorm1D
+from energonai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
+from energonai.nn import LayerNorm1D
 from energonai.nn import VocabParallelEmbedding1D
 from energonai.utils import get_current_device, is_using_pp
 from energonai.utils.checkpointing import load_checkpoint
@@ -36,10 +36,13 @@ class GPTEmbedding1D(nn.Module):
                  padding_idx: int = 0,
                  dtype: dtype = None) -> None:
         super().__init__()
-        self.word_embeddings = VocabParallelEmbedding1D(vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype, skip_tp=True)
-        self.position_embeddings = VocabParallelEmbedding1D(max_position_embeddings, embedding_dim, dtype=dtype, skip_tp=True)
+        self.word_embeddings = VocabParallelEmbedding1D(
+            vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype, skip_tp=True)
+        self.position_embeddings = VocabParallelEmbedding1D(
+            max_position_embeddings, embedding_dim, dtype=dtype, skip_tp=True)
         if num_tokentypes > 0:
-            self.tokentype_embeddings = VocabParallelEmbedding1D(num_tokentypes, embedding_dim, dtype=dtype, skip_tp=True)
+            self.tokentype_embeddings = VocabParallelEmbedding1D(
+                num_tokentypes, embedding_dim, dtype=dtype, skip_tp=True)
         else:
             self.tokentype_embeddings = None
 
@@ -95,11 +98,12 @@ class GPTSelfAttention1D(nn.Module):
         num_attention_heads = divide(all_head_size, self.attention_head_size)  # num_heads
 
         new_qkv_shape = qkv.shape[:-1] + \
-                        (num_attention_heads, 3 * self.attention_head_size)
+            (num_attention_heads, 3 * self.attention_head_size)
         qkv = qkv.view(new_qkv_shape)
 
         if seq_lens is not None:
-            qkv = transpose_pad(qkv, batch_size, max_padding_size, seq_lens, num_attention_heads, self.attention_head_size*3)
+            qkv = transpose_pad(qkv, batch_size, max_padding_size, seq_lens,
+                                num_attention_heads, self.attention_head_size * 3)
         else:
             qkv = qkv.permute((0, 2, 1, 3))
 
@@ -123,8 +127,9 @@ class GPTSelfAttention1D(nn.Module):
         x = torch.matmul(x, v)
 
         if seq_lens is not None:
-            x = transpose_depad(x, batch_size, valid_word_num, max_padding_size, seq_lens, num_attention_heads, self.attention_head_size)
-        else: 
+            x = transpose_depad(x, batch_size, valid_word_num, max_padding_size,
+                                seq_lens, num_attention_heads, self.attention_head_size)
+        else:
             x = x.transpose(1, 2)
 
         new_context_layer_shape = x.size()[:-2] + (all_head_size,)
@@ -143,7 +148,7 @@ class GPTMLP1D(nn.Module):
                  dtype: dtype = None,
                  bias: bool = True):
         super().__init__()
-        
+
         intermediate_dim = int(dim * mlp_ratio)
         self.dense_1 = Linear1D_Col(dim, intermediate_dim, bias=bias, dtype=dtype, gather_output=False)
         self.activation = activation
@@ -218,12 +223,13 @@ class GPTLMHead1D(nn.Module):
         x = self.dense(x)
         return x
 
+
 class PipelineGPT1D(nn.Module):
 
     def __init__(self,
                  vocab_size: int = 50257,
                  max_position_embeddings: int = 1024,
-                 max_batch_size = 32,
+                 max_batch_size=32,
                  dim: int = 768,
                  num_heads: int = 12,
                  depth: int = 12,
@@ -255,18 +261,18 @@ class PipelineGPT1D(nn.Module):
         self.pp_rank = gpc.get_local_rank(ParallelMode.PIPELINE) if is_using_pp() else 0
         for id_ in range(depth):
             self.blocks.add_module("blk_{}".format(id_ + self.pp_rank * depth),
-                                        GPTBlock1D(
-                                            dim=dim,
-                                            num_heads=num_heads,
-                                            mlp_ratio=mlp_ratio,
-                                            activation=activation,
-                                            layernorm_epsilon=layernorm_epsilon,
-                                            dtype=dtype,
-                                            bias=bias,
-                                            apply_post_layernorm=apply_post_layernorm,
-                                            fuse_scale_mask_softmax=fuse_scale_mask_softmax,
-                                        )
-                                        )
+                                   GPTBlock1D(
+                dim=dim,
+                num_heads=num_heads,
+                mlp_ratio=mlp_ratio,
+                activation=activation,
+                layernorm_epsilon=layernorm_epsilon,
+                dtype=dtype,
+                bias=bias,
+                apply_post_layernorm=apply_post_layernorm,
+                fuse_scale_mask_softmax=fuse_scale_mask_softmax,
+            )
+            )
         if self.last:
             self.norm = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
             self.head = GPTLMHead1D(dim=dim, vocab_size=vocab_size,
@@ -295,27 +301,28 @@ class PipelineGPT1D(nn.Module):
         if self.first:
             hidden_states = self.embed(input_ids)
             if seq_lens is not None:
-                hidden_states = ft_remove_padding(hidden_states, self.tmp_mask_offset, 
-                                   self.mask_offset, self.valid_word_num[0].item(), self.dim)
+                hidden_states = ft_remove_padding(hidden_states, self.tmp_mask_offset,
+                                                  self.mask_offset, self.valid_word_num[0].item(), self.dim)
 
         # We create a 3D attention mask from a 2D tensor mask.
         # Sizes are [batch_size, 1, 1, to_seq_length]
         # So we can broadcast to [batch_size, num_heads, from_seq_length, to_seq_length]
         # Adapted from huggingface
-    
+
         if attention_mask is not None:
             attention_mask = attention_mask.view(batch_size, -1)
             attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
             attention_mask = attention_mask.to(dtype=hidden_states.dtype)  # fp16 compatibility
             attention_mask = (1.0 - attention_mask) * -10000.0
-            
 
         for block in self.blocks:
-            hidden_states = block(hidden_states, attention_mask, batch_size, max_padding_size, seq_lens, self.valid_word_num[0].item())
+            hidden_states = block(hidden_states, attention_mask, batch_size,
+                                  max_padding_size, seq_lens, self.valid_word_num[0].item())
 
         if self.last:
             if seq_lens is not None:
-                hidden_states = ft_rebuild_padding(hidden_states, self.tmp_mask_offset[0:self.valid_word_num[0].item()], self.valid_word_num[0].item(), self.dim, batch_size, max_padding_size)
+                hidden_states = ft_rebuild_padding(hidden_states, self.tmp_mask_offset[0:self.valid_word_num[0].item(
+                )], self.valid_word_num[0].item(), self.dim, batch_size, max_padding_size)
             hidden_states = self.head(self.norm(hidden_states))
             res = []
             for i in range(hidden_states.shape[0]):

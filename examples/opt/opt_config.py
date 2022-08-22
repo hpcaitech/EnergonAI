@@ -2,13 +2,13 @@ from energonai.model import opt_30B, opt_125M
 from opt_server import launch_engine
 
 # for engine
-model_class = opt_125M
+model_class = opt_30B
 model_type = "gpt"
 host = "127.0.0.1"
 port = 29402
 half = True
-checkpoint = "/data/user/djs_model_checkpoint/opt_metaseq_125m/model/restored.pt"
-# checkpoint = '/data/user/lclhx/opt-125m'
+# checkpoint = "/data/user/djs_model_checkpoint/opt_metaseq_125m/model/restored.pt"
+checkpoint = '/data/user/lclhx/opt-30B'
 # "/data/user/djs_model_checkpoint/opt-30B-singleton/opt_metaseq_30000m/model/restored.pt"
 backend = "nccl"
 

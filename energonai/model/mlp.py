@@ -2,7 +2,7 @@
 from typing import Callable
 import torch
 from torch import dtype, nn
-from colossalai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
+from energonai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
 
 
 class MLP1D(nn.Module):

@@ -9,7 +9,7 @@ from .endecoder import Block1D
 from .embedding import Embedding1D
 from .downstream import LMHead1D
 
-from colossalai.nn import LayerNorm1D
+from energonai.nn import LayerNorm1D
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
 from energonai.utils import is_using_pp, get_current_device

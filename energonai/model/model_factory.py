@@ -158,7 +158,7 @@ def create_pipeline_model(depth: int = 48,
     numel = 0
     for _, param in model.named_parameters(recurse=True):
         numel += param.numel()
-    logger.info(f'Rank{rank}/{pipeline_rank} model size = {numel * 2 / 1e9} GB!!!')
+    logger.info(f'Rank{rank}/{pipeline_rank} model size = {numel * 2 / 1e9} GB')
 
     if "checkpoint" in model_kwargs.keys() and "model_name" in model_kwargs.keys():
         start = time.time()

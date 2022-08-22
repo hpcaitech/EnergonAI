@@ -9,7 +9,7 @@ from . import is_using_pp
 from ..communication.collective import scatter_object_list
 from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
-
+from typing import Optional, Callable
 try:
     from torch.nn.modules.module import _EXTRA_STATE_KEY_SUFFIX
 except ImportError:
@@ -18,6 +18,29 @@ except ImportError:
 __all__ = [
     "partition_tensor_parallel_state_dict", "load_checkpoint", "gather_tensor_parallel_state_dict", "save_checkpoint"
 ]
+
+import os
+from multiprocessing import Pool
+from time import time
+
+
+def load_state_dict(path: str):
+    if os.path.isfile(path):
+        return torch.load(path)
+    assert os.path.isdir(path)
+    state_dict = {}
+    files = []
+    for filename in os.listdir(path):
+        filepath = os.path.join(path, filename)
+        if os.path.isfile(filepath):
+            files.append(filepath)
+    threads = torch.get_num_threads()
+    print(f'load {len(files)} files using {threads} threads')
+    with Pool(threads) as pool:
+        state_dicts = pool.map(torch.load, files)
+    for sd in state_dicts:
+        state_dict.update(sd)
+    return state_dict
 
 
 def broadcast_state_dict(state_dict, parallel_mode):
@@ -48,26 +71,37 @@ def partition_tensor_parallel_state_dict(state_dict: OrderedDict,
     """
     src_rank = gpc.get_ranks_in_group(parallel_mode)[0]
     depth = gpc.get_world_size(parallel_mode)
-
-    if gpc.get_local_rank(parallel_mode) == 0:
-
-        partitioned_state_list = [dict() for _ in range(depth)]
-
-        for key in list(state_dict.keys()):
-            param = state_dict.pop(key)
-            dim = dims.get(key, 0)
-            do_partition = partition_states.get(key, True)
-            if do_partition:
-                param = torch.chunk(param, depth, dim=dim)
-            for i, p in enumerate(partitioned_state_list):
-                p[key] = param[i] if do_partition else param
-
-    else:
-        partitioned_state_list = [None for _ in range(depth)]
-
-    partitioned_state = [None]
-    scatter_object_list(partitioned_state, partitioned_state_list, src=src_rank, group=gpc.get_cpu_group(parallel_mode))
-    return partitioned_state[0]
+    group = gpc.get_cpu_group(parallel_mode)
+    is_rank0 = gpc.get_local_rank(parallel_mode) == 0
+    partition_info = [None]
+    if is_rank0:
+        partition_info_dict = OrderedDict()
+        for key, param in state_dict.items():
+            dim = dims[key]
+            is_partitioned = partition_states[key]
+            shape = list(param.shape)
+            if is_partitioned:
+                shape[dim] = shape[dim] // depth
+            partition_info_dict[key] = (is_partitioned, param.dtype, shape, dim)
+        partition_info[0] = partition_info_dict
+    dist.broadcast_object_list(partition_info, src_rank, group=group)
+    partitioned_state = OrderedDict()
+    for key, (is_partitioned, dtype, shape, dim) in partition_info[0].items():
+        if is_partitioned:
+            output = torch.empty(shape, dtype=dtype)
+            if is_rank0:
+                scatter_list = [t.contiguous() for t in state_dict[key].chunk(depth, dim)]
+            else:
+                scatter_list = None
+            dist.scatter(output, scatter_list, src_rank, group=group)
+        else:
+            if is_rank0:
+                output = state_dict[key]
+            else:
+                output = torch.empty(shape, dtype=dtype)
+            dist.broadcast(output, src_rank, group=group)
+        partitioned_state[key] = output
+    return partitioned_state
 
 
 def gather_tensor_parallel_state_dict(
@@ -170,9 +204,8 @@ def remove_prefix(state_dict, prefix):
 
 def load_checkpoint(file,
                     model: torch.nn.Module,
-                    optimizer: torch.optim.Optimizer = None,
-                    lr_scheduler: torch.optim.lr_scheduler._LRScheduler = None,
                     strict: bool = True,
+                    preprocess_fn: Optional[Callable[[dict], dict]] = None,
                     **kwargs):
     """Loads training states from a checkpoint file.
 
@@ -192,17 +225,22 @@ def load_checkpoint(file,
     Raises:
         RuntimeError: Raise error if the model/optimizer cannot successfully be recuperated
     """
-    state_dict = (torch.load(file, map_location=torch.device("cpu"))
-                  if gpc.get_local_rank(ParallelMode.MODEL) == 0 else None)
-
-    # model states
-    model_state = state_dict.pop("model") if state_dict is not None else dict()
+    start = time()
+    if gpc.get_local_rank(ParallelMode.MODEL) == 0:
+        model_state = load_state_dict(file)
+        if preprocess_fn:
+            model_state = preprocess_fn(model_state)
+    else:
+        model_state = dict()
+    dist.barrier()
+    print(f'Load file time: {time()-start:.3f} s')
     # pipeline
     if is_using_pp():
         model_state = partition_pipeline_parallel_state_dict(model, model_state, **kwargs)
     if "prefix" in kwargs.keys():
         if kwargs['prefix'] != '':
             model_state = remove_prefix(model_state, kwargs["prefix"])
+
     try:
         model.load_state_dict(model_state, strict=strict)
     except RuntimeError as e:
@@ -219,13 +257,7 @@ def load_checkpoint(file,
         else:
             raise e
 
-    # broadcast the rest states
-    state_dict = broadcast_state_dict(state_dict, ParallelMode.MODEL)
-
-    # last epoch
-    last_epoch = state_dict.pop("epoch", -1)
-
-    return last_epoch
+    return -1
 
 
 def save_checkpoint(file,

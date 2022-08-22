@@ -9,8 +9,8 @@ from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
 from energonai.logging import get_dist_logger
 from colossalai.nn.layer.utils import divide, ACT2FN
-from colossalai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
-from colossalai.nn import LayerNorm1D
+from energonai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
+from energonai.nn import LayerNorm1D
 from energonai.kernel import transpose_pad, transpose_depad, depad
 from energonai.nn import VocabParallelEmbedding1D
 from energonai.utils import get_current_device, is_using_pp
@@ -241,8 +241,8 @@ class PipelineBert1D(nn.Module):
                                             dtype=dtype,
                                             bias=bias,
                                             fuse_scale_mask_softmax=fuse_scale_mask_softmax,
-                                        )
-                                        )
+            )
+            )
 
     def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None):
 

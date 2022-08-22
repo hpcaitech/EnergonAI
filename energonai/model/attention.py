@@ -3,20 +3,21 @@ import torch
 from torch import nn, dtype
 
 from colossalai.nn.layer.utils import divide
-from colossalai.nn import Linear1D_Col, Linear1D_Row
+from energonai.nn import Linear1D_Col, Linear1D_Row
 
 from energonai.utils import get_current_device
 
+
 class MultiHeadAttention1D(nn.Module):
     def __init__(self,
-                hidden_size: int,
-                num_heads: int,
-                bias: bool = True,
-                dtype: dtype = torch.float16,
-                max_seq_len: int = 512,
-                fused_qkv: bool = True,
-                is_decoder:bool = True
-                ) -> None:
+                 hidden_size: int,
+                 num_heads: int,
+                 bias: bool = True,
+                 dtype: dtype = torch.float16,
+                 max_seq_len: int = 512,
+                 fused_qkv: bool = True,
+                 is_decoder: bool = True
+                 ) -> None:
         super().__init__()
 
         self.hidden_size = hidden_size
@@ -37,7 +38,7 @@ class MultiHeadAttention1D(nn.Module):
 
         if is_decoder:
             self.causal_mask = torch.tril(torch.ones((max_seq_len, max_seq_len), dtype=torch.uint8,
-                                                device=get_current_device())).view(1, 1, max_seq_len, max_seq_len).bool()
+                                                     device=get_current_device())).view(1, 1, max_seq_len, max_seq_len).bool()
             self.causal_mask_bias = torch.tensor(-1e4, dtype=dtype, device=get_current_device())
 
     def _split_heads(self, tensor, num_heads, attn_head_size):
@@ -45,8 +46,8 @@ class MultiHeadAttention1D(nn.Module):
         tensor = tensor.view(new_shape)
         return tensor.permute(0, 2, 1, 3)
 
-    def forward(self, 
-                hidden_states, 
+    def forward(self,
+                hidden_states,
                 attention_mask=None,
                 seq_lens=None):
 
@@ -68,12 +69,12 @@ class MultiHeadAttention1D(nn.Module):
             v = self._split_heads(v, num_attention_heads, self.attention_head_size)
 
         hidden_states = torch.matmul(q, k.transpose(-1, -2))
-        hidden_states = hidden_states / math.sqrt(self.attention_head_size) 
+        hidden_states = hidden_states / math.sqrt(self.attention_head_size)
         q_len, k_len = q.size(-2), k.size(-2)
 
         if self.is_decoder:
-            hidden_states = torch.where(self.causal_mask[: ,: ,0:q_len , 0:k_len], hidden_states, self.causal_mask_bias)
-            
+            hidden_states = torch.where(self.causal_mask[:, :, 0:q_len, 0:k_len], hidden_states, self.causal_mask_bias)
+
         if attention_mask is not None:
             hidden_states = hidden_states + attention_mask
         hidden_states = self.softmax(hidden_states)
@@ -88,7 +89,6 @@ class MultiHeadAttention1D(nn.Module):
         hidden_states = self.dense(hidden_states)
 
         return hidden_states
-
 
         # causal_mask = torch.tril(torch.ones((q_len, k_len), dtype=torch.uint8,
         #                                     device=get_current_device())).view(1, 1, q_len, k_len).bool()

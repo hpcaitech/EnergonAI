@@ -9,8 +9,8 @@ from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
 from energonai.logging import get_dist_logger
 from colossalai.nn.layer.utils import divide, ACT2FN
-from colossalai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
-from colossalai.nn import LayerNorm1D
+from energonai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
+from energonai.nn import LayerNorm1D
 from energonai.kernel import transpose_pad, transpose_depad, depad
 from energonai.nn import VocabParallelEmbedding1D
 from energonai.utils import get_current_device, is_using_pp
@@ -54,7 +54,7 @@ class BertEmbedding1D(nn.Module):
         # if position_ids is None:
         #     position_ids = torch.arange(max_padding_size, dtype=torch.long, device=get_current_device()).unsqueeze(0)
 
-        x = self.word_embeddings(input_ids) # + self.position_embeddings(position_ids)
+        x = self.word_embeddings(input_ids)  # + self.position_embeddings(position_ids)
 
         if self.tokentype_embeddings is not None and tokentype_ids is not None:
             x = x + self.tokentype_embeddings(tokentype_ids)
@@ -124,7 +124,7 @@ class BertSelfAttention1D(nn.Module):
         # if seq_lens is not None:
         #     sum_seq = torch.sum(seq_lens)
         #     attention_output = transpose_depad(attention_output, batch_size, sum_seq, max_padding_size, seq_lens,
-                                            #    num_attention_heads, self.attention_head_size)
+        #    num_attention_heads, self.attention_head_size)
         # else:
         attention_output = attention_output.permute(0, 2, 1, 3).contiguous()
 
@@ -207,8 +207,9 @@ class BertTransformerLayer1D(nn.Module):
 
         return hidden_states
 
+
 class Bert1D(nn.Module):
-    
+
     def __init__(self,
                  vocab_size: int = 50304,
                  max_position_embeddings: int = 1024,
@@ -225,27 +226,27 @@ class Bert1D(nn.Module):
                  ):
         super().__init__()
         self.embed = BertEmbedding1D(embedding_dim=hidden_size,
-                                    vocab_size=vocab_size,
-                                    max_position_embeddings=max_position_embeddings,
-                                    padding_idx=padding_idx,
-                                    layernorm_epsilon=layernorm_epsilon,
-                                    dtype=dtype)
+                                     vocab_size=vocab_size,
+                                     max_position_embeddings=max_position_embeddings,
+                                     padding_idx=padding_idx,
+                                     layernorm_epsilon=layernorm_epsilon,
+                                     dtype=dtype)
         self.blocks = nn.ModuleList()
-        
+
         for i in range(depth):
             self.blocks.append(BertTransformerLayer1D(
-                                            hidden_size=hidden_size,
-                                            num_heads=num_heads,
-                                            mlp_ratio=mlp_ratio,
-                                            activation=activation,
-                                            layernorm_epsilon=layernorm_epsilon,
-                                            dtype=dtype,
-                                            bias=bias,
-                                            fuse_scale_mask_softmax=fuse_scale_mask_softmax,)
-                                            )
+                hidden_size=hidden_size,
+                num_heads=num_heads,
+                mlp_ratio=mlp_ratio,
+                activation=activation,
+                layernorm_epsilon=layernorm_epsilon,
+                dtype=dtype,
+                bias=bias,
+                fuse_scale_mask_softmax=fuse_scale_mask_softmax,)
+            )
 
     def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None):
-        
+
         # batch_size = input_ids.shape[0]
         # max_padding_size = input_ids.shape[1]
 
@@ -257,7 +258,6 @@ class Bert1D(nn.Module):
         hidden_states = hidden_states[:, 1, :]
 
         return hidden_states
-
 
 
 def _create_bert_model(model_kwargs):

@@ -9,7 +9,7 @@ from .endecoder import Block1D
 from .embedding import Embedding1D
 from .downstream import LMHead1D
 
-from colossalai.nn import LayerNorm1D
+from energonai.nn import LayerNorm1D
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
 from energonai.utils import is_using_pp, get_current_device
@@ -158,7 +158,7 @@ def create_pipeline_model(depth: int = 48,
     numel = 0
     for _, param in model.named_parameters(recurse=True):
         numel += param.numel()
-    logger.info(f'Rank{rank}/{pipeline_rank} model size = {numel * 2 / 1e9} GB!!!')
+    logger.info(f'Rank{rank}/{pipeline_rank} model size = {numel * 2 / 1e9} GB')
 
     if "checkpoint" in model_kwargs.keys() and "model_name" in model_kwargs.keys():
         start = time.time()

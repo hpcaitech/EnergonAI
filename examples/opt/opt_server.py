@@ -1,12 +1,16 @@
-import os
 import torch
 import uvicorn
 from fastapi import FastAPI
-from fastapi import Response
-import torch.distributed.rpc as rpc
 from energonai.engine import InferenceEngine
 
 from transformers import GPT2Tokenizer
+from pydantic import BaseModel
+
+
+class GenerationTaskReq(BaseModel):
+    max_tokens: int
+    prompt: str
+
 
 app = FastAPI()  # 创建 api 对象
 
@@ -16,13 +20,12 @@ def root():
     return {"200"}
 
 
-@app.get("/run/{request}")
-def run(request: str, max_seq_length: int):
+@app.post('/generation/')
+async def generate(req: GenerationTaskReq):
+    input_token = tokenizer(req.prompt, return_tensors="pt")
+    total_predicted_text = req.prompt
 
-    input_token = tokenizer(request, return_tensors="pt")
-    total_predicted_text = request
-
-    for i in range(1, max_seq_length):
+    for i in range(1, req.max_tokens):
         output = engine.run(input_token)
         predictions = output.to_here()
         total_predicted_text += tokenizer.decode(predictions)
@@ -31,7 +34,7 @@ def run(request: str, max_seq_length: int):
             break
         input_token = tokenizer(total_predicted_text, return_tensors="pt")
 
-    return {total_predicted_text}
+    return {'text': total_predicted_text}
 
 
 @app.get("/shutdown")

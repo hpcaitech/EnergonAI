@@ -11,7 +11,7 @@ from .auto_pipeline_wrapper import AutoPipelineCommWrapper
 
 from energonai.pipelinable import split_transformer_into_partitions
 
-from energonai.context import mcfg
+from energonai.context import MEATCONFIG
 
 logger = get_dist_logger('energonai')
 
@@ -86,7 +86,7 @@ class RPCWorker:
         
         self.model.eval()
 
-        if mcfg['trt_sample'] is not None:
+        if MEATCONFIG['trt_sample'] is not None:
             try:
                 logger.info('Import Torch2Trt')
                 from torch2trt import torch2trt 
@@ -96,10 +96,10 @@ class RPCWorker:
                     follow https://docs.nvidia.com/deeplearning/tensorrt/install-guide/index.html \
                     and https://github.com/NVIDIA-AI-IOT/torch2trt")
 
-        if mcfg['trt_sample'] is not None and gpc.get_world_size(ParallelMode.MODEL) > 1:
+        if MEATCONFIG['trt_sample'] is not None and gpc.get_world_size(ParallelMode.MODEL) > 1:
             logger.error("Tensor Parallelism does not support TensorRT convert")
-        elif mcfg['trt_sample'] is not None and gpc.get_world_size(ParallelMode.MODEL) == 1:
-            self.model = torch2trt(self.model, mcfg['trt_sample'])
+        elif MEATCONFIG['trt_sample'] is not None and gpc.get_world_size(ParallelMode.MODEL) == 1:
+            self.model = torch2trt(self.model, MEATCONFIG['trt_sample'])
             logger.info("TensorRT convert complete.")
         
         try:        

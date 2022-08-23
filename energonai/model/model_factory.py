@@ -50,7 +50,6 @@ class PipelineModel(nn.Module):
                  fused_qkv: bool = True,
                  checkpoint: str = None,
                  model_name: str = None,
-                 topk: int = 5,
                  is_decoder: bool = True) -> None:
         super().__init__()
         self.hidden_size = hidden_size
@@ -58,7 +57,6 @@ class PipelineModel(nn.Module):
         self.last = last
         self.max_seq_len = max_seq_len
         self.model_name = model_name
-        self.topk = topk
 
         if first:
             self.embed = Embedding1D(hidden_size=hidden_size,

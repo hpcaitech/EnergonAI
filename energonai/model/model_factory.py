@@ -1,10 +1,9 @@
-from tabnanny import check
 import os
 import time
 import torch
 import random
 from torch import nn, dtype
-from typing import Callable
+from typing import Callable, Optional
 from .endecoder import Block1D
 from .embedding import Embedding1D
 from .downstream import LMHead1D
@@ -17,6 +16,7 @@ from energonai.logging import get_dist_logger
 from energonai.utils.checkpointing import load_checkpoint
 from energonai.utils.checkpointing_hf_gpt2 import processing_HF_GPT
 from energonai.utils.checkpointing_opt import processing_OPT
+from transformers.generation_logits_process import TopKLogitsWarper, TopPLogitsWarper, TemperatureLogitsWarper, LogitsProcessorList
 
 
 def gelu_impl(x):
@@ -53,7 +53,6 @@ class PipelineModel(nn.Module):
                  topk: int = 5,
                  is_decoder: bool = True) -> None:
         super().__init__()
-
         self.hidden_size = hidden_size
         self.first = first
         self.last = last
@@ -88,7 +87,7 @@ class PipelineModel(nn.Module):
             self.norm = LayerNorm1D(normalized_shape=hidden_size, eps=layernorm_epsilon)
             self.head = LMHead1D(hidden_size=hidden_size, vocab_size=vocab_size, bias=False, dtype=dtype)
 
-    def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None):
+    def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None, top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):
         batch_size = input_ids.shape[0]
 
         if self.first:
@@ -105,9 +104,28 @@ class PipelineModel(nn.Module):
 
         if self.last:
             hidden_states = self.head(self.norm(hidden_states))
-            hidden_states = select_top_k(hidden_states, k=self.topk)
+            # hidden_states = self.generate(input_ids, hidden_states, top_k=top_k, top_p=top_p, temperature=temperature)
+            hidden_states = self.generate(input_ids, hidden_states, top_k=self.topk)
 
         return hidden_states
+
+    def get_logits_processor(self, top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):
+        processor_list = LogitsProcessorList()
+        if temperature is not None and temperature != 1.0:
+            processor_list.append(TemperatureLogitsWarper(temperature))
+        if top_k is not None and top_k != 0:
+            processor_list.append(TopKLogitsWarper(top_k))
+        if top_p is not None and top_p < 1.0:
+            processor_list.append(TopPLogitsWarper(top_p))
+        return processor_list
+
+    def generate(self, input_ids, logits, top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):
+        logits = logits[:, -1, :]
+        logits_processor = self.get_logits_processor(top_k, top_p, temperature)
+        logits = logits_processor(input_ids, logits)
+        logits = torch.softmax(logits, -1)
+        logits = torch.multinomial(logits, num_samples=1).squeeze(1)
+        return logits
 
 
 def partition_uniform(num_items, pipeline_parallel_size):

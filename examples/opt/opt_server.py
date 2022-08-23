@@ -28,7 +28,6 @@ def root():
 def generate(req: GenerationTaskReq):
     input_token = tokenizer(req.prompt, return_tensors="pt")
     total_predicted_text = req.prompt
-    print(req.top_k)
     for i in range(1, req.max_tokens):
         input_token['top_k'] = req.top_k
         input_token['top_p'] = req.top_p

@@ -5,11 +5,15 @@ from energonai.engine import InferenceEngine
 
 from transformers import GPT2Tokenizer
 from pydantic import BaseModel
+from typing import Optional
 
 
 class GenerationTaskReq(BaseModel):
     max_tokens: int
     prompt: str
+    top_k: Optional[int] = None
+    top_p: Optional[float] = None
+    temperature: Optional[float] = None
 
 
 app = FastAPI()  # 创建 api 对象
@@ -24,8 +28,11 @@ def root():
 def generate(req: GenerationTaskReq):
     input_token = tokenizer(req.prompt, return_tensors="pt")
     total_predicted_text = req.prompt
-
+    print(req.top_k)
     for i in range(1, req.max_tokens):
+        input_token['top_k'] = req.top_k
+        input_token['top_p'] = req.top_p
+        input_token['temperature'] = req.temperature
         output = engine.run(input_token)
         predictions = output.to_here()
         total_predicted_text += tokenizer.decode(predictions)

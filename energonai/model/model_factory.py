@@ -104,8 +104,7 @@ class PipelineModel(nn.Module):
 
         if self.last:
             hidden_states = self.head(self.norm(hidden_states))
-            # hidden_states = self.generate(input_ids, hidden_states, top_k=top_k, top_p=top_p, temperature=temperature)
-            hidden_states = self.generate(input_ids, hidden_states, top_k=self.topk)
+            hidden_states = self.generate(input_ids, hidden_states, top_k=top_k, top_p=top_p, temperature=temperature)
 
         return hidden_states
 

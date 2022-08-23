@@ -41,19 +41,13 @@ def generate(req: GenerationTaskReq):
 @app.post('/queue_generation', status_code=status.HTTP_200_OK)
 def queue_generation(req: GenerationTaskReq):
     global batch_manager
-    print(batch_manager.length())
-    if(batch_manager.length()>2):
-        result = req.prompt + " Sorry, the service is busy now." + "!" * (req.max_tokens - 6)
-        # return {"status" : 503, "data": result} 
-        # print(result)
-        return{result}
-    else:
-        time_stamp = time.time()
-        batch_manager.insert_req(time_stamp, req.prompt, req.max_tokens)
+    time_stamp = time.time()
+    is_insert = batch_manager.insert_req(time_stamp, req.prompt, req.max_tokens)
+    if(is_insert):
         result = batch_manager.subscribe_result(time_stamp)
-        # return {"status" : status.HTTP_200_OK, "data": result} 
-        # print(result)
-        return {result}
+    else:
+        result = "Sorry, the serving is busy now." + "!" * req.max_tokens
+    return {result}
 
 @app.get("/shutdown")
 async def shutdown():

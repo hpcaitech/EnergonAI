@@ -3,7 +3,6 @@ import time
 import queue
 import redis
 import threading
-from readerwriterlock import rwlock
 from concurrent.futures import ThreadPoolExecutor
 
 class single_request:
@@ -35,8 +34,7 @@ class QueueManager:
         self.max_batch_size = max_batch_size
         self.max_concurrent_user = max_concurrent_user
         self.working_worker = 0
-        self.req_list = []
-        self.write_lock = rwlock.RWLockFair().gen_wlock()
+        self.req_queue = queue.Queue(maxsize=self.max_concurrent_user)
         self.publisher = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=True)
         self.pool = ThreadPoolExecutor(max_workers=self.max_concurrent_user)
         self.main_thread = threading.Thread(target=self.processing_batch)
@@ -52,12 +50,14 @@ class QueueManager:
         """
         Build a single_request class with the input string and then insert it into the queue.
         """
-        input = self.tokenizer(prompt, return_tensors="pt")
-        cur_len = input['input_ids'].shape[1]
-        tmp_req = single_request(prompt, input, time_stamp, cur_len, tgt_len)     
-        self.write_lock.acquire()
-        self.req_list.append(tmp_req)
-        self.write_lock.release()
+        if(self.req_queue.qsize() < self.max_concurrent_user):
+            input = self.tokenizer(prompt, return_tensors="pt")
+            cur_len = input['input_ids'].shape[1]
+            tmp_req = single_request(prompt, input, time_stamp, cur_len, tgt_len)
+            self.req_queue.put(tmp_req)
+            return True
+        else:
+            return False
     
     def subscribe_result(self, time_stamp):
         """
@@ -79,13 +79,9 @@ class QueueManager:
         and starts new processes that wait for and publish the inference result.
         """
         while self.running_flag:
-            if(self.working_worker < self.max_concurrent_user) and (len(self.req_list) > 0):
+            if(self.working_worker < self.max_concurrent_user) and (not self.req_queue.empty()):
                 self.working_worker = self.working_worker + 1
-                # print(f'working_worker + 1:{self.working_worker}')
-                self.write_lock.acquire()
-                req = self.req_list[0]
-                self.req_list = self.req_list[1:]
-                self.write_lock.release()
+                req = self.req_queue.get()
                 self.pool.submit(self.generation_task, req)
             time.sleep(0.1)
     
@@ -101,4 +97,3 @@ class QueueManager:
 
         self.publisher.publish(req.time_stamp, req.prompt)
         self.working_worker = self.working_worker - 1
-        # print(f'working_worker - 1:{self.working_worker}')

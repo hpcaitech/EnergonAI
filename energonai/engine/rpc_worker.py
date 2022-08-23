@@ -16,16 +16,16 @@ from energonai.context import MEATCONFIG
 logger = get_dist_logger('energonai')
 
 pipe_wrapper = {
-                'vit': ViTPipelineCommWrapper,
-                'bert': PipelineCommWrapper,
-                'gpt': PipelineCommWrapper,
-                'auto': AutoPipelineCommWrapper,
-               }
+    'vit': ViTPipelineCommWrapper,
+    'bert': PipelineCommWrapper,
+    'gpt': PipelineCommWrapper,
+    'auto': AutoPipelineCommWrapper,
+}
 
 pipe_split = {
-                'bert': split_transformer_into_partitions,
-                'gpt': split_transformer_into_partitions,
-            }
+    'bert': split_transformer_into_partitions,
+    'gpt': split_transformer_into_partitions,
+}
 
 
 class ReturnDict:
@@ -41,8 +41,6 @@ class ReturnDict:
             time.sleep(0.001)
         output = self.rd.pop(key)
         return output
-
-
 
 
 class RPCWorker:
@@ -66,7 +64,7 @@ class RPCWorker:
             self._auto_pp_init_model()
         else:
             self._init_self()
-        self.return_dict = ReturnDict() 
+        self.return_dict = ReturnDict()
 
     def _auto_pp_init_model(self):
         logger.info("Init automatic pipeline model in rank {}".format(self.rank))
@@ -75,7 +73,6 @@ class RPCWorker:
         del submodules
         self.model = pipe_wrapper['auto'](model=self.model, max_batch_size=self.max_batch_size, dtype=self.dtype)
 
-
     def _init_self(self):
         logger.info("Init model in rank {}".format(self.rank))
 
@@ -83,14 +80,14 @@ class RPCWorker:
             self.model = self.model_class(**self.model_config).cuda().half()
         else:
             self.model = self.model_class(**self.model_config).cuda()
-        
+
         self.model.eval()
 
         if MEATCONFIG['trt_sample'] is not None:
             try:
                 logger.info('Import Torch2Trt')
-                from torch2trt import torch2trt 
-                from energonai.engine import trt_converter       
+                from torch2trt import torch2trt
+                from energonai.engine import trt_converter
             except:
                 logger.error("Installation Required, \n \
                     follow https://docs.nvidia.com/deeplearning/tensorrt/install-guide/index.html \
@@ -101,16 +98,17 @@ class RPCWorker:
         elif MEATCONFIG['trt_sample'] is not None and gpc.get_world_size(ParallelMode.MODEL) == 1:
             self.model = torch2trt(self.model, MEATCONFIG['trt_sample'])
             logger.info("TensorRT convert complete.")
-        
-        try:        
-            self.model = pipe_wrapper[self.model_type](model=self.model, max_batch_size=self.max_batch_size, dtype=self.dtype)
+
+        try:
+            self.model = pipe_wrapper[self.model_type](
+                model=self.model, max_batch_size=self.max_batch_size, dtype=self.dtype)
         except:
             logger.error(f'Only {pipe_wrapper.keys()} pipeline wrapper are supported.')
 
     def run(self, key, inputs):
         torch.cuda.set_device(f'cuda:{gpc.get_local_rank(ParallelMode.GLOBAL)}')
         for k, v in inputs.items():
-            if v is not None:
+            if v is not None and isinstance(v, torch.Tensor):
                 inputs[k] = v.cuda()    # non_blocking=True
 
         if (gpc.is_initialized(ParallelMode.PIPELINE)) and (not gpc.is_last_rank(ParallelMode.PIPELINE)):

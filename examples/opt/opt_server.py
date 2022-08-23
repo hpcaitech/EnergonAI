@@ -21,7 +21,7 @@ def root():
 
 
 @app.post('/generation')
-async def generate(req: GenerationTaskReq):
+def generate(req: GenerationTaskReq):
     input_token = tokenizer(req.prompt, return_tensors="pt")
     total_predicted_text = req.prompt
 

@@ -15,8 +15,8 @@ checkpoint = '/model_checkpoint/'
 backend = "nccl"
 
 # for parallel
-tp_init_size = 2
-pp_init_size = 2
+tp_init_size = 4
+pp_init_size = 1
 
 # for server
 engine_server = launch_engine

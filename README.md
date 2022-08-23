@@ -27,6 +27,12 @@ $ pip install -r requirements.txt
 $ pip install .
 ```
 
+### Launch an http service using docker
+``` bash
+bash ./docker/launch.sh
+```
+
+
 ### Huggingface GPT2 Generation Task Case
 
 ``` bash

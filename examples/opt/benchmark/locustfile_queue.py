@@ -6,11 +6,11 @@ class GenerationUser(HttpUser):
     @task
     def generate(self):
         prompt = 'Question: What is the longest river on the earth? Answer:'
-        for i in range(4, 8):
+        for i in range(4, 9):
             data = {'max_tokens': 2**i, 'prompt': prompt}
-            with self.client.post('/queue_generation', json=data, catch_response=True) as response:
+            with self.client.post('/generation', json=data, catch_response=True) as response:
                 try:
-                    if False: # len(response.json()['text']) + 1 < data['max_tokens'] :
+                    if False: #len(response.json()['text']) < data['max_tokens']:
                         response.failure('Response wrong')
                 except JSONDecodeError:
                     response.failure('Response could not be decoded as JSON')

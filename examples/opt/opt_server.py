@@ -8,6 +8,7 @@ from energonai.server.queue_manager import QueueManager
 from transformers import GPT2Tokenizer
 from pydantic import BaseModel
 from typing import Optional
+from executor import Executor
 
 
 class GenerationTaskReq(BaseModel):
@@ -27,22 +28,12 @@ def root():
 
 
 @app.post('/generation')
-def generate(req: GenerationTaskReq):
-    input_token = tokenizer(req.prompt, return_tensors="pt")
-    total_predicted_text = req.prompt
-    for i in range(1, req.max_tokens):
-        input_token['top_k'] = req.top_k
-        input_token['top_p'] = req.top_p
-        input_token['temperature'] = req.temperature
-        output = engine.run(input_token)
-        predictions = output.to_here()
-        total_predicted_text += tokenizer.decode(predictions)
-        # print(total_predicted_text)
-        if '<|endoftext|>' in total_predicted_text:
-            break
-        input_token = tokenizer(total_predicted_text, return_tensors="pt")
+async def generate(req: GenerationTaskReq):
+    handle = executor.submit(req.prompt, req.max_tokens, req.top_k, req.top_p, req.temperature)
+    output = await executor.wait(handle)
 
-    return {'text': total_predicted_text}
+    return {'text': output}
+
 
 @app.post('/queue_generation', status_code=status.HTTP_200_OK)
 def queue_generation(req: GenerationTaskReq):
@@ -54,6 +45,7 @@ def queue_generation(req: GenerationTaskReq):
     else:
         result = "Sorry, the serving is busy now." + "!" * req.max_tokens
     return {result}
+
 
 @app.get("/shutdown")
 async def shutdown():
@@ -98,7 +90,9 @@ def launch_engine(model_class,
                              host=host,
                              port=port,
                              dtype=dtype)
-
+    global executor
+    executor = Executor(engine, tokenizer, max_batch_size=1)
+    executor.start()
     global batch_manager
     batch_manager = QueueManager(engine, tokenizer, max_batch_size=1, max_concurrent_user=4)
 

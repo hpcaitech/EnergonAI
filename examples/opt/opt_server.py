@@ -49,6 +49,7 @@ def queue_generation(req: GenerationTaskReq):
 
 @app.get("/shutdown")
 async def shutdown():
+    executor.teardown()
     engine.clear()
     server.should_exit = True
     server.force_exit = True

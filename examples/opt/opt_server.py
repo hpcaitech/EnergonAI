@@ -43,6 +43,23 @@ def generate(req: GenerationTaskReq):
 
     return {'text': total_predicted_text}
 
+# for opt_gen_30B
+@app.post('/queue_generation', status_code=status.HTTP_200_OK)
+def queue_generation(req: GenerationTaskReq):
+    input_token = tokenizer(req.prompt, return_tensors="pt")
+    input_token['top_k'] = req.top_k
+    input_token['top_p'] = req.top_p
+    input_token['temperature'] = req.temperature
+    input_token['max_tokens'] = req.max_tokens
+
+    output = engine.run(input_token)
+    output = output.to_here()
+    output = output[0, :].tolist()
+    output = tokenizer.decode(output)
+
+    return {output}
+
+
 @app.get("/shutdown")
 async def shutdown():
     engine.clear()

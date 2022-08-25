@@ -85,26 +85,40 @@ class PipelineModel(nn.Module):
             self.norm = LayerNorm1D(normalized_shape=hidden_size, eps=layernorm_epsilon)
             self.head = LMHead1D(hidden_size=hidden_size, vocab_size=vocab_size, bias=False, dtype=dtype)
 
-    def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None, top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):
+    def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None, max_tokens: Optional[int] = None, top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):
         batch_size = input_ids.shape[0]
+        cur_len = input_ids.shape[1]
 
-        if self.first:
-            hidden_states = self.embed(input_ids)
+        tgt_len = cur_len + 1 if not max_tokens else max_tokens
+        
+        if(cur_len >= tgt_len):
+            return input_ids
+        
+        for _ in range(cur_len, tgt_len):
 
-        if attention_mask is not None:
-            attention_mask = attention_mask.view(batch_size, -1)
-            attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
-            attention_mask = attention_mask.to(dtype=hidden_states.dtype)  # fp16 compatibility
-            attention_mask = (1.0 - attention_mask) * -10000.0
+            if self.first:
+                hidden_states = self.embed(input_ids)
 
-        for block in self.blocks:
-            hidden_states = block(hidden_states, attention_mask)  # seq_lens
+            if attention_mask is not None:
+                attention_unfold_mask = attention_mask.view(batch_size, -1)
+                attention_unfold_mask = attention_unfold_mask.unsqueeze(1).unsqueeze(2)
+                attention_unfold_mask = attention_unfold_mask.to(dtype=hidden_states.dtype)  # fp16 compatibility
+                attention_unfold_mask = (1.0 - attention_unfold_mask) * -10000.0
 
-        if self.last:
-            hidden_states = self.head(self.norm(hidden_states))
-            hidden_states = self.generate(input_ids, hidden_states, top_k=top_k, top_p=top_p, temperature=temperature)
+            for block in self.blocks:
+                hidden_states = block(hidden_states, attention_unfold_mask)  # seq_lens
 
-        return hidden_states
+            if self.last:
+                hidden_states = self.head(self.norm(hidden_states))
+                hidden_states = self.generate(input_ids, hidden_states, top_k=top_k, top_p=top_p, temperature=temperature)
+
+            if hidden_states == 50256:
+                break # hard code here for opt
+            else:
+                input_ids = torch.cat((input_ids, torch.tensor([[hidden_states]]).cuda()), 1)
+                attention_mask = torch.cat((attention_mask, torch.tensor([[1]]).cuda()), 1)
+
+        return input_ids if max_tokens else hidden_states
 
     def get_logits_processor(self, top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):
         processor_list = LogitsProcessorList()
@@ -282,6 +296,31 @@ def opt_66B(**kwargs):
                         **kwargs)
     return create_pipeline_model(**model_kwargs)
 
+# def opt_gen_30B(**kwargs):
+#     model_kwargs = dict(vocab_size=50272,
+#                         hidden_size=7168,
+#                         depth=48,
+#                         max_seq_len=2050,
+#                         num_heads=56,
+#                         activation=nn.functional.relu,
+#                         is_decoder=True,
+#                         fused_qkv=False,
+#                         model_name="opt",
+#                         **kwargs)
+#     return create_generation_model(**model_kwargs)
+
+# def opt_gen_125M(**kwargs):
+#     model_kwargs = dict(vocab_size=50272,
+#                         hidden_size=7168,
+#                         depth=48,
+#                         max_seq_len=2050,
+#                         num_heads=56,
+#                         activation=nn.functional.relu,
+#                         is_decoder=True,
+#                         fused_qkv=False,
+#                         model_name="opt",
+#                         **kwargs)
+#     return create_generation_model(**model_kwargs)
 
 # def opt_175B(**kwargs):
 #     model_kwargs = dict(hidden_size=12288, depth=96, num_heads=96, activation=nn.functional.relu, is_decoder = True, **kwargs)

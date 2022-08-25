@@ -4,7 +4,7 @@ from colossalai.logging import get_dist_logger
 
 # pytorch rpc
 import torch.distributed.rpc as rpc
-
+import threading
 from .rpc_utils import remote_cls_method
 from .rpc_worker import RPCWorker
 from .pipeline_msg_dict import CircleInt
@@ -59,6 +59,7 @@ class InferenceEngine(Module):
         self._init_dist_rpc()
         self._init_model()
         self.key = CircleInt()
+        self.lock = threading.Lock()
 
     def _init_dist_rpc(self):
         r"""
@@ -93,12 +94,11 @@ class InferenceEngine(Module):
 
     def run(self, inputs):
         output = None
-
-        # self.prioirty = time.time()
+        self.lock.acquire()
         for rref in self.rrefs:
             output = remote_cls_method(RPCWorker.run, rref, self.key.val, inputs)
-
         self.key.addOne()
+        self.lock.release()
         return output
 
     def clear(self):

@@ -18,12 +18,7 @@ class GenerationTaskReq(BaseModel):
     temperature: Optional[float] = None
 
 
-app = FastAPI()  # 创建 api 对象
-
-
-@app.get("/")  # 根路由
-def root():
-    return {"200"}
+app = FastAPI()
 
 
 @app.post('/generation')
@@ -33,7 +28,7 @@ async def generate(req: GenerationTaskReq):
     return {'text': output}
 
 
-@app.get("/shutdown")
+@app.on_event("shutdown")
 async def shutdown():
     executor.teardown()
     engine.clear()

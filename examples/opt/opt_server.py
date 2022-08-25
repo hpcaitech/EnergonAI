@@ -61,7 +61,7 @@ def launch_engine(model_class,
     # only for the generation task
     global tokenizer
     if(tokenizer_path):
-        tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_path)
+        tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_path, padding_side='left')
 
     if checkpoint:
         model_config = {'dtype': dtype, 'checkpoint': checkpoint}

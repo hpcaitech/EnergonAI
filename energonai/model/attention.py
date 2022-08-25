@@ -119,8 +119,8 @@ class MultiHeadAttention1D(nn.Module):
             self.past_cache['dense'] = hidden_states
         else:
             hidden_states = self.dense(self.last_word(hidden_states))
-            self.generative_cache['dense'] = torch.cat((self.past_cache['dense'], hidden_states), 1)
-            past_cache = self.generative_cache['dense']
+            self.past_cache['dense'] = torch.cat((self.past_cache['dense'], hidden_states), 1)
+            past_cache = self.past_cache['dense']
 
         return hidden_states
 

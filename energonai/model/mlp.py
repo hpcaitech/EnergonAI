@@ -35,10 +35,10 @@ class MLP1D(nn.Module):
             self.past_cache['dense_2'] = hidden_states
         else:
             hidden_states = self.dense_1(self.last_word(hidden_states))
-            self.past_cache['dense_1'] = torch.cat((self.generative_cache['dense_1'], hidden_states), 1)           
-            hidden_states = self.activation(self.generative_cache['dense_1'])
+            self.past_cache['dense_1'] = torch.cat((self.past_cache['dense_1'], hidden_states), 1)           
+            hidden_states = self.activation(self.past_cache['dense_1'])
             hidden_states = self.dense_2(self.last_word(hidden_states))
-            self.past_cache['dense_2'] = torch.cat((self.generative_cache['dense_2'], hidden_states), 1)
-            hidden_states = self.generative_cache['dense_2']
+            self.past_cache['dense_2'] = torch.cat((self.past_cache['dense_2'], hidden_states), 1)
+            hidden_states = self.past_cache['dense_2']
 
         return hidden_states

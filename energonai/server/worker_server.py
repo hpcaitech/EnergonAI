@@ -15,7 +15,7 @@ def root():
     return {"200"}
 
 
-@app.get("/shutdown")
+@app.on_event("shutdown")
 async def shutdown():
     rpc.shutdown()
     server.should_exit = True
@@ -30,13 +30,12 @@ def launch_worker(config_file,
                   server_port=8005):
 
     MEATCONFIG.load_config(config_file)
-    
+
     world_size = MEATCONFIG['tp_init_size'] * MEATCONFIG['pp_init_size']
 
-    launch_from_multiprocess(MEATCONFIG['tp_init_size'], MEATCONFIG['pp_init_size'], MEATCONFIG['backend'], 
-                            MEATCONFIG['seed'], MEATCONFIG['verbose'], rank, local_rank, world_size, 
-                            MEATCONFIG['host'], MEATCONFIG['port'])
-
+    launch_from_multiprocess(MEATCONFIG['tp_init_size'], MEATCONFIG['pp_init_size'], MEATCONFIG['backend'],
+                             MEATCONFIG['seed'], MEATCONFIG['verbose'], rank, local_rank, world_size,
+                             MEATCONFIG['host'], MEATCONFIG['port'])
 
     WORKER_NAME = "wok{}"
     # _transports=["uv"] TODO: potentially a bug

@@ -44,7 +44,7 @@ def generate(req: GenerationTaskReq):
     return {'text': total_predicted_text}
 
 # for opt_gen_30B
-@app.post('/queue_generation', status_code=status.HTTP_200_OK)
+@app.post('/generation_single', status_code=status.HTTP_200_OK)
 def queue_generation(req: GenerationTaskReq):
     input_token = tokenizer(req.prompt, return_tensors="pt")
     input_token['top_k'] = req.top_k

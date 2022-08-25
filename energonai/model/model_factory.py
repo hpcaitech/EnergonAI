@@ -295,33 +295,3 @@ def opt_66B(**kwargs):
                         model_name="opt",
                         **kwargs)
     return create_pipeline_model(**model_kwargs)
-
-# def opt_gen_30B(**kwargs):
-#     model_kwargs = dict(vocab_size=50272,
-#                         hidden_size=7168,
-#                         depth=48,
-#                         max_seq_len=2050,
-#                         num_heads=56,
-#                         activation=nn.functional.relu,
-#                         is_decoder=True,
-#                         fused_qkv=False,
-#                         model_name="opt",
-#                         **kwargs)
-#     return create_generation_model(**model_kwargs)
-
-# def opt_gen_125M(**kwargs):
-#     model_kwargs = dict(vocab_size=50272,
-#                         hidden_size=7168,
-#                         depth=48,
-#                         max_seq_len=2050,
-#                         num_heads=56,
-#                         activation=nn.functional.relu,
-#                         is_decoder=True,
-#                         fused_qkv=False,
-#                         model_name="opt",
-#                         **kwargs)
-#     return create_generation_model(**model_kwargs)
-
-# def opt_175B(**kwargs):
-#     model_kwargs = dict(hidden_size=12288, depth=96, num_heads=96, activation=nn.functional.relu, is_decoder = True, **kwargs)
-#     return create_pipeline_model(**model_kwargs)

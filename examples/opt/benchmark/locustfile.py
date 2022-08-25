@@ -10,7 +10,7 @@ class GenerationUser(HttpUser):
             data = {'max_tokens': 2**i, 'prompt': prompt}
             with self.client.post('/generation', json=data, catch_response=True) as response:
                 try:
-                    if len(response.json()['text']) < data['max_tokens']:
+                    if len(response.json()['text']) == 0:
                         response.failure('Response wrong')
                 except JSONDecodeError:
                     response.failure('Response could not be decoded as JSON')

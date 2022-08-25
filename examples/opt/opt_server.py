@@ -3,7 +3,6 @@ import torch
 import uvicorn
 from fastapi import FastAPI, status
 from energonai.engine import InferenceEngine
-from energonai.server.queue_manager import QueueManager
 
 from transformers import GPT2Tokenizer
 from pydantic import BaseModel
@@ -44,16 +43,22 @@ def generate(req: GenerationTaskReq):
 
     return {'text': total_predicted_text}
 
-@app.post('/queue_generation', status_code=status.HTTP_200_OK)
+# for opt_gen_30B
+@app.post('/generation_single', status_code=status.HTTP_200_OK)
 def queue_generation(req: GenerationTaskReq):
-    global batch_manager
-    time_stamp = time.time()
-    is_insert = batch_manager.insert_req(time_stamp, req.prompt, req.max_tokens)
-    if(is_insert):
-        result = batch_manager.subscribe_result(time_stamp)
-    else:
-        result = "Sorry, the serving is busy now." + "!" * req.max_tokens
-    return {result}
+    input_token = tokenizer(req.prompt, return_tensors="pt")
+    input_token['top_k'] = req.top_k
+    input_token['top_p'] = req.top_p
+    input_token['temperature'] = req.temperature
+    input_token['max_tokens'] = req.max_tokens
+
+    output = engine.run(input_token)
+    output = output.to_here()
+    output = output[0, :].tolist()
+    output = tokenizer.decode(output)
+
+    return {output}
+
 
 @app.get("/shutdown")
 async def shutdown():
@@ -98,9 +103,6 @@ def launch_engine(model_class,
                              host=host,
                              port=port,
                              dtype=dtype)
-
-    global batch_manager
-    batch_manager = QueueManager(engine, tokenizer, max_batch_size=1, max_concurrent_user=4)
 
     global server
     config = uvicorn.Config(app, host=server_host, port=server_port, log_level=log_level)

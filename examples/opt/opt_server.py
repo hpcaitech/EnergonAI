@@ -3,7 +3,6 @@ import torch
 import uvicorn
 from fastapi import FastAPI, status
 from energonai.engine import InferenceEngine
-from energonai.server.queue_manager import QueueManager
 
 from transformers import GPT2Tokenizer
 from pydantic import BaseModel

@@ -30,7 +30,6 @@ def root():
 async def generate(req: GenerationTaskReq):
     handle = executor.submit(req.prompt, req.max_tokens, req.top_k, req.top_p, req.temperature)
     output = await executor.wait(handle)
-
     return {'text': output}
 
 

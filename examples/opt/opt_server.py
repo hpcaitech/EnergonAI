@@ -91,10 +91,8 @@ def launch_engine(model_class,
                              port=port,
                              dtype=dtype)
     global executor
-    executor = Executor(engine, tokenizer, max_batch_size=1)
+    executor = Executor(engine, tokenizer, max_batch_size=16)
     executor.start()
-    global batch_manager
-    batch_manager = QueueManager(engine, tokenizer, max_batch_size=1, max_concurrent_user=4)
 
     global server
     config = uvicorn.Config(app, host=server_host, port=server_port, log_level=log_level)

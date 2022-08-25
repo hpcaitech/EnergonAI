@@ -1,10 +1,9 @@
 import asyncio
 import time
-from queue import Queue
 from threading import Thread
-from dataclasses import dataclass
 from typing import Any, Dict, Deque, List
 from collections import namedtuple, deque
+from energonai.logging import get_dist_logger
 
 GenerationArgs = namedtuple('GenerationArgs', ['top_k', 'top_p', 'temperature', 'max_tokens'])
 SubmitEntry = namedtuple('SubmitEntry', ['text', 'args'])
@@ -19,17 +18,18 @@ class Executor:
         self.thread = None
         self.ready_map: Dict[int, Any] = {}
         self.submit_queue: Deque[SubmitEntry] = deque()
+        self.logger = get_dist_logger()
 
     def _start(self) -> None:
         self.running = True
         while self.running:
             if len(self.submit_queue) > 0:
                 inputs, entry_ids = self._make_batch()
-                print(f'Run batch size = {len(entry_ids)}')
-                outputs = self.engine.run(inputs)
-                outputs = self.tokenizer.decoce(outputs)
+                start = time.time()
+                outputs = self.engine.run(inputs).to_here()
                 for entry_id, output in zip(entry_ids, outputs):
-                    self.ready_map[entry_id] = output
+                    self.ready_map[entry_id] = self.tokenizer.decode(output, skip_special_tokens=True)
+                self.logger.info(f'batch size: {len(entry_ids)}, time: {time.time()-start:.3f} s')
 
     def _make_batch(self):
         entry = self.submit_queue.popleft()
@@ -41,7 +41,7 @@ class Executor:
                 break
             batch.append(self.submit_queue.popleft())
         batch_text = [e.text for e in batch]
-        inputs = self.tokenizer(batch_text, padding=True)
+        inputs = self.tokenizer(batch_text, padding=True, return_tensors='pt')
         inputs['top_k'] = entry.args.top_k
         inputs['top_p'] = entry.args.top_p
         inputs['temperature'] = entry.args.temperature

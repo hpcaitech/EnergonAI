@@ -90,10 +90,10 @@ class PipelineModel(nn.Module):
         cur_len = input_ids.shape[1]
 
         tgt_len = cur_len + 1 if not max_tokens else max_tokens
-        
+
         if(cur_len >= tgt_len):
             return input_ids
-        
+
         for _ in range(cur_len, tgt_len):
 
             if self.first:
@@ -110,13 +110,14 @@ class PipelineModel(nn.Module):
 
             if self.last:
                 hidden_states = self.head(self.norm(hidden_states))
-                hidden_states = self.generate(input_ids, hidden_states, top_k=top_k, top_p=top_p, temperature=temperature)
-
-            if hidden_states == 50256:
-                break # hard code here for opt
+                hidden_states = self.generate(input_ids, hidden_states, top_k=top_k,
+                                              top_p=top_p, temperature=temperature)
+            if torch.all(hidden_states == 50256):
+                break  # hard code here for opt
             else:
-                input_ids = torch.cat((input_ids, torch.tensor([[hidden_states]]).cuda()), 1)
-                attention_mask = torch.cat((attention_mask, torch.tensor([[1]]).cuda()), 1)
+                input_ids = torch.cat((input_ids, hidden_states.view(-1, 1)), 1)
+                attention_mask = torch.cat((attention_mask, torch.ones(
+                    batch_size, 1, device=torch.cuda.current_device())), 1)
 
         return input_ids if max_tokens else hidden_states
 

@@ -7,6 +7,7 @@ from energonai.engine import InferenceEngine
 from transformers import GPT2Tokenizer
 from pydantic import BaseModel
 from typing import Optional
+from executor import Executor
 
 
 class GenerationTaskReq(BaseModel):
@@ -26,42 +27,16 @@ def root():
 
 
 @app.post('/generation')
-def generate(req: GenerationTaskReq):
-    input_token = tokenizer(req.prompt, return_tensors="pt")
-    total_predicted_text = req.prompt
-    for i in range(1, req.max_tokens):
-        input_token['top_k'] = req.top_k
-        input_token['top_p'] = req.top_p
-        input_token['temperature'] = req.temperature
-        output = engine.run(input_token)
-        predictions = output.to_here()
-        total_predicted_text += tokenizer.decode(predictions)
-        # print(total_predicted_text)
-        if '<|endoftext|>' in total_predicted_text:
-            break
-        input_token = tokenizer(total_predicted_text, return_tensors="pt")
+async def generate(req: GenerationTaskReq):
+    handle = executor.submit(req.prompt, req.max_tokens, req.top_k, req.top_p, req.temperature)
+    output = await executor.wait(handle)
 
-    return {'text': total_predicted_text}
-
-# for opt_gen_30B
-@app.post('/generation_single', status_code=status.HTTP_200_OK)
-def queue_generation(req: GenerationTaskReq):
-    input_token = tokenizer(req.prompt, return_tensors="pt")
-    input_token['top_k'] = req.top_k
-    input_token['top_p'] = req.top_p
-    input_token['temperature'] = req.temperature
-    input_token['max_tokens'] = req.max_tokens
-
-    output = engine.run(input_token)
-    output = output.to_here()
-    output = output[0, :].tolist()
-    output = tokenizer.decode(output)
-
-    return {output}
+    return {'text': output}
 
 
 @app.get("/shutdown")
 async def shutdown():
+    executor.teardown()
     engine.clear()
     server.should_exit = True
     server.force_exit = True
@@ -103,6 +78,9 @@ def launch_engine(model_class,
                              host=host,
                              port=port,
                              dtype=dtype)
+    global executor
+    executor = Executor(engine, tokenizer, max_batch_size=16)
+    executor.start()
 
     global server
     config = uvicorn.Config(app, host=server_host, port=server_port, log_level=log_level)

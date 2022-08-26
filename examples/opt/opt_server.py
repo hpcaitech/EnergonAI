@@ -24,8 +24,10 @@ app = FastAPI()
 @app.post('/generation')
 async def generate(data: GenerationTaskReq, request: Request):
     logger.info(f'{request.client.host}:{request.client.port} - "{request.method} {request.url.path}" - {data}')
-    handle = executor.submit(data.prompt, data.max_tokens, data.top_k, data.top_p, data.temperature)
+    inputs = tokenizer(data.prompt)
+    handle = executor.submit(inputs, data.max_tokens, data.top_k, data.top_p, data.temperature)
     output = await executor.wait(handle)
+    output = tokenizer.decode(output, skip_special_tokens=True)
     return {'text': output}
 
 
@@ -83,7 +85,7 @@ def launch_engine(model_class,
                              port=port,
                              dtype=dtype)
     global executor
-    executor = Executor(engine, tokenizer, max_batch_size=16)
+    executor = Executor(engine, pad_token_id=tokenizer.pad_token_id, max_batch_size=16)
     executor.start()
 
     global server

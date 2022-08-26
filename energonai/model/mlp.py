@@ -12,8 +12,10 @@ class MLP1D(nn.Module):
                  mlp_ratio: float,
                  activation: Callable,
                  dtype: dtype = torch.float16,
-                 bias: bool = True):
+                 bias: bool = True,
+                 disable_past_cache = False):
         super().__init__()
+        self.disable_past_cache = disable_past_cache
         intermediate_dim = int(hidden_size * mlp_ratio)
         self.dense_1 = Linear1D_Col(hidden_size, intermediate_dim, bias=bias, dtype=dtype, gather_output=False)
         self.activation = activation
@@ -27,7 +29,7 @@ class MLP1D(nn.Module):
 
     def forward(self, hidden_states, first_cache: Optional[bool] = True):
         
-        if first_cache:
+        if first_cache or self.disable_past_cache:
             hidden_states = self.dense_1(hidden_states)
             self.past_cache['dense_1'] = hidden_states
             hidden_states = self.activation(hidden_states)

@@ -50,7 +50,8 @@ class PipelineModel(nn.Module):
                  fused_qkv: bool = True,
                  checkpoint: str = None,
                  model_name: str = None,
-                 is_decoder: bool = True) -> None:
+                 is_decoder: bool = True,
+                 disable_past_cache = False) -> None:
         super().__init__()
         self.hidden_size = hidden_size
         self.first = first
@@ -80,7 +81,8 @@ class PipelineModel(nn.Module):
                                            apply_post_layernorm=apply_post_layernorm,
                                            max_seq_len=max_seq_len,
                                            fused_qkv=fused_qkv,
-                                           is_decoder=is_decoder))
+                                           is_decoder=is_decoder,
+                                           disable_past_cache=disable_past_cache))
         if last:
             self.norm = LayerNorm1D(normalized_shape=hidden_size, eps=layernorm_epsilon)
             self.head = LMHead1D(hidden_size=hidden_size, vocab_size=vocab_size, bias=False, dtype=dtype)
@@ -269,6 +271,7 @@ def opt_125M(**kwargs):
                         is_decoder=True,
                         fused_qkv=False,
                         model_name="opt",
+                        disable_past_cache=False,
                         **kwargs)
     return create_pipeline_model(**model_kwargs)
 
@@ -283,6 +286,7 @@ def opt_30B(**kwargs):
                         is_decoder=True,
                         fused_qkv=False,
                         model_name="opt",
+                        disable_past_cache=False,
                         **kwargs)
     return create_pipeline_model(**model_kwargs)
 
@@ -297,6 +301,7 @@ def opt_66B(**kwargs):
                         is_decoder=True,
                         fused_qkv=False,
                         model_name="opt",
+                        disable_past_cache=False,
                         **kwargs)
     return create_pipeline_model(**model_kwargs)
 
@@ -311,5 +316,6 @@ def opt_175B(**kwargs):
                         is_decoder=True,
                         fused_qkv=False,
                         model_name="opt",
+                        disable_past_cache=False,
                         **kwargs)
     return create_pipeline_model(**model_kwargs)

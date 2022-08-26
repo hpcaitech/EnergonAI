@@ -20,7 +20,8 @@ class Block1D(nn.Module):
                  apply_post_layernorm: bool = False,
                  max_seq_len: int = 512,
                  fused_qkv: bool = True,
-                 is_decoder: bool = True) -> None:
+                 is_decoder: bool = True,
+                 disable_past_cache = False) -> None:
         super().__init__()
 
         self.apply_post_layernorm = apply_post_layernorm
@@ -32,7 +33,8 @@ class Block1D(nn.Module):
                                          dtype=dtype,
                                          max_seq_len=max_seq_len,
                                          fused_qkv=fused_qkv,
-                                         is_decoder=is_decoder)
+                                         is_decoder=is_decoder,
+                                         disable_past_cache=disable_past_cache)
 
         self.norm2 = LayerNorm1D(hidden_size, eps=layernorm_epsilon)
 
@@ -40,7 +42,8 @@ class Block1D(nn.Module):
                          mlp_ratio=mlp_ratio,
                          activation=activation,
                          dtype=dtype,
-                         bias=bias)
+                         bias=bias,
+                         disable_past_cache=disable_past_cache)
 
     def forward(self, hidden_states, attention_mask=None, first_cache = False, seq_lens=None):
 

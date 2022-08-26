@@ -42,7 +42,7 @@ class Block1D(nn.Module):
                          dtype=dtype,
                          bias=bias)
 
-    def forward(self, hidden_states, attention_mask=None, seq_lens=None):
+    def forward(self, hidden_states, attention_mask=None, first_cache = False, seq_lens=None):
 
         if not self.apply_post_layernorm:
             residual = hidden_states
@@ -50,7 +50,9 @@ class Block1D(nn.Module):
 
         if self.apply_post_layernorm:
             residual = hidden_states
-        hidden_states = residual + self.attn(hidden_states, attention_mask)
+        hidden_states = residual + self.attn(hidden_states = hidden_states,
+                                            attention_mask = attention_mask, 
+                                            first_cache=first_cache)
 
         if not self.apply_post_layernorm:
             residual = hidden_states
@@ -59,6 +61,7 @@ class Block1D(nn.Module):
 
         if self.apply_post_layernorm:
             residual = hidden_states
-        hidden_states = residual + self.mlp(hidden_states)
+        hidden_states = residual + self.mlp(hidden_states = hidden_states,
+                                            first_cache = first_cache)
 
         return hidden_states

@@ -88,12 +88,12 @@ class PipelineModel(nn.Module):
     def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None, max_tokens: Optional[int] = None, top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):
         batch_size = input_ids.shape[0]
         cur_len = input_ids.shape[1]
-
         tgt_len = cur_len + 1 if not max_tokens else max_tokens
 
         if(cur_len >= tgt_len):
             return input_ids
 
+        first_cache = True
         for _ in range(cur_len, tgt_len):
 
             if self.first:
@@ -106,7 +106,9 @@ class PipelineModel(nn.Module):
                 attention_unfold_mask = (1.0 - attention_unfold_mask) * -10000.0
 
             for block in self.blocks:
-                hidden_states = block(hidden_states, attention_unfold_mask)  # seq_lens
+                hidden_states = block(hidden_states = hidden_states, 
+                                      attention_mask = attention_unfold_mask, 
+                                      first_cache = first_cache)  # seq_lens
 
             if self.last:
                 hidden_states = self.head(self.norm(hidden_states))
@@ -119,6 +121,7 @@ class PipelineModel(nn.Module):
                 attention_mask = torch.cat((attention_mask, torch.ones(
                     batch_size, 1, device=torch.cuda.current_device())), 1)
 
+            first_cache = False
         return input_ids if max_tokens else hidden_states
 
     def get_logits_processor(self, top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):

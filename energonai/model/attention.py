@@ -62,36 +62,43 @@ class MultiHeadAttention1D(nn.Module):
                 seq_lens=None):
 
         if self.fused_qkv:
-            if first_cache or self.disable_past_cache:
+            if self.disable_past_cache:
                 qkv = self.query_key_value(hidden_states)
-                self.past_cache['query_key_value'] = qkv
             else:
-                qkv = self.query_key_value(self.last_word(hidden_states))
-                self.past_cache['query_key_value'] = torch.cat((self.past_cache['query_key_value'], qkv), 1)           
-                qkv = self.past_cache['query_key_value']            
+                if first_cache:
+                    qkv = self.query_key_value(hidden_states)
+                    self.past_cache['query_key_value'] = qkv
+                else:
+                    qkv = self.query_key_value(self.last_word(hidden_states))
+                    self.past_cache['query_key_value'] = torch.cat((self.past_cache['query_key_value'], qkv), 1)           
+                    qkv = self.past_cache['query_key_value']
             all_head_size = qkv.shape[-1] // 3
             num_attention_heads = divide(all_head_size, self.attention_head_size)
             qkv = self._split_heads(qkv, num_attention_heads, 3 * self.attention_head_size)
             q, k, v = torch.chunk(qkv, 3, dim=-1)
         else:
-            if first_cache or self.disable_past_cache:
+            if self.disable_past_cache:
                 q = self.query_(hidden_states)
                 k = self.key_(hidden_states)
                 v = self.value_(hidden_states)
-                self.past_cache['q'] = q
-                self.past_cache['k'] = k
-                self.past_cache['v'] = v
             else:
-                q = self.query_(self.last_word(hidden_states))
-                k = self.key_(self.last_word(hidden_states))
-                v = self.value_(self.last_word(hidden_states))
-                self.past_cache['q'] = torch.cat((self.past_cache['q'], q), 1)
-                self.past_cache['k'] = torch.cat((self.past_cache['k'], k), 1)
-                self.past_cache['v'] = torch.cat((self.past_cache['v'], v), 1)
-                q = self.past_cache['q']
-                k = self.past_cache['k']
-                v = self.past_cache['v']
-
+                if first_cache:
+                    q = self.query_(hidden_states)
+                    k = self.key_(hidden_states)
+                    v = self.value_(hidden_states)
+                    self.past_cache['q'] = q
+                    self.past_cache['k'] = k
+                    self.past_cache['v'] = v
+                else:
+                    q = self.query_(self.last_word(hidden_states))
+                    k = self.key_(self.last_word(hidden_states))
+                    v = self.value_(self.last_word(hidden_states))
+                    self.past_cache['q'] = torch.cat((self.past_cache['q'], q), 1)
+                    self.past_cache['k'] = torch.cat((self.past_cache['k'], k), 1)
+                    self.past_cache['v'] = torch.cat((self.past_cache['v'], v), 1)
+                    q = self.past_cache['q']
+                    k = self.past_cache['k']
+                    v = self.past_cache['v']
             all_head_size = q.shape[-1]
             num_attention_heads = divide(all_head_size, self.attention_head_size)
             q = self._split_heads(q, num_attention_heads, self.attention_head_size)
@@ -117,16 +124,15 @@ class MultiHeadAttention1D(nn.Module):
 
         hidden_states = hidden_states.reshape(new_context_layer_shape)
         
-        if first_cache or self.disable_past_cache:
+        if self.disable_past_cache:
             hidden_states = self.dense(hidden_states)
-            self.past_cache['dense'] = hidden_states
         else:
-            hidden_states = self.dense(self.last_word(hidden_states))
-            self.past_cache['dense'] = torch.cat((self.past_cache['dense'], hidden_states), 1)
-            past_cache = self.past_cache['dense']
+            if first_cache:
+                hidden_states = self.dense(hidden_states)
+                self.past_cache['dense'] = hidden_states
+            else:
+                hidden_states = self.dense(self.last_word(hidden_states))
+                self.past_cache['dense'] = torch.cat((self.past_cache['dense'], hidden_states), 1)
+                hidden_states = self.past_cache['dense']
 
         return hidden_states
-
-        # causal_mask = torch.tril(torch.ones((q_len, k_len), dtype=torch.uint8,
-        #                                     device=get_current_device())).view(1, 1, q_len, k_len).bool()
-        # hidden_states = torch.where(causal_mask, hidden_states, torch.tensor(-1e4, dtype=hidden_states.dtype, device=get_current_device()))

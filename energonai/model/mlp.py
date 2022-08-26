@@ -28,19 +28,24 @@ class MLP1D(nn.Module):
         return hidden_states[:, -1, :].view(batch_size, 1, hidden_size)
 
     def forward(self, hidden_states, first_cache: Optional[bool] = True):
-        
-        if first_cache or self.disable_past_cache:
+
+        if self.disable_past_cache:
             hidden_states = self.dense_1(hidden_states)
-            self.past_cache['dense_1'] = hidden_states
             hidden_states = self.activation(hidden_states)
             hidden_states = self.dense_2(hidden_states)
-            self.past_cache['dense_2'] = hidden_states
-        else:
-            hidden_states = self.dense_1(self.last_word(hidden_states))
-            self.past_cache['dense_1'] = torch.cat((self.past_cache['dense_1'], hidden_states), 1)           
-            hidden_states = self.activation(self.past_cache['dense_1'])
-            hidden_states = self.dense_2(self.last_word(hidden_states))
-            self.past_cache['dense_2'] = torch.cat((self.past_cache['dense_2'], hidden_states), 1)
-            hidden_states = self.past_cache['dense_2']
+        else:        
+            if first_cache:
+                hidden_states = self.dense_1(hidden_states)
+                self.past_cache['dense_1'] = hidden_states
+                hidden_states = self.activation(hidden_states)
+                hidden_states = self.dense_2(hidden_states)
+                self.past_cache['dense_2'] = hidden_states
+            else:
+                hidden_states = self.dense_1(self.last_word(hidden_states))
+                self.past_cache['dense_1'] = torch.cat((self.past_cache['dense_1'], hidden_states), 1)           
+                hidden_states = self.activation(self.past_cache['dense_1'])
+                hidden_states = self.dense_2(self.last_word(hidden_states))
+                self.past_cache['dense_2'] = torch.cat((self.past_cache['dense_2'], hidden_states), 1)
+                hidden_states = self.past_cache['dense_2']
 
         return hidden_states

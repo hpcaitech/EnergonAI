@@ -16,7 +16,8 @@ class MultiHeadAttention1D(nn.Module):
                  dtype: dtype = torch.float16,
                  max_seq_len: int = 512,
                  fused_qkv: bool = True,
-                 is_decoder: bool = True
+                 is_decoder: bool = True,
+                 disable_past_cache = False
                  ) -> None:
         super().__init__()
 
@@ -24,6 +25,7 @@ class MultiHeadAttention1D(nn.Module):
         self.attention_head_size = divide(hidden_size, num_heads)
         self.fused_qkv = fused_qkv
         self.is_decoder = is_decoder
+        self.disable_past_cache = disable_past_cache
 
         if fused_qkv:
             self.query_key_value = Linear1D_Col(hidden_size, 3 * hidden_size, bias=bias, dtype=dtype)
@@ -40,6 +42,7 @@ class MultiHeadAttention1D(nn.Module):
             self.causal_mask = torch.tril(torch.ones((max_seq_len, max_seq_len), dtype=torch.uint8,
                                                      device=get_current_device())).view(1, 1, max_seq_len, max_seq_len).bool()
             self.causal_mask_bias = torch.tensor(-1e4, dtype=dtype, device=get_current_device())
+
         self.past_cache = {}
 
     def _split_heads(self, tensor, num_heads, attn_head_size):
@@ -59,7 +62,7 @@ class MultiHeadAttention1D(nn.Module):
                 seq_lens=None):
 
         if self.fused_qkv:
-            if first_cache:
+            if first_cache or self.disable_past_cache:
                 qkv = self.query_key_value(hidden_states)
                 self.past_cache['query_key_value'] = qkv
             else:
@@ -71,7 +74,7 @@ class MultiHeadAttention1D(nn.Module):
             qkv = self._split_heads(qkv, num_attention_heads, 3 * self.attention_head_size)
             q, k, v = torch.chunk(qkv, 3, dim=-1)
         else:
-            if first_cache:
+            if first_cache or self.disable_past_cache:
                 q = self.query_(hidden_states)
                 k = self.key_(hidden_states)
                 v = self.value_(hidden_states)
@@ -114,7 +117,7 @@ class MultiHeadAttention1D(nn.Module):
 
         hidden_states = hidden_states.reshape(new_context_layer_shape)
         
-        if first_cache:
+        if first_cache or self.disable_past_cache:
             hidden_states = self.dense(hidden_states)
             self.past_cache['dense'] = hidden_states
         else:

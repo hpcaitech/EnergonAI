@@ -1,29 +1,30 @@
-import time
+import logging
 import torch
 import uvicorn
-from fastapi import FastAPI, status
+from fastapi import FastAPI, Request
 from energonai.engine import InferenceEngine
-
+from fastapi.middleware.cors import CORSMiddleware
 from transformers import GPT2Tokenizer
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from executor import Executor
 
 
 class GenerationTaskReq(BaseModel):
-    max_tokens: int
-    prompt: str
-    top_k: Optional[int] = None
-    top_p: Optional[float] = None
-    temperature: Optional[float] = None
+    max_tokens: int = Field(gt=0)
+    prompt: str = Field(min_length=1)
+    top_k: Optional[int] = Field(default=None, gt=0)
+    top_p: Optional[float] = Field(default=None, gt=0.0, lt=1.0)
+    temperature: Optional[float] = Field(default=None, gt=0.0, lt=1.0)
 
 
 app = FastAPI()
 
 
 @app.post('/generation')
-async def generate(req: GenerationTaskReq):
-    handle = executor.submit(req.prompt, req.max_tokens, req.top_k, req.top_p, req.temperature)
+async def generate(data: GenerationTaskReq, request: Request):
+    logger.info(f'{request.client.host}:{request.client.port} - "{request.method} {request.url.path}" - {data}')
+    handle = executor.submit(data.prompt, data.max_tokens, data.top_k, data.top_p, data.temperature)
     output = await executor.wait(handle)
     return {'text': output}
 
@@ -49,9 +50,18 @@ def launch_engine(model_class,
                   tokenizer_path: str = None,
                   server_host="localhost",
                   server_port=8005,
-                  log_level="info"
+                  log_level="info",
+                  allow_cors: bool = False
                   ):
-
+    if allow_cors:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=['*'],
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    global logger
+    logger = logging.getLogger(__name__)
     # only for the generation task
     global tokenizer
     if(tokenizer_path):

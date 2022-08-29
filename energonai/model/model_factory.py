@@ -51,15 +51,13 @@ class PipelineModel(nn.Module):
                  checkpoint: str = None,
                  model_name: str = None,
                  is_decoder: bool = True,
-                 disable_past_cache = False,
-                 last_layer_norm = True) -> None:
+                 disable_past_cache = False) -> None:
         super().__init__()
         self.hidden_size = hidden_size
         self.first = first
         self.last = last
         self.max_seq_len = max_seq_len
         self.model_name = model_name
-        self.last_layer_norm = last_layer_norm
 
         if first:
             self.embed = Embedding1D(hidden_size=hidden_size,
@@ -86,8 +84,7 @@ class PipelineModel(nn.Module):
                                            is_decoder=is_decoder,
                                            disable_past_cache=disable_past_cache))
         if last:
-            if self.last_layer_norm:
-                self.norm = LayerNorm1D(normalized_shape=hidden_size, eps=layernorm_epsilon)
+            self.norm = LayerNorm1D(normalized_shape=hidden_size, eps=layernorm_epsilon)
             self.head = LMHead1D(hidden_size=hidden_size, vocab_size=vocab_size, bias=False, dtype=dtype)
 
     def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None, max_tokens: Optional[int] = None, top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):
@@ -116,8 +113,7 @@ class PipelineModel(nn.Module):
                                       first_cache = first_cache)
 
             if self.last:
-                if self.last_layer_norm:
-                    hidden_states = self.norm(hidden_states)
+                hidden_states = self.norm(hidden_states)
                 hidden_states = self.head(hidden_states)
                 hidden_states = self.generate(input_ids, hidden_states, top_k=top_k,
                                               top_p=top_p, temperature=temperature)
@@ -307,7 +303,6 @@ def opt_66B(**kwargs):
                         fused_qkv=False,
                         model_name="opt",
                         disable_past_cache=False,
-                        last_layer_norm = False,
                         **kwargs)
     return create_pipeline_model(**model_kwargs)
 

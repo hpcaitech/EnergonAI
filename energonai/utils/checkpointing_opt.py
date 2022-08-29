@@ -8,7 +8,7 @@ __all__ = [
 
 name_map = {
     'embed_tokens': 'embed.word_embeddings',
-    'embed_positions': 'position_embeddings',
+    'embed_positions': 'embed.position_embeddings',
     # 'layers': 'blocks',
     'self_attn.q_proj': 'attn.query_',
     'self_attn.k_proj': 'attn.key_',
@@ -86,7 +86,9 @@ def processing_OPT(state_dict: OrderedDict):
         # else:
         #     new_dict[new_k] = new_v
     # print(new_dict.keys())
-    new_dict['head.dense.weight'] = new_dict['embed.word_embeddings.weight'].clone()
+    if 'head.dense.weight' not in new_dict:
+        new_dict['head.dense.weight'] = new_dict['embed.word_embeddings.weight'].clone()
+        
     del new_dict['decoder.version']
     # print("="*100)
     # print(new_dict.keys())

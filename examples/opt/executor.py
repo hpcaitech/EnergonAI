@@ -64,8 +64,7 @@ class Executor:
         if not self.running:
             raise RuntimeError('executor is shutdown')
         args = GenerationArgs(top_k, top_p, temperature)
-        decode_steps = max_tokens - len(inputs['input_ids'])
-        entry = SubmitEntry(inputs, args, decode_steps)
+        entry = SubmitEntry(inputs, args, max_tokens)
         self.submit_queue.append(entry)
         return id(entry)
 

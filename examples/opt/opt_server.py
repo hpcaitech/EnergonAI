@@ -1,6 +1,7 @@
 import logging
 import torch
 import uvicorn
+import random
 from fastapi import FastAPI, Request
 from energonai.engine import InferenceEngine
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +9,7 @@ from transformers import GPT2Tokenizer
 from pydantic import BaseModel, Field
 from typing import Optional
 from executor import Executor
+from cache import ListCache, MissCacheError
 
 
 class GenerationTaskReq(BaseModel):
@@ -24,10 +26,17 @@ app = FastAPI()
 @app.post('/generation')
 async def generate(data: GenerationTaskReq, request: Request):
     logger.info(f'{request.client.host}:{request.client.port} - "{request.method} {request.url.path}" - {data}')
-    inputs = tokenizer(data.prompt)
-    handle = executor.submit(inputs, data.max_tokens, data.top_k, data.top_p, data.temperature)
-    output = await executor.wait(handle)
-    output = tokenizer.decode(output, skip_special_tokens=True)
+    key = (data.prompt, data.max_tokens)
+    try:
+        outputs = cache.get(key)
+        output = random.choice(outputs)
+        logger.info('Cache hit')
+    except MissCacheError:
+        inputs = tokenizer(data.prompt)
+        handle = executor.submit(inputs, data.max_tokens, data.top_k, data.top_p, data.temperature)
+        output = await executor.wait(handle)
+        output = tokenizer.decode(output, skip_special_tokens=True)
+        cache.add(key, output)
     return {'text': output}
 
 
@@ -53,7 +62,11 @@ def launch_engine(model_class,
                   server_host="localhost",
                   server_port=8005,
                   log_level="info",
-                  allow_cors: bool = False
+                  allow_cors: bool = False,
+                  executor_max_batch_size: int = 16,
+                  cache_size: int = 50,
+                  cache_list_size: int = 1,
+                  fixed_cache_keys: list = [],
                   ):
     if allow_cors:
         app.add_middleware(
@@ -84,8 +97,11 @@ def launch_engine(model_class,
                              host=host,
                              port=port,
                              dtype=dtype)
+    global cache
+    cache = ListCache(cache_size, cache_list_size, fixed_keys=fixed_cache_keys)
+
     global executor
-    executor = Executor(engine, pad_token_id=tokenizer.pad_token_id, max_batch_size=16)
+    executor = Executor(engine, pad_token_id=tokenizer.pad_token_id, max_batch_size=executor_max_batch_size)
     executor.start()
 
     global server

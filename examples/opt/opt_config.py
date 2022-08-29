@@ -25,3 +25,7 @@ tokenizer_path = "facebook/opt-350m"
 server_host = "0.0.0.0"
 server_port = 8020
 log_level = "info"
+allow_cors = True
+executor_max_batch_size = 16
+cache_size = 50
+cache_list_size = 2

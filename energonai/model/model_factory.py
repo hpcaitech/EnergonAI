@@ -51,13 +51,15 @@ class PipelineModel(nn.Module):
                  checkpoint: str = None,
                  model_name: str = None,
                  is_decoder: bool = True,
-                 disable_past_cache = False) -> None:
+                 disable_past_cache = False,
+                 last_layer_norm = True) -> None:
         super().__init__()
         self.hidden_size = hidden_size
         self.first = first
         self.last = last
         self.max_seq_len = max_seq_len
         self.model_name = model_name
+        self.last_layer_norm = last_layer_norm
 
         if first:
             self.embed = Embedding1D(hidden_size=hidden_size,
@@ -84,7 +86,8 @@ class PipelineModel(nn.Module):
                                            is_decoder=is_decoder,
                                            disable_past_cache=disable_past_cache))
         if last:
-            self.norm = LayerNorm1D(normalized_shape=hidden_size, eps=layernorm_epsilon)
+            if self.last_layer_norm:
+                self.norm = LayerNorm1D(normalized_shape=hidden_size, eps=layernorm_epsilon)
             self.head = LMHead1D(hidden_size=hidden_size, vocab_size=vocab_size, bias=False, dtype=dtype)
 
     def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None, max_tokens: Optional[int] = None, top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):
@@ -110,10 +113,12 @@ class PipelineModel(nn.Module):
             for block in self.blocks:
                 hidden_states = block(hidden_states = hidden_states, 
                                       attention_mask = attention_unfold_mask, 
-                                      first_cache = first_cache)  # seq_lens
+                                      first_cache = first_cache)
 
             if self.last:
-                hidden_states = self.head(self.norm(hidden_states))
+                if self.last_layer_norm:
+                    hidden_states = self.norm(hidden_states)
+                hidden_states = self.head(hidden_states)
                 hidden_states = self.generate(input_ids, hidden_states, top_k=top_k,
                                               top_p=top_p, temperature=temperature)
             if torch.all(hidden_states == 50256):
@@ -204,7 +209,7 @@ def create_pipeline_model(depth: int = 48,
         elif model_kwargs["model_name"] == "opt":
             preprocess_fn = processing_OPT
         load_checkpoint(model_kwargs["checkpoint"], model, preprocess_fn=preprocess_fn, **model_kwargs)
-        logger.info(f'Load time: {time.time() - start:.3f} s')
+        logger.info(f'Rank: {rank}, Load time: {time.time() - start:.3f} s')
 
     return model
 
@@ -286,7 +291,7 @@ def opt_30B(**kwargs):
                         is_decoder=True,
                         fused_qkv=False,
                         model_name="opt",
-                        disable_past_cache=False,
+                        disable_past_cache=True,
                         **kwargs)
     return create_pipeline_model(**model_kwargs)
 
@@ -302,6 +307,7 @@ def opt_66B(**kwargs):
                         fused_qkv=False,
                         model_name="opt",
                         disable_past_cache=False,
+                        last_layer_norm = False,
                         **kwargs)
     return create_pipeline_model(**model_kwargs)
 

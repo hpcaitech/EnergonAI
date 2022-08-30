@@ -17,6 +17,7 @@ from energonai.utils.checkpointing import load_checkpoint
 from energonai.utils.checkpointing_hf_gpt2 import processing_HF_GPT
 from energonai.utils.checkpointing_opt import processing_OPT
 from transformers.generation_logits_process import TopKLogitsWarper, TopPLogitsWarper, TemperatureLogitsWarper, LogitsProcessorList
+from colossalai.nn import VocabParallelClassifier1D
 
 
 def gelu_impl(x):
@@ -51,7 +52,8 @@ class PipelineModel(nn.Module):
                  checkpoint: str = None,
                  model_name: str = None,
                  is_decoder: bool = True,
-                 disable_past_cache = False) -> None:
+                 disable_past_cache=False,
+                 vocab_parallel: bool = False) -> None:
         super().__init__()
         self.hidden_size = hidden_size
         self.first = first
@@ -65,7 +67,8 @@ class PipelineModel(nn.Module):
                                      max_seq_len=max_seq_len,
                                      num_tokentypes=num_tokentypes,
                                      padding_idx=padding_idx,
-                                     dtype=dtype)
+                                     dtype=dtype,
+                                     vocab_parallel=vocab_parallel)
 
         self.blocks = nn.ModuleList()
         self.pp_rank = gpc.get_local_rank(ParallelMode.PIPELINE) if is_using_pp() else 0
@@ -85,7 +88,10 @@ class PipelineModel(nn.Module):
                                            disable_past_cache=disable_past_cache))
         if last:
             self.norm = LayerNorm1D(normalized_shape=hidden_size, eps=layernorm_epsilon)
-            self.head = LMHead1D(hidden_size=hidden_size, vocab_size=vocab_size, bias=False, dtype=dtype)
+            if vocab_parallel:
+                self.head = VocabParallelClassifier1D(hidden_size, vocab_size, bias=False, dtype=dtype)
+            else:
+                self.head = LMHead1D(hidden_size=hidden_size, vocab_size=vocab_size, bias=False, dtype=dtype)
 
     def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None, max_tokens: Optional[int] = None, top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):
         batch_size = input_ids.shape[0]
@@ -108,9 +114,9 @@ class PipelineModel(nn.Module):
                 attention_unfold_mask = (1.0 - attention_unfold_mask) * -10000.0
 
             for block in self.blocks:
-                hidden_states = block(hidden_states = hidden_states, 
-                                      attention_mask = attention_unfold_mask, 
-                                      first_cache = first_cache)  # seq_lens
+                hidden_states = block(hidden_states=hidden_states,
+                                      attention_mask=attention_unfold_mask,
+                                      first_cache=first_cache)  # seq_lens
 
             if self.last:
                 hidden_states = self.head(self.norm(hidden_states))
@@ -314,8 +320,9 @@ def opt_175B(**kwargs):
                         num_heads=96,
                         activation=nn.functional.relu,
                         is_decoder=True,
-                        fused_qkv=False,
+                        fused_qkv=True,
                         model_name="opt",
                         disable_past_cache=False,
+                        vocab_parallel=True,
                         **kwargs)
     return create_pipeline_model(**model_kwargs)

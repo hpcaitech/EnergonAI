@@ -207,9 +207,9 @@ class VocabParallelEmbedding1D(torch.nn.Module):
         self.vocab_start_index, self.vocab_end_index = \
             VocabUtility.vocab_range_from_global_vocab_size(
                 self.num_embeddings, gpc.get_local_rank(ParallelMode.PARALLEL_1D),
-                self.tensor_model_parallel_size) if not skip_tp else 0, num_embeddings
+                self.tensor_model_parallel_size) if not skip_tp else (0, num_embeddings)
         self.num_embeddings_per_partition = self.vocab_end_index - \
-                                            self.vocab_start_index
+            self.vocab_start_index
 
         # Allocate weights and initialize.
         factory_kwargs = {'device': get_current_device(), 'dtype': dtype}
@@ -339,7 +339,7 @@ class _VocabParallelCrossEntropy(torch.autograd.Function):
         arange_1d = torch.arange(start=0, end=grad_2d.size()[0],
                                  device=grad_2d.device)
         grad_2d[arange_1d, masked_target_1d] -= (
-                1.0 - target_mask.view(-1).float())
+            1.0 - target_mask.view(-1).float())
 
         # Finally elementwise multiplication with the output gradients.
         grad_input.mul_(grad_output.unsqueeze(dim=-1))

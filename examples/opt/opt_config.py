@@ -1,17 +1,20 @@
-from energonai.model import opt_30B, opt_125M
+from energonai.model import opt_30B, opt_125M, opt_66B
 from opt_server import launch_engine
 
 # for engine
-model_class = opt_30B
+model_class = opt_66B
 model_type = "gpt"
 host = "127.0.0.1"
 port = 29402
 half = True
-# checkpoint = "/data/user/djs_model_checkpoint/opt_metaseq_125m/model/restored.pt"
 
 # If serving using a docker, map your own checkpoint directory to /model_checkpoint
-checkpoint = '/model_checkpoint/'
-# "/data/user/djs_model_checkpoint/opt-30B-singleton/opt_metaseq_30000m/model/restored.pt"
+# checkpoint = '/model_checkpoint/'
+
+# checkpoint = "/data/user/djs_model_checkpoint/opt_metaseq_125m/model/restored.pt"
+# checkpoint = "/data/user/lclhx/opt-30B"
+checkpoint="/data/user/djs_model_checkpoint/opt-66B-fragment"
+
 backend = "nccl"
 
 # for parallel
@@ -20,8 +23,9 @@ pp_init_size = 1
 
 # for server
 engine_server = launch_engine
-tokenizer_path = "facebook/opt-350m"
-# server_host = "127.0.0.1"
+# tokenizer_path = "facebook/opt-125m"
+tokenizer_path = "facebook/opt-30b"
+# tokenizer_path = "facebook/opt-66b"
 server_host = "0.0.0.0"
 server_port = 8020
 log_level = "info"

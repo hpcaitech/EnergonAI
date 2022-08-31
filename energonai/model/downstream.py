@@ -1,8 +1,5 @@
 from torch import dtype, nn
-from energonai.nn import Classifier1D
-from colossalai.nn import VocabParallelClassifier1D
-from energonai.nn.layer.parallel_1d._utils import gather_forward_split_backward
-from colossalai.context import ParallelMode
+from energonai.nn import Classifier1D, VocabParallelClassifier1D
 
 
 class LMHead1D(nn.Module):
@@ -26,6 +23,4 @@ class LMHead1D(nn.Module):
 
     def forward(self, x):
         x = self.dense(x)
-        if self.vocab_parallel:
-            x = gather_forward_split_backward(x, ParallelMode.PARALLEL_1D, -1)
         return x

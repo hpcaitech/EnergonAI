@@ -251,7 +251,7 @@ class VocabParallelEmbedding1D(ParallelLayer):
         pt_states = {weight_key: True} if not self.skip_tp else {weight_key: False}
         local_state = partition_tensor_parallel_state_dict(local_state,
                                                            ParallelMode.PARALLEL_1D,
-                                                           dims={weight_key: -1},
+                                                           dims={weight_key: 0},
                                                            partition_states=pt_states)
         super(ParallelLayer, self)._load_from_state_dict(local_state, prefix, *args)
 

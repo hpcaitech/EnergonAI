@@ -1,5 +1,10 @@
 import re
+import os
+import torch
 from collections import OrderedDict
+from colossalai.core import global_context as gpc
+from colossalai.context import ParallelMode
+from typing import Dict
 
 
 __all__ = [
@@ -97,3 +102,37 @@ def processing_OPT(state_dict: OrderedDict):
 def id_map(matched):
     value = matched.group('value')
     return "blocks.{}.".format(value)
+
+
+def preprocess_175b(state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    key_map = {
+        'decoder.embed_tokens.weight': 'embed.word_embeddings.weight',
+        'decoder.embed_positions.weight': 'embed.position_embeddings.weight',
+        'decoder.layer_norm': 'norm',
+        'decoder.layers': 'blocks',
+        'self_attn.qkv_proj': 'attn.query_key_value',
+        'self_attn.out_proj': 'attn.dense',
+        'self_attn_layer_norm': 'norm1',
+        'final_layer_norm': 'norm2',
+        'fc1': 'mlp.dense_1',
+        'fc2': 'mlp.dense_2'
+    }
+    output_sd = {}
+    for k, v in state_dict.items():
+        new_key = k
+        for old, new in key_map.items():
+            new_key = new_key.replace(old, new)
+        output_sd[new_key] = v
+    output_sd['head.weight'] = output_sd['embed.word_embeddings.weight'].clone()
+    return output_sd
+
+
+def load_175b(checkpoint_dir: str, model: torch.nn.Module) -> None:
+    tp_rank = gpc.get_local_rank(ParallelMode.PARALLEL_1D)
+    checkpoint_path = os.path.join(checkpoint_dir, f'reshard-model_part-{tp_rank}.pt')
+    print(f'Rank{gpc.get_global_rank()} load {checkpoint_path}')
+    state_dict = torch.load(checkpoint_path)
+    state_dict = preprocess_175b(state_dict)
+    for n, p in model.named_parameters():
+        with torch.no_grad():
+            p.copy_(state_dict[n])

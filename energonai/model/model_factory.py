@@ -15,7 +15,7 @@ from energonai.utils import is_using_pp, get_current_device
 from energonai.logging import get_dist_logger
 from energonai.utils.checkpointing import load_checkpoint
 from energonai.utils.checkpointing_hf_gpt2 import processing_HF_GPT
-from energonai.utils.checkpointing_opt import processing_OPT
+from energonai.utils.checkpointing_opt import processing_OPT, load_175b
 from transformers.generation_logits_process import TopKLogitsWarper, TopPLogitsWarper, TemperatureLogitsWarper, LogitsProcessorList
 from colossalai.nn import VocabParallelClassifier1D
 
@@ -204,12 +204,15 @@ def create_pipeline_model(depth: int = 48,
     if "checkpoint" in model_kwargs.keys() and "model_name" in model_kwargs.keys():
         start = time.time()
         assert os.path.exists(model_kwargs["checkpoint"]), "Checkpoint file not found"
-        preprocess_fn = None
-        if model_kwargs["model_name"] == "hf_gpt2":
-            preprocess_fn = processing_HF_GPT
-        elif model_kwargs["model_name"] == "opt":
-            preprocess_fn = processing_OPT
-        load_checkpoint(model_kwargs["checkpoint"], model, preprocess_fn=preprocess_fn, **model_kwargs)
+        if model_kwargs['model_name'] == 'opt-175b':
+            load_175b(model_kwargs["checkpoint"], model)
+        else:
+            preprocess_fn = None
+            if model_kwargs["model_name"] == "hf_gpt2":
+                preprocess_fn = processing_HF_GPT
+            elif model_kwargs["model_name"] == "opt":
+                preprocess_fn = processing_OPT
+            load_checkpoint(model_kwargs["checkpoint"], model, preprocess_fn=preprocess_fn, **model_kwargs)
         logger.info(f'Load time: {time.time() - start:.3f} s')
 
     return model
@@ -321,7 +324,7 @@ def opt_175B(**kwargs):
                         activation=nn.functional.relu,
                         is_decoder=True,
                         fused_qkv=True,
-                        model_name="opt",
+                        model_name="opt-175b",
                         disable_past_cache=False,
                         vocab_parallel=True,
                         **kwargs)

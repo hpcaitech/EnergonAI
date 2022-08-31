@@ -2,6 +2,7 @@ import torch
 from torch import nn as nn
 from torch import dtype
 from energonai.nn import VocabParallelEmbedding1D
+from energonai.nn.layer.parallel_1d.embed import Embedding
 from energonai.utils import get_current_device
 
 
@@ -16,14 +17,18 @@ class Embedding1D(nn.Module):
                  vocab_parallel: bool = False,
                  ) -> None:
         super().__init__()
+        if vocab_parallel:
+            self.word_embeddings = VocabParallelEmbedding1D(
+                vocab_size, hidden_size, padding_idx=padding_idx, dtype=dtype)
+        else:
+            self.word_embeddings = Embedding(vocab_size, hidden_size, padding_idx=padding_idx).to(
+                dtype=dtype, device=get_current_device())
 
-        self.word_embeddings = VocabParallelEmbedding1D(
-            vocab_size, hidden_size, padding_idx=padding_idx, dtype=dtype, skip_tp=not vocab_parallel)
-
-        self.position_embeddings = VocabParallelEmbedding1D(max_seq_len, hidden_size, dtype=dtype, skip_tp=True)
+        self.position_embeddings = Embedding(max_seq_len, hidden_size).to(dtype=dtype, device=get_current_device())
 
         if num_tokentypes > 0:
-            self.tokentype_embeddings = VocabParallelEmbedding1D(num_tokentypes, hidden_size, dtype=dtype, skip_tp=True)
+            self.tokentype_embeddings = Embedding(num_tokentypes, hidden_size).to(
+                dtype=dtype, device=get_current_device())
         else:
             self.tokentype_embeddings = None
 

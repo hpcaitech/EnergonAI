@@ -791,7 +791,6 @@ class VocabParallelClassifier1D(ParallelLayer):
                                                                weight_key: True,
                                                                bias_key: True
                                                            })
-        print(f'weight: {self.weight.shape}, sd: {local_state[weight_key].shape}')
         super()._load_from_state_dict(local_state, prefix, *args)
 
     def _save_to_state_dict(self, destination, prefix, keep_vars):

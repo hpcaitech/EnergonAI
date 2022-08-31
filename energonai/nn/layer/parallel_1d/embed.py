@@ -177,7 +177,7 @@ class VocabParallelEmbedding(torch.nn.Module):
                       'checkpoint but could not find it', flush=True)
 
 
-class VocabParallelEmbedding1D(torch.nn.Module):
+class VocabParallelEmbedding1D(ParallelLayer):
     """Embedding parallelized in the vocabulary dimension.
 
     This is mainly adapted from torch.nn.Embedding and all the default
@@ -240,7 +240,7 @@ class VocabParallelEmbedding1D(torch.nn.Module):
         output = output = reduce_input(output_parallel, ParallelMode.PARALLEL_1D)
         return output
 
-    def _load_from_state_dict(self, state_dict, prefix, *args):
+    def _load_from_global_state_dict(self, state_dict, prefix, *args):
         local_state = OrderedDict()
         weight_key = prefix + 'weight'
         if gpc.get_local_rank(ParallelMode.TENSOR) == 0:
@@ -253,9 +253,9 @@ class VocabParallelEmbedding1D(torch.nn.Module):
                                                            ParallelMode.PARALLEL_1D,
                                                            dims={weight_key: -1},
                                                            partition_states=pt_states)
-        super()._load_from_state_dict(local_state, prefix, *args)
+        super(ParallelLayer, self)._load_from_state_dict(local_state, prefix, *args)
 
-    def _save_to_state_dict(self, destination, prefix, keep_vars):
+    def _save_to_global_state_dict(self, destination, prefix, keep_vars):
         weight_key = prefix + 'weight'
         pt_states = {weight_key: True} if not self.skip_tp else {weight_key: False}
         local_state = OrderedDict({weight_key: self.weight})

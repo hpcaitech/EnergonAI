@@ -92,7 +92,7 @@ class Linear1D(torch.nn.Module):
 class Classifier1D(ParallelLayer):
     """RowLinear with given weight
     Classifier of 1D parallelism
-    
+
     :param in_features: size of input features
     :type in_features: int
     :param num_classes: number of classes in the dataset
@@ -169,7 +169,7 @@ class Classifier1D(ParallelLayer):
             output = output + self.bias
         return output
 
-    def _save_to_state_dict(self, destination, prefix, keep_vars):
+    def _save_to_global_state_dict(self, destination, prefix, keep_vars):
         weight_key = prefix + 'weight'
         bias_key = prefix + 'bias'
         local_state = OrderedDict()
@@ -190,7 +190,7 @@ class Classifier1D(ParallelLayer):
                                                         keep_vars=keep_vars)
         destination.update(local_state)
 
-    def _load_from_state_dict(self, state_dict, prefix, *args):
+    def _load_from_global_state_dict(self, state_dict, prefix, *args):
         local_state = OrderedDict()
         weight_key = prefix + 'weight'
         bias_key = prefix + 'bias'
@@ -216,7 +216,7 @@ class Classifier1D(ParallelLayer):
                                                                weight_key: True,
                                                                bias_key: False
                                                            })
-        super()._load_from_state_dict(local_state, prefix, *args)
+        super(ParallelLayer, self)._load_from_state_dict(local_state, prefix, *args)
 
 
 class Linear1D_Col(ParallelLayer):
@@ -310,7 +310,7 @@ class Linear1D_Col(ParallelLayer):
         else:
             return output
 
-    def _save_to_state_dict(self, destination, prefix, keep_vars):
+    def _save_to_global_state_dict(self, destination, prefix, keep_vars):
         weight_key = prefix + 'weight'
         bias_key = prefix + 'bias'
         local_state = OrderedDict({weight_key: self.weight})
@@ -329,7 +329,7 @@ class Linear1D_Col(ParallelLayer):
                                                         keep_vars=keep_vars)
         destination.update(local_state)
 
-    def _load_from_state_dict(self, state_dict, prefix, *args):
+    def _load_from_global_state_dict(self, state_dict, prefix, *args):
         local_state = OrderedDict()
         weight_key = prefix + 'weight'
         bias_key = prefix + 'bias'
@@ -354,7 +354,7 @@ class Linear1D_Col(ParallelLayer):
                                                                weight_key: True,
                                                                bias_key: True
                                                            })
-        super()._load_from_state_dict(local_state, prefix, *args)
+        super(ParallelLayer, self)._load_from_state_dict(local_state, prefix, *args)
 
 
 class Linear1D_Row(ParallelLayer):
@@ -426,7 +426,7 @@ class Linear1D_Row(ParallelLayer):
         num_partition = gpc.get_world_size(ParallelMode.TENSOR)
         set_tensor_parallel_attribute_by_partition(self.weight, num_partition)
 
-    def _load_from_state_dict(self, state_dict, prefix, *args):
+    def _load_from_global_state_dict(self, state_dict, prefix, *args):
         local_state = OrderedDict()
         weight_key = prefix + 'weight'
         bias_key = prefix + 'bias'
@@ -451,9 +451,9 @@ class Linear1D_Row(ParallelLayer):
                                                                weight_key: True,
                                                                bias_key: False
                                                            })
-        super()._load_from_state_dict(local_state, prefix, *args)
+        super(ParallelLayer, self)._load_from_state_dict(local_state, prefix, *args)
 
-    def _save_to_state_dict(self, destination, prefix, keep_vars):
+    def _save_to_global_state_dict(self, destination, prefix, keep_vars):
         weight_key = prefix + 'weight'
         bias_key = prefix + 'bias'
         local_state = OrderedDict({weight_key: self.weight})
@@ -488,7 +488,7 @@ class Linear1D_Row(ParallelLayer):
             return output, self.bias
 
 
-class MixedFusedLayerNorm1D(torch.nn.Module):
+class MixedFusedLayerNorm1D(ParallelLayer):
     r"""
     Layer Normalization for 1D parallelism
 
@@ -516,9 +516,9 @@ class MixedFusedLayerNorm1D(torch.nn.Module):
         init.ones_()(self.weight)
         init.zeros_()(self.bias)
 
-    def _save_to_state_dict(self, destination, prefix, keep_vars):
+    def _save_to_global_state_dict(self, destination, prefix, keep_vars):
         if gpc.get_local_rank(ParallelMode.TENSOR) == 0:
-            super()._save_to_state_dict(destination, prefix, keep_vars)
+            super(ParallelLayer, self)._save_to_state_dict(destination, prefix, keep_vars)
 
         # weight_key = prefix + 'weight'
         # bias_key = prefix + 'bias'
@@ -538,7 +538,7 @@ class MixedFusedLayerNorm1D(torch.nn.Module):
         #                                                 keep_vars=keep_vars)
         # destination.update(local_state)
 
-    def _load_from_state_dict(self, state_dict, prefix, *args):
+    def _load_from_global_state_dict(self, state_dict, prefix, *args):
         local_state = OrderedDict()
         weight_key = prefix + 'weight'
         bias_key = prefix + 'bias'
@@ -553,7 +553,7 @@ class MixedFusedLayerNorm1D(torch.nn.Module):
                 local_state[bias_key] = bias
 
         local_state = broadcast_state_dict(local_state, ParallelMode.PARALLEL_1D)
-        super()._load_from_state_dict(local_state, prefix, *args)
+        super(ParallelLayer, self)._load_from_state_dict(local_state, prefix, *args)
 
         # local_state = OrderedDict()
         # weight_key = prefix + 'weight'
@@ -642,7 +642,7 @@ class Embedding1D(ParallelLayer):
             with torch.no_grad():
                 self.weight[self.padding_idx].fill_(0)
 
-    def _load_from_state_dict(self, state_dict, prefix, *args):
+    def _load_from_global_state_dict(self, state_dict, prefix, *args):
         local_state = OrderedDict()
         weight_key = prefix + 'weight'
         if gpc.get_local_rank(ParallelMode.TENSOR) == 0:
@@ -655,9 +655,9 @@ class Embedding1D(ParallelLayer):
                                                            ParallelMode.PARALLEL_1D,
                                                            dims={weight_key: -1},
                                                            partition_states={weight_key: True})
-        super()._load_from_state_dict(local_state, prefix, *args)
+        super(ParallelLayer, self)._load_from_state_dict(local_state, prefix, *args)
 
-    def _save_to_state_dict(self, destination, prefix, keep_vars):
+    def _save_to_global_state_dict(self, destination, prefix, keep_vars):
         weight_key = prefix + 'weight'
         local_state = OrderedDict({weight_key: self.weight})
         local_state = gather_tensor_parallel_state_dict(local_state,

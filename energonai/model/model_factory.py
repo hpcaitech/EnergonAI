@@ -17,7 +17,6 @@ from energonai.utils.checkpointing import load_checkpoint
 from energonai.utils.checkpointing_hf_gpt2 import processing_HF_GPT
 from energonai.utils.checkpointing_opt import processing_OPT, load_175b
 from transformers.generation_logits_process import TopKLogitsWarper, TopPLogitsWarper, TemperatureLogitsWarper, LogitsProcessorList
-from colossalai.nn import VocabParallelClassifier1D
 
 
 def gelu_impl(x):
@@ -88,10 +87,8 @@ class PipelineModel(nn.Module):
                                            disable_past_cache=disable_past_cache))
         if last:
             self.norm = LayerNorm1D(normalized_shape=hidden_size, eps=layernorm_epsilon)
-            if vocab_parallel:
-                self.head = VocabParallelClassifier1D(hidden_size, vocab_size, bias=False, dtype=dtype)
-            else:
-                self.head = LMHead1D(hidden_size=hidden_size, vocab_size=vocab_size, bias=False, dtype=dtype)
+            self.head = LMHead1D(hidden_size=hidden_size, vocab_size=vocab_size,
+                                 bias=False, dtype=dtype, vocab_parallel=vocab_parallel)
 
     def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None, max_tokens: Optional[int] = None, top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):
         batch_size = input_ids.shape[0]

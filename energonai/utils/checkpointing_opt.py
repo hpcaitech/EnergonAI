@@ -93,7 +93,7 @@ def processing_OPT(state_dict: OrderedDict):
     # print(new_dict.keys())
     if 'head.dense.weight' not in new_dict:
         new_dict['head.dense.weight'] = new_dict['embed.word_embeddings.weight'].clone()
-        
+
     del new_dict['decoder.version']
     # print("="*100)
     # print(new_dict.keys())
@@ -125,7 +125,7 @@ def preprocess_175b(state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tens
         for old, new in key_map.items():
             new_key = new_key.replace(old, new)
         output_sd[new_key] = v
-    output_sd['head.weight'] = output_sd['embed.word_embeddings.weight'].clone()
+    output_sd['head.dense.weight'] = output_sd['embed.word_embeddings.weight'].clone()
     return output_sd
 
 

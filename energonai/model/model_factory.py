@@ -116,10 +116,11 @@ class PipelineModel(nn.Module):
             for block in self.blocks:
                 hidden_states = block(hidden_states=hidden_states,
                                       attention_mask=attention_unfold_mask,
-                                      first_cache=first_cache)  # seq_lens
+                                      first_cache=first_cache)
 
             if self.last:
-                hidden_states = self.head(self.norm(hidden_states))
+                hidden_states = self.norm(hidden_states)
+                hidden_states = self.head(hidden_states)
                 hidden_states = self.generate(input_ids, hidden_states, top_k=top_k,
                                               top_p=top_p, temperature=temperature)
             if torch.all(hidden_states == 50256):
@@ -295,7 +296,7 @@ def opt_30B(**kwargs):
                         is_decoder=True,
                         fused_qkv=False,
                         model_name="opt",
-                        disable_past_cache=False,
+                        disable_past_cache=True,
                         **kwargs)
     return create_pipeline_model(**model_kwargs)
 

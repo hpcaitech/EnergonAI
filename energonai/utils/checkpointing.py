@@ -34,12 +34,17 @@ def load_state_dict(path: str):
         filepath = os.path.join(path, filename)
         if os.path.isfile(filepath):
             files.append(filepath)
-    threads = torch.get_num_threads()
-    print(f'load {len(files)} files using {threads} threads')
-    with Pool(threads) as pool:
-        state_dicts = pool.map(torch.load, files)
-    for sd in state_dicts:
-        state_dict.update(sd)
+    procs = int(os.environ.get('LOAD_N_PROC', '1'))
+    print(f'load {len(files)} files using {procs} procs')
+    if procs > 1:
+        with Pool(procs) as pool:
+            state_dicts = pool.map(torch.load, files)
+        for sd in state_dicts:
+            state_dict.update(sd)
+    else:
+        for filepath in files:
+            sd = torch.load(filepath)
+            state_dict.update(sd)
     return state_dict
 
 

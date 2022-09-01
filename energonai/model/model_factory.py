@@ -294,7 +294,6 @@ def opt_30B(**kwargs):
                         fused_qkv=False,
                         model_name="opt",
                         disable_past_cache=False,
-                        vocab_parallel=True,
                         **kwargs)
     return create_pipeline_model(**model_kwargs)
 

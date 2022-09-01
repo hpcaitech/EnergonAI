@@ -35,6 +35,7 @@ def load_state_dict(path: str):
         if os.path.isfile(filepath):
             files.append(filepath)
     procs = int(os.environ.get('LOAD_N_PROC', '1'))
+    procs = min(procs, len(files))
     print(f'load {len(files)} files using {procs} procs')
     if procs > 1:
         with Pool(procs) as pool:
@@ -246,21 +247,7 @@ def load_checkpoint(file,
         if kwargs['prefix'] != '':
             model_state = remove_prefix(model_state, kwargs["prefix"])
 
-    try:
-        model.load_state_dict(model_state, strict=strict)
-    except RuntimeError as e:
-        error_msgs = str(e)
-        if error_msgs.startswith("Error(s) in loading state_dict for "):
-            error_msgs = error_msgs.split("\n\t")[1:]
-            dst_rank = gpc.get_ranks_in_group(ParallelMode.MODEL)[0]
-            all_error_msgs = [None for _ in range(gpc.get_world_size(ParallelMode.MODEL))]
-            dist.gather_object(error_msgs, all_error_msgs, dst=dst_rank, group=gpc.get_cpu_group(ParallelMode.MODEL))
-            if gpc.get_global_rank() == 0:
-                all_error_msgs = list(chain.from_iterable(all_error_msgs))
-                raise RuntimeError("Error(s) in loading state_dict for {}:\n\t{}".format(
-                    model.__class__.__name__, "\n\t".join(all_error_msgs)))
-        else:
-            raise e
+    model.load_state_dict(model_state, strict=strict)
 
     return -1
 

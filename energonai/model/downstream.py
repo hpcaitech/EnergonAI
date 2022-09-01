@@ -1,5 +1,5 @@
 from torch import dtype, nn
-from energonai.nn import Classifier1D
+from energonai.nn import Classifier1D, VocabParallelClassifier1D
 
 
 class LMHead1D(nn.Module):
@@ -8,9 +8,14 @@ class LMHead1D(nn.Module):
                  vocab_size: int,
                  word_embedding_weight: nn.Parameter = None,
                  bias: bool = False,
-                 dtype: dtype = None) -> None:
+                 dtype: dtype = None,
+                 vocab_parallel: bool = False) -> None:
         super().__init__()
-        self.dense = Classifier1D(hidden_size, vocab_size, word_embedding_weight, bias=bias, dtype=dtype)
+        self.vocab_parallel = vocab_parallel
+        if vocab_parallel:
+            self.dense = VocabParallelClassifier1D(hidden_size, vocab_size, bias=bias, dtype=dtype)
+        else:
+            self.dense = Classifier1D(hidden_size, vocab_size, word_embedding_weight, bias=bias, dtype=dtype)
 
     @property
     def weight(self):

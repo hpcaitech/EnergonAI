@@ -13,7 +13,9 @@ from ..base_layer import ParallelLayer
 from .layers import Linear1D_Row
 from energonai.nn.layer.utils import divide
 
-from ._utils import (gather_forward_split_backward, reduce_grad, reduce_input)
+from ._utils import (gather_forward_split_backward, reduce_grad, reduce_input, set_parallel_input)
+from ..utils import set_tensor_parallel_attribute_by_partition
+from colossalai.nn import init as colo_init
 
 
 class VocabParallelEmbedding(torch.nn.Module):
@@ -177,68 +179,48 @@ class VocabParallelEmbedding(torch.nn.Module):
                       'checkpoint but could not find it', flush=True)
 
 
-class VocabParallelEmbedding1D(torch.nn.Module):
-    """Embedding parallelized in the vocabulary dimension.
-
-    This is mainly adapted from torch.nn.Embedding and all the default
-    values are kept.
-    Arguments:
-        num_embeddings: vocabulary size.
-        embedding_dim: size of hidden state.
-        init_method: method to initialize weights.
-    """
-
-    def __init__(self, num_embeddings, embedding_dim, padding_idx=None, dtype=None,
-                 init_method=None, skip_tp=False):
-        super(VocabParallelEmbedding1D, self).__init__()
-        # Keep the input dimensions.
+class VocabParallelEmbedding1D(ParallelLayer):
+    def __init__(self,
+                 num_embeddings: int,
+                 embedding_dim: int,
+                 padding_idx: int = None,
+                 dtype: torch.dtype = None,
+                 weight_initializer=colo_init.normal_(),
+                 *args,
+                 **kwargs):
+        super().__init__()
         self.num_embeddings = num_embeddings
-        self.embedding_dim = embedding_dim
-        # Set the detauls for compatibility.
+        self.embed_dim = embedding_dim
         self.padding_idx = padding_idx
-        self.max_norm = None
-        self.norm_type = 2.
-        self.scale_grad_by_freq = False
-        self.sparse = False
-        self._weight = None
-        self.skip_tp = skip_tp
-        self.tensor_model_parallel_size = gpc.tensor_parallel_size
-        # Divide the weight matrix along the vocaburaly dimension.
-        self.vocab_start_index, self.vocab_end_index = \
-            VocabUtility.vocab_range_from_global_vocab_size(
-                self.num_embeddings, gpc.get_local_rank(ParallelMode.PARALLEL_1D),
-                self.tensor_model_parallel_size) if not skip_tp else 0, num_embeddings
-        self.num_embeddings_per_partition = self.vocab_end_index - \
-                                            self.vocab_start_index
+        self.embed_args = args
+        self.embed_kwargs = kwargs
 
-        # Allocate weights and initialize.
-        factory_kwargs = {'device': get_current_device(), 'dtype': dtype}
-        self.weight = Parameter(torch.empty(
-            self.num_embeddings_per_partition, self.embedding_dim,
-            **factory_kwargs))
-        init.uniform_(self.weight, -1, 1)
+        tensor_parallel_size = gpc.get_world_size(ParallelMode.PARALLEL_1D)
+        tensor_parallel_rank = gpc.get_local_rank(ParallelMode.PARALLEL_1D)
+        self.num_embeddings_per_partition = divide(num_embeddings, tensor_parallel_size)
+        self.vocab_start_index = tensor_parallel_rank * self.num_embeddings_per_partition
+        self.vocab_end_index = self.vocab_start_index + self.num_embeddings_per_partition
 
-    def forward(self, input_):
-        if self.tensor_model_parallel_size > 1:
-            # Build the mask.
-            input_mask = (input_ < self.vocab_start_index) | \
-                         (input_ >= self.vocab_end_index)
-            # Mask the input.
-            masked_input = input_.clone() - self.vocab_start_index
-            masked_input[input_mask] = 0
-        else:
-            masked_input = input_
-            # Get the embeddings.
-        output_parallel = F.embedding(masked_input, self.weight,
-                                      self.padding_idx, self.max_norm,
-                                      self.norm_type, self.scale_grad_by_freq,
-                                      self.sparse)
-        # Mask the output embedding.
-        if self.tensor_model_parallel_size > 1:
-            output_parallel[input_mask, :] = 0.0
-        # Reduce across all the model parallel GPUs.
-        output = output = reduce_input(output_parallel, ParallelMode.PARALLEL_1D)
-        return output
+        self.weight = Parameter(
+            torch.empty((self.num_embeddings_per_partition, self.embed_dim), device=get_current_device(), dtype=dtype))
+
+        self.reset_parameters(weight_initializer)
+        self._set_tensor_parallel_attributes()
+        set_parallel_input(False)
+
+    def _set_tensor_parallel_attributes(self):
+        set_tensor_parallel_attribute_by_partition(self.weight, gpc.tensor_parallel_size)
+
+    def reset_parameters(self, weight_initializer) -> None:
+        fan_in, fan_out = self.num_embeddings, self.embed_dim
+        weight_initializer(self.weight, fan_in=fan_in, fan_out=fan_out)
+        self._fill_padding_idx_with_zero()
+
+    def _fill_padding_idx_with_zero(self) -> None:
+        if self.padding_idx is not None and \
+                self.padding_idx >= self.vocab_start_index and self.padding_idx < self.vocab_end_index:
+            with torch.no_grad():
+                self.weight[self.padding_idx - self.vocab_start_index].fill_(0)
 
     def _load_from_state_dict(self, state_dict, prefix, *args):
         local_state = OrderedDict()
@@ -248,23 +230,38 @@ class VocabParallelEmbedding1D(torch.nn.Module):
             weight = state_dict.pop(weight_key, None)
             if weight is not None:
                 local_state[weight_key] = weight
-        pt_states = {weight_key: True} if not self.skip_tp else {weight_key: False}
+
         local_state = partition_tensor_parallel_state_dict(local_state,
                                                            ParallelMode.PARALLEL_1D,
-                                                           dims={weight_key: -1},
-                                                           partition_states=pt_states)
+                                                           dims={weight_key: 0},
+                                                           partition_states={weight_key: True})
         super()._load_from_state_dict(local_state, prefix, *args)
 
     def _save_to_state_dict(self, destination, prefix, keep_vars):
         weight_key = prefix + 'weight'
-        pt_states = {weight_key: True} if not self.skip_tp else {weight_key: False}
         local_state = OrderedDict({weight_key: self.weight})
         local_state = gather_tensor_parallel_state_dict(local_state,
                                                         ParallelMode.PARALLEL_1D,
-                                                        dims={weight_key: -1},
-                                                        partition_states=pt_states,
+                                                        dims={weight_key: 0},
+                                                        partition_states={weight_key: True},
                                                         keep_vars=keep_vars)
         destination.update(local_state)
+
+    def forward(self, input_: Tensor) -> Tensor:
+        # Build the mask.
+        input_mask = (input_ < self.vocab_start_index) | (input_ >= self.vocab_end_index)
+        # Mask the input.
+        masked_input = input_.clone() - self.vocab_start_index
+        masked_input[input_mask] = 0
+
+        output_parallel = F.embedding(masked_input, self.weight, self.padding_idx, *self.embed_args,
+                                      **self.embed_kwargs)
+
+        # Mask the output embedding.
+        output_parallel[input_mask, :] = 0.
+        # Reduce across all the model parallel GPUs.
+        output = reduce_input(output_parallel, ParallelMode.PARALLEL_1D)
+        return output
 
 
 class _VocabParallelCrossEntropy(torch.autograd.Function):
@@ -339,7 +336,7 @@ class _VocabParallelCrossEntropy(torch.autograd.Function):
         arange_1d = torch.arange(start=0, end=grad_2d.size()[0],
                                  device=grad_2d.device)
         grad_2d[arange_1d, masked_target_1d] -= (
-                1.0 - target_mask.view(-1).float())
+            1.0 - target_mask.view(-1).float())
 
         # Finally elementwise multiplication with the output gradients.
         grad_input.mul_(grad_output.unsqueeze(dim=-1))
@@ -635,3 +632,20 @@ class HiddenParallelGPTLMHead1D(ParallelLayer):
             x = self.head(x)
 
         return x
+
+
+class Embedding(nn.Embedding):
+    def _load_from_state_dict(self, state_dict, prefix, *args):
+        local_state = OrderedDict()
+        weight_key = prefix + 'weight'
+        if gpc.get_local_rank(ParallelMode.TENSOR) == 0:
+            # weight
+            weight = state_dict.pop(weight_key, None)
+            if weight is not None:
+                local_state[weight_key] = weight
+
+        local_state = partition_tensor_parallel_state_dict(local_state,
+                                                           ParallelMode.PARALLEL_1D,
+                                                           dims={weight_key: 0},
+                                                           partition_states={weight_key: False})
+        super()._load_from_state_dict(local_state, prefix, *args)

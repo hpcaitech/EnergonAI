@@ -15,7 +15,7 @@ from energonai.utils import is_using_pp, get_current_device
 from energonai.logging import get_dist_logger
 from energonai.utils.checkpointing import load_checkpoint
 from energonai.utils.checkpointing_hf_gpt2 import processing_HF_GPT
-from energonai.utils.checkpointing_opt import processing_OPT
+from energonai.utils.checkpointing_opt import processing_OPT, load_175b
 from transformers.generation_logits_process import TopKLogitsWarper, TopPLogitsWarper, TemperatureLogitsWarper, LogitsProcessorList
 
 
@@ -51,7 +51,8 @@ class PipelineModel(nn.Module):
                  checkpoint: str = None,
                  model_name: str = None,
                  is_decoder: bool = True,
-                 disable_past_cache = False) -> None:
+                 disable_past_cache=False,
+                 vocab_parallel: bool = False) -> None:
         super().__init__()
         self.hidden_size = hidden_size
         self.first = first
@@ -65,7 +66,8 @@ class PipelineModel(nn.Module):
                                      max_seq_len=max_seq_len,
                                      num_tokentypes=num_tokentypes,
                                      padding_idx=padding_idx,
-                                     dtype=dtype)
+                                     dtype=dtype,
+                                     vocab_parallel=vocab_parallel)
 
         self.blocks = nn.ModuleList()
         self.pp_rank = gpc.get_local_rank(ParallelMode.PIPELINE) if is_using_pp() else 0
@@ -85,7 +87,8 @@ class PipelineModel(nn.Module):
                                            disable_past_cache=disable_past_cache))
         if last:
             self.norm = LayerNorm1D(normalized_shape=hidden_size, eps=layernorm_epsilon)
-            self.head = LMHead1D(hidden_size=hidden_size, vocab_size=vocab_size, bias=False, dtype=dtype)
+            self.head = LMHead1D(hidden_size=hidden_size, vocab_size=vocab_size,
+                                 bias=False, dtype=dtype, vocab_parallel=vocab_parallel)
 
     def forward(self, hidden_states=None, input_ids=None, attention_mask=None, seq_lens=None, max_tokens: Optional[int] = None, top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):
         batch_size = input_ids.shape[0]
@@ -108,9 +111,9 @@ class PipelineModel(nn.Module):
                 attention_unfold_mask = (1.0 - attention_unfold_mask) * -10000.0
 
             for block in self.blocks:
-                hidden_states = block(hidden_states = hidden_states, 
-                                      attention_mask = attention_unfold_mask, 
-                                      first_cache = first_cache)
+                hidden_states = block(hidden_states=hidden_states,
+                                      attention_mask=attention_unfold_mask,
+                                      first_cache=first_cache)
 
             if self.last:
                 hidden_states = self.norm(hidden_states)
@@ -141,7 +144,7 @@ class PipelineModel(nn.Module):
         logits = logits[:, -1, :]
         logits_processor = self.get_logits_processor(top_k, top_p, temperature)
         logits = logits_processor(input_ids, logits)
-        logits = torch.softmax(logits, -1)
+        logits = torch.softmax(logits, -1, dtype=torch.float)
         logits = torch.multinomial(logits, num_samples=1).squeeze(1)
         return logits
 
@@ -199,13 +202,16 @@ def create_pipeline_model(depth: int = 48,
     if "checkpoint" in model_kwargs.keys() and "model_name" in model_kwargs.keys():
         start = time.time()
         assert os.path.exists(model_kwargs["checkpoint"]), "Checkpoint file not found"
-        preprocess_fn = None
-        if model_kwargs["model_name"] == "hf_gpt2":
-            preprocess_fn = processing_HF_GPT
-        elif model_kwargs["model_name"] == "opt":
-            preprocess_fn = processing_OPT
-        load_checkpoint(model_kwargs["checkpoint"], model, preprocess_fn=preprocess_fn, **model_kwargs)
-        logger.info(f'Rank: {rank}, Load time: {time.time() - start:.3f} s')
+        if model_kwargs['model_name'] == 'opt-175b':
+            load_175b(model_kwargs["checkpoint"], model)
+        else:
+            preprocess_fn = None
+            if model_kwargs["model_name"] == "hf_gpt2":
+                preprocess_fn = processing_HF_GPT
+            elif model_kwargs["model_name"] == "opt":
+                preprocess_fn = processing_OPT
+            load_checkpoint(model_kwargs["checkpoint"], model, preprocess_fn=preprocess_fn, **model_kwargs)
+        logger.info(f'Load time: {time.time() - start:.3f} s')
 
     return model
 
@@ -287,7 +293,7 @@ def opt_30B(**kwargs):
                         is_decoder=True,
                         fused_qkv=False,
                         model_name="opt",
-                        disable_past_cache=True,
+                        disable_past_cache=False,
                         **kwargs)
     return create_pipeline_model(**model_kwargs)
 
@@ -315,8 +321,9 @@ def opt_175B(**kwargs):
                         num_heads=96,
                         activation=nn.functional.relu,
                         is_decoder=True,
-                        fused_qkv=False,
-                        model_name="opt",
+                        fused_qkv=True,
+                        model_name="opt-175b",
                         disable_past_cache=False,
+                        vocab_parallel=True,
                         **kwargs)
     return create_pipeline_model(**model_kwargs)

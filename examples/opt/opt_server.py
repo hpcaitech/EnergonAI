@@ -13,11 +13,12 @@ from cache import ListCache, MissCacheError
 
 
 class GenerationTaskReq(BaseModel):
-    max_tokens: int = Field(gt=0)
-    prompt: str = Field(min_length=1)
-    top_k: Optional[int] = Field(default=None, gt=0)
-    top_p: Optional[float] = Field(default=None, gt=0.0, lt=1.0)
-    temperature: Optional[float] = Field(default=None, gt=0.0, lt=1.0)
+    max_tokens: int = Field(gt=0, le=256, example=64)
+    prompt: str = Field(
+        min_length=1, example='Question: Where were the 2004 Olympics held?\nAnswer: Athens, Greece\n\nQuestion: What is the longest river on the earth?\nAnswer:')
+    top_k: Optional[int] = Field(default=None, gt=0, example=50)
+    top_p: Optional[float] = Field(default=None, gt=0.0, lt=1.0, example=0.5)
+    temperature: Optional[float] = Field(default=None, gt=0.0, lt=1.0, example=0.7)
 
 
 app = FastAPI()
@@ -28,15 +29,18 @@ async def generate(data: GenerationTaskReq, request: Request):
     logger.info(f'{request.client.host}:{request.client.port} - "{request.method} {request.url.path}" - {data}')
     key = (data.prompt, data.max_tokens)
     try:
+        if cache is None:
+            raise MissCacheError()
         outputs = cache.get(key)
         output = random.choice(outputs)
         logger.info('Cache hit')
     except MissCacheError:
-        inputs = tokenizer(data.prompt)
+        inputs = tokenizer(data.prompt, truncation=True, max_length=512)
         handle = executor.submit(inputs, data.max_tokens, data.top_k, data.top_p, data.temperature)
         output = await executor.wait(handle)
         output = tokenizer.decode(output, skip_special_tokens=True)
-        cache.add(key, output)
+        if cache is not None:
+            cache.add(key, output)
     return {'text': output}
 
 
@@ -80,7 +84,7 @@ def launch_engine(model_class,
     # only for the generation task
     global tokenizer
     if(tokenizer_path):
-        tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_path, padding_side='left')
+        tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_path, padding_side='left', truncation_side='left')
 
     if checkpoint:
         model_config = {'dtype': dtype, 'checkpoint': checkpoint}
@@ -98,7 +102,10 @@ def launch_engine(model_class,
                              port=port,
                              dtype=dtype)
     global cache
-    cache = ListCache(cache_size, cache_list_size, fixed_keys=fixed_cache_keys)
+    if cache_size <= 0:
+        cache = None
+    else:
+        cache = ListCache(cache_size, cache_list_size, fixed_keys=fixed_cache_keys)
 
     global executor
     executor = Executor(engine, pad_token_id=tokenizer.pad_token_id, max_batch_size=executor_max_batch_size)

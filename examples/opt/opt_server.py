@@ -13,7 +13,7 @@ from cache import ListCache, MissCacheError
 
 
 class GenerationTaskReq(BaseModel):
-    max_tokens: int = Field(gt=0)
+    max_tokens: int = Field(gt=0, le=256)
     prompt: str = Field(min_length=1)
     top_k: Optional[int] = Field(default=None, gt=0)
     top_p: Optional[float] = Field(default=None, gt=0.0, lt=1.0)
@@ -32,7 +32,7 @@ async def generate(data: GenerationTaskReq, request: Request):
         output = random.choice(outputs)
         logger.info('Cache hit')
     except MissCacheError:
-        inputs = tokenizer(data.prompt)
+        inputs = tokenizer(data.prompt, truncation=True, max_length=512)
         handle = executor.submit(inputs, data.max_tokens, data.top_k, data.top_p, data.temperature)
         output = await executor.wait(handle)
         output = tokenizer.decode(output, skip_special_tokens=True)
@@ -80,7 +80,7 @@ def launch_engine(model_class,
     # only for the generation task
     global tokenizer
     if(tokenizer_path):
-        tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_path, padding_side='left')
+        tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_path, padding_side='left', truncation_side='left')
 
     if checkpoint:
         model_config = {'dtype': dtype, 'checkpoint': checkpoint}

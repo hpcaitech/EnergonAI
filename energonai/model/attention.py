@@ -1,4 +1,3 @@
-import math
 import torch
 from torch import nn, dtype
 
@@ -17,7 +16,7 @@ class MultiHeadAttention1D(nn.Module):
                  max_seq_len: int = 512,
                  fused_qkv: bool = True,
                  is_decoder: bool = True,
-                 disable_past_cache = False
+                 disable_past_cache=False
                  ) -> None:
         super().__init__()
 
@@ -26,7 +25,7 @@ class MultiHeadAttention1D(nn.Module):
         self.fused_qkv = fused_qkv
         self.is_decoder = is_decoder
         self.disable_past_cache = disable_past_cache
-
+        self.scaling = self.attention_head_size**-0.5
         if fused_qkv:
             self.query_key_value = Linear1D_Col(hidden_size, 3 * hidden_size, bias=bias, dtype=dtype)
         else:
@@ -58,24 +57,23 @@ class MultiHeadAttention1D(nn.Module):
     def forward(self,
                 hidden_states,
                 attention_mask=None,
-                first_cache = False,
+                first_cache=False,
                 seq_lens=None):
-
         if self.fused_qkv:
             if self.disable_past_cache:
-                qkv = self.query_key_value(hidden_states)
+                kvq = self.query_key_value(hidden_states)
             else:
                 if first_cache:
-                    qkv = self.query_key_value(hidden_states)
-                    self.past_cache['query_key_value'] = qkv
+                    kvq = self.query_key_value(hidden_states)
+                    self.past_cache['query_key_value'] = kvq
                 else:
-                    qkv = self.query_key_value(self.last_word(hidden_states))
-                    self.past_cache['query_key_value'] = torch.cat((self.past_cache['query_key_value'], qkv), 1)           
-                    qkv = self.past_cache['query_key_value']
-            all_head_size = qkv.shape[-1] // 3
+                    kvq = self.query_key_value(self.last_word(hidden_states))
+                    self.past_cache['query_key_value'] = torch.cat((self.past_cache['query_key_value'], kvq), 1)
+                    kvq = self.past_cache['query_key_value']
+            all_head_size = kvq.shape[-1] // 3
             num_attention_heads = divide(all_head_size, self.attention_head_size)
-            qkv = self._split_heads(qkv, num_attention_heads, 3 * self.attention_head_size)
-            q, k, v = torch.chunk(qkv, 3, dim=-1)
+            # kvq = self._split_heads(kvq, num_attention_heads, 3 * self.attention_head_size)
+            k, v, q = [t.contiguous() for t in torch.chunk(kvq, 3, dim=-1)]
         else:
             if self.disable_past_cache:
                 q = self.query_(hidden_states)
@@ -101,12 +99,13 @@ class MultiHeadAttention1D(nn.Module):
                     v = self.past_cache['v']
             all_head_size = q.shape[-1]
             num_attention_heads = divide(all_head_size, self.attention_head_size)
-            q = self._split_heads(q, num_attention_heads, self.attention_head_size)
-            k = self._split_heads(k, num_attention_heads, self.attention_head_size)
-            v = self._split_heads(v, num_attention_heads, self.attention_head_size)
+        q = self._split_heads(q, num_attention_heads, self.attention_head_size)
+        k = self._split_heads(k, num_attention_heads, self.attention_head_size)
+        v = self._split_heads(v, num_attention_heads, self.attention_head_size)
 
+        q *= self.scaling
         hidden_states = torch.matmul(q, k.transpose(-1, -2))
-        hidden_states = hidden_states / math.sqrt(self.attention_head_size)
+
         q_len, k_len = q.size(-2), k.size(-2)
 
         if self.is_decoder:
@@ -114,7 +113,8 @@ class MultiHeadAttention1D(nn.Module):
 
         if attention_mask is not None:
             hidden_states = hidden_states + attention_mask
-        hidden_states = self.softmax(hidden_states)
+        dtype = hidden_states.dtype
+        hidden_states = torch.softmax(hidden_states, -1, dtype=torch.float).to(dtype)
 
         hidden_states = torch.matmul(hidden_states, v)
 
@@ -123,7 +123,7 @@ class MultiHeadAttention1D(nn.Module):
         new_context_layer_shape = hidden_states.size()[:-2] + (all_head_size,)
 
         hidden_states = hidden_states.reshape(new_context_layer_shape)
-        
+
         if self.disable_past_cache:
             hidden_states = self.dense(hidden_states)
         else:
@@ -134,5 +134,4 @@ class MultiHeadAttention1D(nn.Module):
                 hidden_states = self.dense(self.last_word(hidden_states))
                 self.past_cache['dense'] = torch.cat((self.past_cache['dense'], hidden_states), 1)
                 hidden_states = self.past_cache['dense']
-
         return hidden_states

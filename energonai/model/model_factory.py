@@ -144,7 +144,7 @@ class PipelineModel(nn.Module):
         logits = logits[:, -1, :]
         logits_processor = self.get_logits_processor(top_k, top_p, temperature)
         logits = logits_processor(input_ids, logits)
-        logits = torch.softmax(logits, -1)
+        logits = torch.softmax(logits, -1, dtype=torch.float)
         logits = torch.multinomial(logits, num_samples=1).squeeze(1)
         return logits
 

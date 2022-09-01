@@ -13,11 +13,12 @@ from cache import ListCache, MissCacheError
 
 
 class GenerationTaskReq(BaseModel):
-    max_tokens: int = Field(gt=0, le=256)
-    prompt: str = Field(min_length=1)
-    top_k: Optional[int] = Field(default=None, gt=0)
-    top_p: Optional[float] = Field(default=None, gt=0.0, lt=1.0)
-    temperature: Optional[float] = Field(default=None, gt=0.0, lt=1.0)
+    max_tokens: int = Field(gt=0, le=256, example=64)
+    prompt: str = Field(
+        min_length=1, example='Question: Where were the 2004 Olympics held?\nAnswer: Athens, Greece\n\nQuestion: What is the longest river on the earth?\nAnswer:')
+    top_k: Optional[int] = Field(default=None, gt=0, example=50)
+    top_p: Optional[float] = Field(default=None, gt=0.0, lt=1.0, example=0.5)
+    temperature: Optional[float] = Field(default=None, gt=0.0, lt=1.0, example=0.7)
 
 
 app = FastAPI()

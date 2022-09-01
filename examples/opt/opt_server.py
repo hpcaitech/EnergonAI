@@ -29,6 +29,8 @@ async def generate(data: GenerationTaskReq, request: Request):
     logger.info(f'{request.client.host}:{request.client.port} - "{request.method} {request.url.path}" - {data}')
     key = (data.prompt, data.max_tokens)
     try:
+        if cache is None:
+            raise MissCacheError()
         outputs = cache.get(key)
         output = random.choice(outputs)
         logger.info('Cache hit')
@@ -37,7 +39,8 @@ async def generate(data: GenerationTaskReq, request: Request):
         handle = executor.submit(inputs, data.max_tokens, data.top_k, data.top_p, data.temperature)
         output = await executor.wait(handle)
         output = tokenizer.decode(output, skip_special_tokens=True)
-        cache.add(key, output)
+        if cache is not None:
+            cache.add(key, output)
     return {'text': output}
 
 
@@ -99,7 +102,10 @@ def launch_engine(model_class,
                              port=port,
                              dtype=dtype)
     global cache
-    cache = ListCache(cache_size, cache_list_size, fixed_keys=fixed_cache_keys)
+    if cache_size <= 0:
+        cache = None
+    else:
+        cache = ListCache(cache_size, cache_list_size, fixed_keys=fixed_cache_keys)
 
     global executor
     executor = Executor(engine, pad_token_id=tokenizer.pad_token_id, max_batch_size=executor_max_batch_size)

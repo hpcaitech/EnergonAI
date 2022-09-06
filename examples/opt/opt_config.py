@@ -30,3 +30,4 @@ allow_cors = True
 executor_max_batch_size = 16
 cache_size = 50
 cache_list_size = 2
+timeout_keep_alive = 180

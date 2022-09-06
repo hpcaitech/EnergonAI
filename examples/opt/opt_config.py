@@ -31,3 +31,4 @@ executor_max_batch_size = 16
 cache_size = 50
 cache_list_size = 2
 timeout_keep_alive = 180
+executor_max_queue_size = 0

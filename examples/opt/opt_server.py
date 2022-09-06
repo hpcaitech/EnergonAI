@@ -2,13 +2,13 @@ import logging
 import torch
 import uvicorn
 import random
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from energonai.engine import InferenceEngine
 from fastapi.middleware.cors import CORSMiddleware
 from transformers import GPT2Tokenizer
 from pydantic import BaseModel, Field
 from typing import Optional
-from executor import Executor
+from executor import Executor, QueueFullError
 from cache import ListCache, MissCacheError
 
 
@@ -36,11 +36,14 @@ async def generate(data: GenerationTaskReq, request: Request):
         logger.info('Cache hit')
     except MissCacheError:
         inputs = tokenizer(data.prompt, truncation=True, max_length=512)
-        handle = executor.submit(inputs, data.max_tokens, data.top_k, data.top_p, data.temperature)
-        output = await executor.wait(handle)
-        output = tokenizer.decode(output, skip_special_tokens=True)
-        if cache is not None:
-            cache.add(key, output)
+        try:
+            handle = executor.submit(inputs, data.max_tokens, data.top_k, data.top_p, data.temperature)
+            output = await executor.wait(handle)
+            output = tokenizer.decode(output, skip_special_tokens=True)
+            if cache is not None:
+                cache.add(key, output)
+        except QueueFullError as e:
+            raise HTTPException(status_code=406, detail=e.args[0])
     return {'text': output}
 
 
@@ -72,6 +75,7 @@ def launch_engine(model_class,
                   cache_list_size: int = 1,
                   fixed_cache_keys: list = [],
                   timeout_keep_alive: int = 60,
+                  executor_max_queue_size: int = 0
                   ):
     if allow_cors:
         app.add_middleware(
@@ -109,7 +113,8 @@ def launch_engine(model_class,
         cache = ListCache(cache_size, cache_list_size, fixed_keys=fixed_cache_keys)
 
     global executor
-    executor = Executor(engine, pad_token_id=tokenizer.pad_token_id, max_batch_size=executor_max_batch_size)
+    executor = Executor(engine, pad_token_id=tokenizer.pad_token_id,
+                        max_batch_size=executor_max_batch_size, max_queue_size=executor_max_queue_size)
     executor.start()
 
     global server

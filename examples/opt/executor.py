@@ -69,10 +69,9 @@ class Executor:
     def submit(self, inputs, max_tokens, top_k, top_p, temperature):
         if not self.running:
             raise RuntimeError('executor is shutdown')
-        current_queue_size = len(self.submit_queue)
-        if self.max_queue_size > 0 and current_queue_size >= self.max_queue_size:
+        if self.max_queue_size > 0 and len(self.submit_queue) >= self.max_queue_size:
             raise QueueFullError(
-                f'Submit queue is full, current size: {current_queue_size}, max size: {self.max_queue_size}')
+                f'Submit queue is full, size: {self.max_queue_size}')
         args = GenerationArgs(top_k, top_p, temperature)
         entry = SubmitEntry(inputs, args, max_tokens)
         self.submit_queue.append(entry)

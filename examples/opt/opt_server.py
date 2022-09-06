@@ -71,6 +71,7 @@ def launch_engine(model_class,
                   cache_size: int = 50,
                   cache_list_size: int = 1,
                   fixed_cache_keys: list = [],
+                  timeout_keep_alive: int = 60,
                   ):
     if allow_cors:
         app.add_middleware(
@@ -112,6 +113,7 @@ def launch_engine(model_class,
     executor.start()
 
     global server
-    config = uvicorn.Config(app, host=server_host, port=server_port, log_level=log_level)
+    config = uvicorn.Config(app, host=server_host, port=server_port,
+                            log_level=log_level, timeout_keep_alive=timeout_keep_alive)
     server = uvicorn.Server(config=config)
     server.run()

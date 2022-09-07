@@ -10,8 +10,12 @@ GenerationArgs = namedtuple('GenerationArgs', ['top_k', 'top_p', 'temperature'])
 SubmitEntry = namedtuple('SubmitEntry', ['inputs', 'args', 'decode_steps'])
 
 
+class QueueFullError(Exception):
+    pass
+
+
 class Executor:
-    def __init__(self, engine, pad_token_id: int = 0, max_batch_size: int = 1) -> None:
+    def __init__(self, engine, pad_token_id: int = 0, max_batch_size: int = 1, max_queue_size: int = 0) -> None:
         self.engine = engine
         self.pad_token_id = pad_token_id
         self.max_batch_size = max_batch_size
@@ -20,6 +24,8 @@ class Executor:
         self.ready_map: Dict[int, Any] = {}
         self.submit_queue: Deque[SubmitEntry] = deque()
         self.logger = get_dist_logger()
+        assert isinstance(max_queue_size, int)
+        self.max_queue_size = max_queue_size
 
     def _start(self) -> None:
         self.running = True
@@ -63,6 +69,9 @@ class Executor:
     def submit(self, inputs, max_tokens, top_k, top_p, temperature):
         if not self.running:
             raise RuntimeError('executor is shutdown')
+        if self.max_queue_size > 0 and len(self.submit_queue) >= self.max_queue_size:
+            raise QueueFullError(
+                f'Submit queue is full, size: {self.max_queue_size}')
         args = GenerationArgs(top_k, top_p, temperature)
         entry = SubmitEntry(inputs, args, max_tokens)
         self.submit_queue.append(entry)

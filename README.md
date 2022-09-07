@@ -26,7 +26,7 @@ $ pip install .
 ```
 **Use docker**
 ``` bash
-$ docker pull hpcaitech/energon-ai:0.2.3
+$ docker pull hpcaitech/energon-ai:0.2.5
 ```
 
 
@@ -34,14 +34,8 @@ $ docker pull hpcaitech/energon-ai:0.2.3
 
 1. **Download OPT model:**
   To launch the distributed inference service quickly, you can download the checkpoint of OPT-125M [here](https://huggingface.co/patrickvonplaten/opt_metaseq_125m/blob/main/model/restored.pt). You can get details for loading other sizes of models [here](https://github.com/hpcaitech/EnergonAI/tree/main/examples/opt/script).
-2. **Prepare a prebuilt service image:**
-Pull a docker image from dockerhub installed with ColossalAI and EnergonAI.
-    ```bash
-        docker pull hpcaitech/energon-ai:0.2.3
-    ```
-    You can also install the colossalai and Energon-ai without a docker by following their readme pages.
 
-3. **Launch an HTTP service:**
+2. **Launch an HTTP service:**
 To launch a service, we need to provide python scripts to describe the model type and related configurations, and start an http service.
 An OPT example is [EnergonAI/examples/opt](https://github.com/hpcaitech/EnergonAI/tree/main/examples/opt).  
 The entrance of the service is a bash script ***server.sh***.
@@ -52,27 +46,36 @@ For example, set the model class as opt_125M and set the correct checkpoint path
         checkpoint = 'your_file_path'
         tp_init_size = #gpu
     ```
-    Now, we can launch a service using docker. You can map the path of checkpoint and directory containing configs to docker disk volume.
+    Now, we can launch a service:
+
     ```bash
-        export CHECKPOINT_DIR="your_opt_checkpoint_path"
-        export CONFIG_DIR="config_file_path"
-        # the ${CONFIG_DIR} must contain a server.sh file as the entry of service
-        docker run --gpus all  --rm -it -p 8020:8020 -v ${CHECKPOINT_DIR}:/model_checkpoint -v ${CONFIG_DIR}:/config --ipc=host energonai:lastest
+        bash server.sh
     ```
 
-    Then open ***https://[ip]:8020/docs*** in your browser and try out!
+    Then open ***https://[ip]:[port]/docs*** in your browser and try out!
 
+
+### Publication
+You can find technical details in our blog and manuscript:
+
+[EnergonAI: An Inference System for 10-100 Billion Parameter Transformer Models](https://arxiv.org/pdf/2209.02341.pdf)
+
+```
+@misc{du2022energonai, 
+      title={EnergonAI: An Inference System for 10-100 Billion Parameter Transformer Models}, 
+      author={Jiangsu Du and Ziming Liu and Jiarui Fang and Shenggui Li and Yongbin Li and Yutong Lu and Yang You},
+      year={2022},
+      eprint={2209.02341},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
+}
+```
 
 ### Contributing
 
 If interested in making your own contribution to the project, please refer to [Contributing](./CONTRIBUTING.md) for guidance.
 
 Thanks so much!
-
-### Publication
-You can find technical details in our blog and paper:
-
-Cite this paper, if you use EnergonAI in your research publication:
 
 
 

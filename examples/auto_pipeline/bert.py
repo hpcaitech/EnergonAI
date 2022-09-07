@@ -9,10 +9,8 @@ from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
 from energonai.logging import get_dist_logger
 from colossalai.nn.layer.utils import divide, ACT2FN
-from energonai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
-from energonai.nn import LayerNorm1D
+from colossalai.nn import Linear1D_Col, Linear1D_Row, LayerNorm1D, VocabParallelEmbedding1D
 from energonai.kernel import transpose_pad, transpose_depad, depad
-from energonai.nn import VocabParallelEmbedding1D
 from energonai.utils import get_current_device, is_using_pp
 
 __all__ = [
@@ -35,16 +33,14 @@ class BertEmbedding1D(nn.Module):
                  layernorm_epsilon: float = 1e-5,
                  dtype: dtype = None) -> None:
         super().__init__()
-        self.word_embeddings = VocabParallelEmbedding1D(vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype,
-                                                        skip_tp=True)
-        self.position_embeddings = VocabParallelEmbedding1D(max_position_embeddings, embedding_dim, dtype=dtype,
-                                                            skip_tp=True)
+        self.word_embeddings = VocabParallelEmbedding1D(vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype)
+        self.position_embeddings = VocabParallelEmbedding1D(max_position_embeddings, embedding_dim, dtype=dtype)
         if num_tokentypes > 0:
             self.tokentype_embeddings = VocabParallelEmbedding1D(num_tokentypes, embedding_dim, dtype=dtype)
         else:
             self.tokentype_embeddings = None
 
-        self.LayerNorm = LayerNorm1D(embedding_dim, eps=layernorm_epsilon)
+        self.LayerNorm = LayerNorm1D(embedding_dim, eps=layernorm_epsilon, dtype=dtype)
 
     def forward(self, input_ids, position_ids=None, tokentype_ids=None):
         # max_padding_size = input_ids.shape[1]
@@ -89,7 +85,7 @@ class BertSelfAttention1D(nn.Module):
             raise NotImplementedError
 
         self.dense = Linear1D_Row(hidden_size, hidden_size, bias=True, dtype=dtype, parallel_input=True)
-        self.LayerNorm = LayerNorm1D(hidden_size, eps=layernorm_epsilon)
+        self.LayerNorm = LayerNorm1D(hidden_size, eps=layernorm_epsilon, dtype=dtype)
 
     def forward(self, hidden_states, attention_mask=None):
 
@@ -156,7 +152,7 @@ class BertMLP1D(nn.Module):
         self.layer_0 = Linear1D_Col(hidden_size, intermediate_dim, bias=bias, dtype=dtype, gather_output=False)
         self.activation = activation
         self.layer_1 = Linear1D_Row(intermediate_dim, hidden_size, bias=bias, dtype=dtype, parallel_input=True)
-        self.LayerNorm = LayerNorm1D(hidden_size, eps=layernorm_epsilon)
+        self.LayerNorm = LayerNorm1D(hidden_size, eps=layernorm_epsilon, dtype=dtype)
 
     def forward(self, input_tensor):
         hidden_states = self.layer_0(input_tensor)

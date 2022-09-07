@@ -5,7 +5,7 @@ import pprint
 from functools import partial
 from energonai.logging import get_dist_logger
 
-import energonai.nn as col_nn
+import colossalai.nn as col_nn
 import pytest
 import torch
 import torch.multiprocessing as mp
@@ -16,6 +16,7 @@ from energonai.initialize import launch
 from energonai.logging import disable_existing_loggers
 from energonai.utils import free_port, is_using_pp
 from energonai.utils.checkpointing import gather_pipeline_parallel_state_dict, load_checkpoint, save_checkpoint
+
 
 def partition_uniform(num_items, pipeline_parallel_size, num_chunks):
     assert num_items % num_chunks == 0, \
@@ -40,7 +41,6 @@ def partition_uniform(num_items, pipeline_parallel_size, num_chunks):
 
 
 def build_pipeline(model):
-
 
     pipeline_size = gpc.get_world_size(ParallelMode.PIPELINE)
     pipeline_rank = gpc.get_local_rank(ParallelMode.PIPELINE)

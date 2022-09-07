@@ -4,7 +4,7 @@
 import pprint
 from functools import partial
 
-import energonai.nn as col_nn
+import colossalai.nn as col_nn
 import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
@@ -22,6 +22,7 @@ from energonai.utils.checkpointing import gather_pipeline_parallel_state_dict, l
 
 def check_equal(A, B):
     assert torch.allclose(A, B, rtol=1e-3, atol=1e-2)
+
 
 def check_gpt_1d(rank, world_size, port):
     disable_existing_loggers()

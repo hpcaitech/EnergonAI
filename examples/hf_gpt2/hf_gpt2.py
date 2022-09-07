@@ -10,9 +10,7 @@ from energonai.logging import get_dist_logger
 from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
 from colossalai.nn.layer.utils import divide, ACT2FN
-from energonai.nn import Linear1D_Col, Linear1D_Row, Classifier1D
-from energonai.nn import LayerNorm1D
-from energonai.nn import VocabParallelEmbedding1D
+from colossalai.nn import Linear1D_Col, Linear1D_Row, Classifier1D, LayerNorm1D, VocabParallelEmbedding1D
 from torch.nn import Embedding
 from energonai.utils import get_current_device, is_using_pp
 from energonai.utils.checkpointing import load_checkpoint
@@ -38,14 +36,14 @@ class GPTEmbedding1D(nn.Module):
                  dtype: dtype = None) -> None:
         super().__init__()
         self.word_embeddings = VocabParallelEmbedding1D(
-            vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype, skip_tp=True)
+            vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype)
         # self.word_embeddings = Embedding(vocab_size, embedding_dim, padding_idx=padding_idx, dtype=dtype)
         self.position_embeddings = VocabParallelEmbedding1D(
-            max_position_embeddings, embedding_dim, dtype=dtype, skip_tp=True)
+            max_position_embeddings, embedding_dim, dtype=dtype)
         # self.position_embeddings = Embedding(max_position_embeddings, embedding_dim, dtype=dtype)
         if num_tokentypes > 0:
             self.tokentype_embeddings = VocabParallelEmbedding1D(
-                num_tokentypes, embedding_dim, dtype=dtype, skip_tp=True)
+                num_tokentypes, embedding_dim, dtype=dtype)
             # self.tokentype_embeddings = Embedding(num_tokentypes, embedding_dim, dtype=dtype)
         else:
             self.tokentype_embeddings = None
@@ -191,7 +189,7 @@ class GPTBlock1D(nn.Module):
 
         self.apply_post_layernorm = apply_post_layernorm
         # self.norm1 = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
-        self.norm1 = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
+        self.norm1 = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
         self.attn = GPTSelfAttention1D(dim=dim,
                                        num_heads=num_heads,
                                        bias=bias,
@@ -199,7 +197,7 @@ class GPTBlock1D(nn.Module):
                                        dtype=dtype)
 
         # self.norm2 = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
-        self.norm2 = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
+        self.norm2 = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
         self.mlp = GPTMLP1D(dim=dim, mlp_ratio=mlp_ratio, activation=activation, dtype=dtype, bias=bias)
 
     def forward(self, x, attention_mask=None):
@@ -295,7 +293,7 @@ class GPT1D(nn.Module):
         #     ) for _ in range(depth)
         # ])
         # self.norm = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
-        self.norm = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
+        self.norm = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
         self.head = GPTLMHead1D(dim=dim,
                                 vocab_size=vocab_size,
                                 word_embeding_weight=self.embed.word_embedding_weight,
@@ -383,7 +381,7 @@ class PipelineGPT1D(nn.Module):
         # ])
         if self.last:
             # self.norm = nn.LayerNorm(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
-            self.norm = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon)
+            self.norm = LayerNorm1D(normalized_shape=dim, eps=layernorm_epsilon, dtype=dtype)
             self.head = GPTLMHead1D(dim=dim, vocab_size=vocab_size,
                                     dtype=dtype)  # word_embeeding_weight=self.embed.word_embedding_weight not in the same process
 

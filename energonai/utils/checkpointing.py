@@ -1,22 +1,17 @@
-import re
 from collections import OrderedDict
-from itertools import chain
 
 import torch
 import torch.distributed as dist
 
 from . import is_using_pp
-from ..communication.collective import scatter_object_list
 from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
 from typing import Optional, Callable
-try:
-    from torch.nn.modules.module import _EXTRA_STATE_KEY_SUFFIX
-except ImportError:
-    _EXTRA_STATE_KEY_SUFFIX = '_extra_state'
+from colossalai.utils.checkpointing import partition_pipeline_parallel_state_dict, broadcast_model
+
 
 __all__ = [
-    "partition_tensor_parallel_state_dict", "load_checkpoint", "gather_tensor_parallel_state_dict", "save_checkpoint"
+    "load_checkpoint", "load_state_dict"
 ]
 
 import os
@@ -46,156 +41,6 @@ def load_state_dict(path: str):
         for filepath in files:
             sd = torch.load(filepath)
             state_dict.update(sd)
-    return state_dict
-
-
-def broadcast_state_dict(state_dict, parallel_mode):
-    """
-    Broadcast the state dict among the group under the selected parallel mode
-    Args:
-        state_dict: state dict containing the parameters of the model
-        parallel_mode: PP/TP and so on
-
-    Returns:
-        state dict
-    """
-    state_dict = [state_dict.copy() if isinstance(state_dict, dict) else state_dict]
-    src_rank = gpc.get_ranks_in_group(parallel_mode)[0]
-    dist.broadcast_object_list(state_dict, src=src_rank, group=gpc.get_cpu_group(parallel_mode))
-    return state_dict[0]
-
-
-def partition_tensor_parallel_state_dict(state_dict: OrderedDict,
-                                         parallel_mode: ParallelMode,
-                                         dims: dict = dict(),
-                                         partition_states: dict = dict()):
-    """
-    Given a state dict, do the partition of parameters among workers.
-    Args:
-        dims: dimensions to chunk on.
-        partition_states: the states in state dicts that needs to be chunked.
-    """
-    src_rank = gpc.get_ranks_in_group(parallel_mode)[0]
-    depth = gpc.get_world_size(parallel_mode)
-    group = gpc.get_cpu_group(parallel_mode)
-    is_rank0 = gpc.get_local_rank(parallel_mode) == 0
-    partition_info = [None]
-    if is_rank0:
-        partition_info_dict = OrderedDict()
-        for key, param in state_dict.items():
-            dim = dims[key]
-            is_partitioned = partition_states[key]
-            shape = list(param.shape)
-            if is_partitioned:
-                shape[dim] = shape[dim] // depth
-            partition_info_dict[key] = (is_partitioned, param.dtype, shape, dim)
-        partition_info[0] = partition_info_dict
-    dist.broadcast_object_list(partition_info, src_rank, group=group)
-    partitioned_state = OrderedDict()
-    for key, (is_partitioned, dtype, shape, dim) in partition_info[0].items():
-        if is_partitioned:
-            output = torch.empty(shape, dtype=dtype)
-            if is_rank0:
-                scatter_list = [t.contiguous() for t in state_dict[key].chunk(depth, dim)]
-            else:
-                scatter_list = None
-            dist.scatter(output, scatter_list, src_rank, group=group)
-        else:
-            if is_rank0:
-                output = state_dict[key]
-            else:
-                output = torch.empty(shape, dtype=dtype)
-            dist.broadcast(output, src_rank, group=group)
-        partitioned_state[key] = output
-    return partitioned_state
-
-
-def gather_tensor_parallel_state_dict(
-        state_dict: OrderedDict,
-        parallel_mode: ParallelMode,
-        dims: dict = dict(),
-        partition_states: dict = dict(),
-        keep_vars: bool = False,
-):
-    dst_rank = gpc.get_ranks_in_group(parallel_mode)[0]
-    depth = gpc.get_world_size(parallel_mode)
-
-    for key in list(state_dict.keys()):
-        param = state_dict.pop(key)
-        param = param if keep_vars else param.detach()
-        dim = dims.get(key, 0)
-        do_partition = partition_states.get(key, True)
-        if do_partition:
-            temp = param.transpose(0, dim).contiguous()
-            gather_list = None
-            if gpc.get_local_rank(parallel_mode) == 0:
-                shape = list(param.shape)
-                shape[0], shape[dim] = shape[dim], shape[0]
-                shape[0] *= depth
-                param = torch.empty(shape, dtype=param.dtype, device=param.device)
-                gather_list = list(torch.chunk(param, depth, dim=0))
-            dist.gather(temp, gather_list, dst=dst_rank, group=gpc.get_cpu_group(parallel_mode))
-            param = torch.transpose(param, 0, dim)
-        # update params in state_dict only on local rank 0
-        if gpc.get_local_rank(parallel_mode) == 0:
-            state_dict[key] = param
-
-    return state_dict
-
-
-def _send_state_dict(state_dict, dst, parallel_mode):
-    state_tensor, state_size = dist.distributed_c10d._object_to_tensor(state_dict)
-    dist.send(state_size, dst, group=gpc.get_cpu_group(parallel_mode))
-    dist.send(state_tensor, dst, group=gpc.get_cpu_group(parallel_mode))
-
-
-def _recv_state_dict(src, parallel_mode):
-    state_size = torch.tensor([0], dtype=torch.long)
-    dist.recv(state_size, src, group=gpc.get_cpu_group(parallel_mode))
-    state_tensor = torch.empty(state_size.item(), dtype=torch.uint8)
-    dist.recv(state_tensor, src, group=gpc.get_cpu_group(parallel_mode))
-    state_dict = dist.distributed_c10d._tensor_to_object(state_tensor, state_size)
-    return state_dict
-
-
-def partition_pipeline_parallel_state_dict(model, state_dict, **kwargs):
-    pipeline_state = OrderedDict()
-    prefix = "" if "prefix" not in kwargs.keys() else kwargs["prefix"]
-    if gpc.get_local_rank(ParallelMode.TENSOR) == 0:
-        # receive all states from prev stage
-        if not gpc.is_first_rank(ParallelMode.PIPELINE):
-            state_dict = _recv_state_dict(gpc.get_prev_global_rank(ParallelMode.PIPELINE), ParallelMode.PIPELINE)
-        # move states to output
-        for name, _ in model.named_parameters(recurse=True, prefix=prefix):
-            if name in state_dict:
-                pipeline_state[name] = state_dict.pop(name)
-        for name, _ in model.named_buffers(recurse=True, prefix=prefix):
-            if name in state_dict:
-                pipeline_state[name] = state_dict.pop(name)
-        for name, _ in model.named_modules(prefix=prefix):
-            extra_state_key = name + "." + _EXTRA_STATE_KEY_SUFFIX
-            if extra_state_key in state_dict:
-                pipeline_state[extra_state_key] = state_dict.pop(extra_state_key)
-        # send rest states to next stage
-        if not gpc.is_last_rank(ParallelMode.PIPELINE):
-            _send_state_dict(state_dict, gpc.get_next_global_rank(ParallelMode.PIPELINE), ParallelMode.PIPELINE)
-
-    return pipeline_state
-
-
-def gather_pipeline_parallel_state_dict(state_dict):
-    gathered_states = ([None for _ in range(gpc.get_world_size(ParallelMode.PIPELINE))]
-                       if gpc.get_local_rank(ParallelMode.PIPELINE) == 0 else None)
-    dist.gather_object(
-        state_dict,
-        gathered_states,
-        dst=gpc.get_ranks_in_group(ParallelMode.PIPELINE)[0],
-        group=gpc.get_cpu_group(ParallelMode.PIPELINE),
-    )
-
-    state_dict = (OrderedDict(chain.from_iterable(state.items() for state in gathered_states))
-                  if gpc.get_local_rank(ParallelMode.PIPELINE) == 0 else OrderedDict())
-
     return state_dict
 
 
@@ -248,40 +93,6 @@ def load_checkpoint(file,
             model_state = remove_prefix(model_state, kwargs["prefix"])
 
     model.load_state_dict(model_state, strict=strict)
+    broadcast_model(model)
 
     return -1
-
-
-def save_checkpoint(file,
-                    epoch: int,
-                    model: torch.nn.Module,
-                    optimizer: torch.optim.Optimizer = None,
-                    lr_scheduler: torch.optim.lr_scheduler._LRScheduler = None,
-                    **kwargs):
-    """Stores the checkpoint to disk. Saves all the training components' parameters or buffers, such as model, optimizer,
-    lr_scheduler etc. into a checkpoint dictionary.
-
-    Args:
-        file: a file-like object (has to implement write and flush) or a string or os.PathLike object containing a
-            file name.
-        epoch (int): Epoch number (indicates how many epochs have you trained this model).
-        model (:class:`torch.nn.Module`): Model to be saved.
-        optimizer (Union[:class:`torch.optim.Optimizer`, :class:`colossalai.nn.optimizer`]): Optimizer to be saved.
-        lr_scheduler (Union[:class:`torch.optim.lr_scheduler`, :class:`colossalai.nn.lr_scheduler`], optional):
-            lr_scheduler to be saved, defaults to None.
-        pickle_module: module used for pickling metadata and objects
-        pickle_protocol: can be specified to override the default protocol
-    """
-    # ckpt container
-    checkpoint = {"epoch": epoch}
-    prefix = "" if "prefix" not in kwargs.keys() else kwargs["prefix"]
-    model_state = model.state_dict(prefix=prefix)
-    if is_using_pp() and gpc.get_local_rank(ParallelMode.TENSOR) == 0:
-        model_state = gather_pipeline_parallel_state_dict(model_state)
-    if "prefix" in kwargs.keys():
-        kwargs.pop("prefix")
-    if gpc.get_global_rank() == 0:
-        checkpoint["model"] = model_state
-        for key_ in model_state:
-            print(key_, model_state[key_].size())
-        torch.save(checkpoint, file, **kwargs)

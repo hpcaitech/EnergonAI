@@ -7,7 +7,7 @@ from torch import dtype, nn
 from colossalai.nn.layer.utils import CheckpointModule
 import colossalai.nn as col_nn
 from colossalai.nn import PatchEmbedding1D, DropPath
-from energonai.nn import Linear1D_Col, Linear1D_Row, Dropout1D, LayerNorm1D, Classifier1D
+from colossalai.nn import Linear1D_Col, Linear1D_Row, Dropout1D, LayerNorm1D, Classifier1D
 
 from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc

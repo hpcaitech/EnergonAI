@@ -56,7 +56,7 @@ For example, set the model class as opt_125M and set the correct checkpoint path
 
 
 ### Publication
-You can find technical details in our blog and manuscript:
+You can find technical details in the manuscript:
 
 [EnergonAI: An Inference System for 10-100 Billion Parameter Transformer Models](https://arxiv.org/pdf/2209.02341.pdf)
 
@@ -76,73 +76,3 @@ You can find technical details in our blog and manuscript:
 If interested in making your own contribution to the project, please refer to [Contributing](./CONTRIBUTING.md) for guidance.
 
 Thanks so much!
-
-
-
-<!-- ### Large-scale Model Inference Performance
-#### Scaling Ability
-
-Here GPT3-12-layers in FP16 is adopted.  
-Here a node with 8 A100 80 GB GPUs is adopted. GPUs are fully connected with NvLink.   
-Energon-AI adopts the redundant computation elimination method. The method is first raised in [EffectiveTransformer](https://github.com/bytedance/effective_transformer), and our implementation refers to [TurboTransformer](https://github.com/Tencent/TurboTransformers/blob/master/turbo_transformers/layers/kernels/gpu_transpose_kernel.cu).  
-Here the sequence length is set the half of the padding length.
-<div  align="center">    
-    <img src="https://user-images.githubusercontent.com/12018307/168971637-ffd1d6ba-44bb-4043-a275-3dc2a008c048.png" width = "600" height = "240" alt="Architecture" align=center />
-</div>
-
-#### Latency
-Here GPT3 in FP16 is adopted.  
-Here a node with 8 A100 80 GB GPUs is adopted. Every two GPUs are connected with NvLink.  
-Here the sequence length is set the half of the padding length when using redundant computation elimination method, which is the Energon-AI(RM).  
-Here FasterTransformer is adopted in comparison and it does not support the redundant computation elimination method in the distributed execution.
-<div  align="center">    
-    <img src="https://user-images.githubusercontent.com/12018307/169728315-8ac95e4f-3e81-44e5-b82b-5873ffe85351.png" width = "600" height = "300" alt="Architecture" align=center />
-</div>
-
-#### Batching
-Energon-AI dynamically selects the batch processing with the highest priority regarding the waiting time, batch size, batch expansion possibility (based on the sentence length after padding).
-Our dynamic batching method is inspired by the DP algorithm from [TurboTransformer](https://dl.acm.org/doi/10.1145/3437801.3441578).  
-Here FIFO batching is selected in comparison.
-<div  align="center">    
-    <img src="https://user-images.githubusercontent.com/12018307/170616782-18fae36f-75cd-4e7b-bc0b-c8998be1e540.png" width = "400" height = "100" alt="Architecture" align=center />
-</div>
-
-### Technical Overview
-
-<div  align="center">    
-    <img src="https://user-images.githubusercontent.com/12018307/168971629-6df3232b-85a7-43ce-95df-f067e7e5959c.png" width = "480" height = "500" alt="Architecture" align=center />
-</div> -->
-
-<!-- ### Cite us
-Cite this paper, if you use EnergonAI in your research publication. -->
-
-
-<!-- ### Launch an http service using docker
-``` bash
-bash ./docker/launch.sh
-``` -->
-
-
-<!-- ### Huggingface GPT2 Generation Task Case
-
-``` bash
-# Download checkpoint
-$ wget https://huggingface.co/gpt2/blob/main/pytorch_model.bin
-# Download files for tokenizer
-$ wget https://huggingface.co/gpt2/blob/main/tokenizer.json
-$ wget https://huggingface.co/gpt2/blob/main/vocab.json
-$ wget https://huggingface.co/gpt2/blob/main/merges.txt
-
-# Launch the service
-export PYTHONPATH=~/EnergonAI/examples/hf_gpt2
-energonai service init --config_file=~/EnergonAI/hf_gpt2/hf_gpt2_config.py
-
-# Request for the service
-Method 1: 
-    FastAPI provides an automatic API docs, you can forward 
-    http://127.0.0.1:8005/docs and make request with the graphical interface.
-Method 2:
-    curl -X 'GET' \
-    'http://127.0.0.1:8005/run_hf_gpt2/I%20do%20not?max_seq_length=16' \
-    -H 'accept: application/json'  -->
-```

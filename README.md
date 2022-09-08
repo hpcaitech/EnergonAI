@@ -26,7 +26,7 @@ $ pip install .
 ```
 **Use docker**
 ``` bash
-$ docker pull hpcaitech/energon-ai:0.2.5
+$ docker pull hpcaitech/energon-ai:latest
 ```
 
 
@@ -56,7 +56,9 @@ For example, set the model class as opt_125M and set the correct checkpoint path
 
 
 ### Publication
-You can find technical details in the manuscript:
+You can find technical details in our blog and manuscript:
+
+[Build an online OPT service using Colossal-AI in 5 minutes](https://www.colossalai.org/docs/advanced_tutorials/opt_service/)
 
 [EnergonAI: An Inference System for 10-100 Billion Parameter Transformer Models](https://arxiv.org/pdf/2209.02341.pdf)
 

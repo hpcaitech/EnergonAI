@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from executor import Executor, QueueFullError
 from cache import ListCache, MissCacheError
+from prometheus_fastapi_instrumentator import Instrumentator
 
 
 class GenerationTaskReq(BaseModel):
@@ -118,6 +119,10 @@ def launch_engine(model_class,
     executor.start()
 
     global server
+
+    # Expose prometheus metrics
+    Instrumentator().instrument(app).expose(app)
+
     config = uvicorn.Config(app, host=server_host, port=server_port,
                             log_level=log_level, timeout_keep_alive=timeout_keep_alive)
     server = uvicorn.Server(config=config)

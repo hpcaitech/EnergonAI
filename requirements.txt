@@ -18,3 +18,5 @@ torchvision
 torchaudio 
 colossalai
 omegaconf
+prometheus-fastapi-instrumentator
+

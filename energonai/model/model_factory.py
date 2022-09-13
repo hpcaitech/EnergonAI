@@ -11,7 +11,7 @@ from .downstream import LMHead1D
 from colossalai.nn import LayerNorm1D
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
-from energonai.utils import is_using_pp, get_current_device
+from colossalai.utils import is_using_pp, get_current_device
 from colossalai.logging import get_dist_logger
 from energonai.utils.checkpointing import load_checkpoint
 from energonai.utils.checkpointing_hf_gpt2 import processing_HF_GPT

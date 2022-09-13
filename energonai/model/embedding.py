@@ -3,7 +3,7 @@ from torch import nn as nn
 from torch import dtype
 from colossalai.nn import VocabParallelEmbedding1D
 from torch.nn import Embedding
-from energonai.utils import get_current_device
+from colossalai.utils import get_current_device
 
 
 class Embedding1D(nn.Module):

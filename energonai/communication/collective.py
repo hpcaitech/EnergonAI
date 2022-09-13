@@ -8,13 +8,13 @@ from torch import Tensor
 
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
-from energonai.utils import get_current_device
+from colossalai.utils import get_current_device
 
 
 def all_gather(tensor: Tensor, dim: int, parallel_mode: ParallelMode, async_op: bool = False) -> Tensor:
     """Gathers all tensors from the parallel group and concatenates them in a 
     specific dimension.
-    
+
     :param tensor: Tensor to be gathered
     :param dim: The dimension concatenating in
     :param parallel_mode: Parallel group mode used in this communication
@@ -56,7 +56,7 @@ def reduce_scatter(tensor: Tensor,
                    async_op: bool = False) -> Tensor:
     """Reduces all tensors then scatters it in a specific dimension to all 
     members in the parallel group.
-    
+
     :param tensor: Tensor to be reduced and scattered
     :param dim: The dimension scattering in
     :param parallel_mode: Parallel group mode used in this communication

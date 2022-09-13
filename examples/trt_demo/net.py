@@ -6,7 +6,7 @@ import torch
 from torch import nn as nn, dtype
 from colossalai.logging import get_dist_logger
 from colossalai.nn.layer.utils import divide
-from energonai.utils import get_current_device, is_using_pp
+from colossalai.utils import get_current_device, is_using_pp
 from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
 

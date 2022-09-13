@@ -12,7 +12,7 @@ from colossalai.core import global_context as gpc
 from colossalai.nn.layer.utils import divide, ACT2FN
 from colossalai.nn import Linear1D_Col, Linear1D_Row, Classifier1D, LayerNorm1D, VocabParallelEmbedding1D
 from torch.nn import Embedding
-from energonai.utils import get_current_device, is_using_pp
+from colossalai.utils import get_current_device, is_using_pp
 from energonai.utils.checkpointing import load_checkpoint
 from energonai.utils.checkpointing_hf_gpt2 import processing_HF_GPT
 

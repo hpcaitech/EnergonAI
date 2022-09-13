@@ -5,7 +5,7 @@ import torch
 
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
-from energonai.utils import get_current_device, synchronize
+from colossalai.utils import get_current_device, synchronize
 
 
 def ring_forward(tensor_send_next: torch.Tensor, parallel_mode: ParallelMode):

@@ -3,7 +3,7 @@
 
 import pprint
 from functools import partial
-from energonai.logging import get_dist_logger
+from colossalai.logging import get_dist_logger
 
 import colossalai.nn as col_nn
 import pytest
@@ -13,7 +13,7 @@ import torch.nn as nn
 from energonai.context.parallel_mode import ParallelMode
 from energonai.core import global_context as gpc
 from energonai.initialize import launch
-from energonai.logging import disable_existing_loggers
+from colossalai.logging import disable_existing_loggers
 from energonai.utils import free_port, is_using_pp
 from energonai.utils.checkpointing import gather_pipeline_parallel_state_dict, load_checkpoint, save_checkpoint
 
@@ -22,7 +22,7 @@ def partition_uniform(num_items, pipeline_parallel_size, num_chunks):
     assert num_items % num_chunks == 0, \
         "Layer length should be divided by the number of chunks, otherwise parameter method is recomended"
 
-    logger = get_dist_logger()
+    logger = get_dist_logger('energonai')
     parts = [[] for _ in range(pipeline_parallel_size)]
     partition_items = num_items // num_chunks
     for idx in range(num_chunks):

@@ -4,7 +4,7 @@ import torch
 from threading import Thread
 from typing import Any, Dict, Deque
 from collections import namedtuple, deque
-from energonai.logging import get_dist_logger
+from colossalai.logging import get_dist_logger
 
 GenerationArgs = namedtuple('GenerationArgs', ['top_k', 'top_p', 'temperature'])
 SubmitEntry = namedtuple('SubmitEntry', ['inputs', 'args', 'decode_steps'])
@@ -23,7 +23,7 @@ class Executor:
         self.thread = None
         self.ready_map: Dict[int, Any] = {}
         self.submit_queue: Deque[SubmitEntry] = deque()
-        self.logger = get_dist_logger()
+        self.logger = get_dist_logger('energonai')
         assert isinstance(max_queue_size, int)
         self.max_queue_size = max_queue_size
 

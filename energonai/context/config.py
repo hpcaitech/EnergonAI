@@ -1,34 +1,35 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
+from colossalai.context.singleton_meta import SingletonMeta
 import inspect
 import sys
 import torch
 from typing import Union
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
-from energonai.logging import get_dist_logger
+from colossalai.logging import get_dist_logger
 
 
 nec_args = {
-        'model_class': None,
-        'model_type': None,
-        'max_batch_size': 32,
-        'tp_init_size': 1,
-        'pp_init_size': 1,
-        'host': "127.0.0.1",
-        'port': 29500,
-        'dtype': torch.float,
-        'checkpoint': None,
-        'tokenizer_path': None,
-        'server_host': "127.0.0.1",
-        'server_port': 8005,
-        'log_level': "critical",
-        'backend':"nccl",
-        'rm_padding': False,
-        'seed' : 1024,
-        'verbose' : True,
-        'trt_sample' : None
+    'model_class': None,
+    'model_type': None,
+    'max_batch_size': 32,
+    'tp_init_size': 1,
+    'pp_init_size': 1,
+    'host': "127.0.0.1",
+    'port': 29500,
+    'dtype': torch.float,
+    'checkpoint': None,
+    'tokenizer_path': None,
+    'server_host': "127.0.0.1",
+    'server_port': 8005,
+    'log_level': "critical",
+    'backend': "nccl",
+    'rm_padding': False,
+    'seed': 1024,
+    'verbose': True,
+    'trt_sample': None
 }
 
 
@@ -113,7 +114,7 @@ class Config(dict):
             else:
                 config._add_item(k, v)
 
-        logger = get_dist_logger()
+        logger = get_dist_logger('energonai')
         logger.debug('variables which starts with __, is a module or class declaration are omitted in config file')
 
         # remove module
@@ -127,7 +128,6 @@ class Config(dict):
 class ConfigException(Exception):
     pass
 
-from colossalai.context.singleton_meta import SingletonMeta
 
 class MetaConfig(metaclass=SingletonMeta):
     def __init__(self):
@@ -136,7 +136,7 @@ class MetaConfig(metaclass=SingletonMeta):
     @property
     def config(self):
         return self._config
-    
+
     def __iter__(self):
         return self._config.__iter__()
 
@@ -145,7 +145,7 @@ class MetaConfig(metaclass=SingletonMeta):
             return self._config[key]
         else:
             return None
-    
+
     def __setitem__(self, key, value):
         self._config[key] = value
 
@@ -163,15 +163,15 @@ class MetaConfig(metaclass=SingletonMeta):
             self._config = Config(config)
         else:
             raise TypeError("Invalid type for config, only dictionary or string is supported")
-        
-        for k,v in nec_args.items():
+
+        for k, v in nec_args.items():
             if k not in self._config:
                 self._config[k] = v
-        
+
         if MEATCONFIG['half']:
             MEATCONFIG['dtype'] = torch.half
         else:
             MEATCONFIG['dtype'] = torch.float
 
-MEATCONFIG = MetaConfig()
 
+MEATCONFIG = MetaConfig()

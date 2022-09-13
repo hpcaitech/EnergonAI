@@ -12,7 +12,7 @@ from colossalai.nn import LayerNorm1D
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
 from energonai.utils import is_using_pp, get_current_device
-from energonai.logging import get_dist_logger
+from colossalai.logging import get_dist_logger
 from energonai.utils.checkpointing import load_checkpoint
 from energonai.utils.checkpointing_hf_gpt2 import processing_HF_GPT
 from energonai.utils.checkpointing_opt import processing_OPT, load_175b
@@ -150,7 +150,7 @@ class PipelineModel(nn.Module):
 
 
 def partition_uniform(num_items, pipeline_parallel_size):
-    logger = get_dist_logger()
+    logger = get_dist_logger('energonai')
     assert num_items % pipeline_parallel_size == 0, \
         "Layer length should be divided by the number of pipeline size, otherwise parameter method is recomended"
 
@@ -172,7 +172,7 @@ def partition_uniform(num_items, pipeline_parallel_size):
 def create_pipeline_model(depth: int = 48,
                           layer_partitions=None,
                           **model_kwargs):
-    logger = get_dist_logger()
+    logger = get_dist_logger('energonai')
     pipeline_size = 0
     pipeline_rank = 0
 

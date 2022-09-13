@@ -1,8 +1,8 @@
 import torch
 from torch import nn as nn
 from torch import dtype
-from energonai.nn import VocabParallelEmbedding1D
-from energonai.nn.layer.parallel_1d.embed import Embedding
+from colossalai.nn import VocabParallelEmbedding1D
+from torch.nn import Embedding
 from energonai.utils import get_current_device
 
 

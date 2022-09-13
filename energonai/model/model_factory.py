@@ -8,7 +8,7 @@ from .endecoder import Block1D
 from .embedding import Embedding1D
 from .downstream import LMHead1D
 
-from energonai.nn import LayerNorm1D
+from colossalai.nn import LayerNorm1D
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
 from energonai.utils import is_using_pp, get_current_device
@@ -86,7 +86,7 @@ class PipelineModel(nn.Module):
                                            is_decoder=is_decoder,
                                            disable_past_cache=disable_past_cache))
         if last:
-            self.norm = LayerNorm1D(normalized_shape=hidden_size, eps=layernorm_epsilon)
+            self.norm = LayerNorm1D(normalized_shape=hidden_size, eps=layernorm_epsilon, dtype=dtype)
             self.head = LMHead1D(hidden_size=hidden_size, vocab_size=vocab_size,
                                  bias=False, dtype=dtype, vocab_parallel=vocab_parallel)
 

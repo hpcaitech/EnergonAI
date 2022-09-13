@@ -4,7 +4,7 @@
 import pprint
 from functools import partial
 
-import energonai.nn as col_nn
+import colossalai.nn as col_nn
 import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
@@ -46,6 +46,7 @@ def check_bert_1d(rank, world_size, port):
         for k, v in sd1.items():
             assert k in sd2
             check_equal(v.to(torch.device("cpu")), sd2[k].to(torch.device("cpu")))
+
 
 def test_bert():
     world_size = 4

@@ -11,7 +11,7 @@ from colossalai.core import global_context as gpc
 from colossalai.logging import get_dist_logger
 from colossalai.nn.layer.utils import divide, ACT2FN
 from colossalai.nn import Linear1D_Col, Linear1D_Row, Classifier1D, LayerNorm1D, VocabParallelEmbedding1D
-from energonai.utils import get_current_device, is_using_pp
+from colossalai.utils import get_current_device, is_using_pp
 from energonai.utils.checkpointing import load_checkpoint
 from energonai.kernel import transpose_pad, transpose_depad, depad
 from energonai.kernel import ft_build_padding_offsets, ft_remove_padding, ft_rebuild_padding

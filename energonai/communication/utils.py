@@ -3,7 +3,7 @@ import torch.distributed as dist
 
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
-from energonai.utils import get_current_device
+from colossalai.utils import get_current_device
 
 
 def send_tensor_meta(tensor, need_meta=True, next_rank=None):

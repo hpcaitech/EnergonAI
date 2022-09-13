@@ -7,7 +7,7 @@ import torch.distributed as dist
 
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
-from energonai.utils import get_current_device
+from colossalai.utils import get_current_device
 from functools import reduce
 import operator
 from .utils import split_tensor_into_1d_equal_chunks, gather_split_1d_tensor

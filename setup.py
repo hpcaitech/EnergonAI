@@ -84,6 +84,7 @@ if TORCH_MAJOR < 1 or (TORCH_MAJOR == 1 and TORCH_MINOR < 8):
     raise RuntimeError("Requires Pytorch 1.8 or newer.\n" +
                        "The latest stable release can be obtained from https://pytorch.org/")
 
+
 cmdclass = {}
 ext_modules = []
 
@@ -109,8 +110,8 @@ if build_cuda_ext:
                 sources=[os.path.join('energonai/kernel/cuda_native/csrc', path) for path in sources],
                 include_dirs=[
                     os.path.join(this_dir, 'energonai/kernel/cuda_native/csrc'),
-            #  '/opt/lcsoftware/spack/opt/spack/linux-ubuntu20.04-zen2/gcc-9.3.0/nccl-2.9.6-1'
-            #  '-ysovaavjkgjez2fwms4dkvatu5yrxbec/include'
+                    #  '/opt/lcsoftware/spack/opt/spack/linux-ubuntu20.04-zen2/gcc-9.3.0/nccl-2.9.6-1'
+                    #  '-ysovaavjkgjez2fwms4dkvatu5yrxbec/include'
                 ],
                 extra_compile_args={
                     'cxx': ['-O3'] + version_dependent_macros,
@@ -149,29 +150,40 @@ if build_cuda_ext:
         #                                    ['get_ncclid.cpp'],
         #                                    extra_cuda_flags + cc_flag))
 
+
+def get_version():
+    with open('version.txt') as f:
+        version = f.read().strip()
+        if build_cuda_ext:
+            torch_version = '.'.join(torch.__version__.split('.')[:2])
+            cuda_version = '.'.join(get_cuda_bare_metal_version(CUDA_HOME)[1:])
+            version += f'+torch{torch_version}cu{cuda_version}'
+        return version
+
+
 setup(
-      name='energonai',
-      version='0.0.1b0',
-      packages=find_packages(
-          exclude=(
-          'benchmark',
-          'docker',
-          'tests',
-          'docs',
-          'examples',
-          'tests',
-          'scripts',
-          'requirements',
-          '*.egg-info',
-          'dist',
-          'build',
-      )),
-      description='Large-scale Model Inference',
-      license='Apache Software License 2.0',
-      ext_modules=ext_modules,
-      cmdclass={'build_ext': BuildExtension} if ext_modules else {},
+    name='energonai',
+    version=get_version(),
+    packages=find_packages(
+        exclude=(
+            'benchmark',
+            'docker',
+            'tests',
+            'docs',
+            'examples',
+            'tests',
+            'scripts',
+            'requirements',
+            '*.egg-info',
+            'dist',
+            'build',
+        )),
+    description='Large-scale Model Inference',
+    license='Apache Software License 2.0',
+    ext_modules=ext_modules,
+    cmdclass={'build_ext': BuildExtension} if ext_modules else {},
     #   install_requires=fetch_requirements('requirements.txt'),
-      entry_points={
-          'console_scripts': ['energonai=energonai.cli:typer_click_object',],
-      },
-      )
+    entry_points={
+        'console_scripts': ['energonai=energonai.cli:typer_click_object', ],
+    },
+)

@@ -1,16 +1,17 @@
 import logging
-import torch
-import uvicorn
+import argparse
 import random
-from fastapi import FastAPI, Request, HTTPException
-from energonai.engine import InferenceEngine
-from fastapi.middleware.cors import CORSMiddleware
-from transformers import GPT2Tokenizer
 from pydantic import BaseModel, Field
 from typing import Optional
-from executor import Executor, QueueFullError
+from energonai.model import opt_125M, opt_30B, opt_175B
+from transformers import GPT2Tokenizer
+from energonai import launch_engine, QueueFullError
+from sanic import Sanic
+from sanic.request import Request
+from sanic.response import json
+from sanic_ext import validate
+from batch import BatchManagerForGeneration
 from cache import ListCache, MissCacheError
-from prometheus_fastapi_instrumentator import Instrumentator
 
 
 class GenerationTaskReq(BaseModel):
@@ -22,13 +23,14 @@ class GenerationTaskReq(BaseModel):
     temperature: Optional[float] = Field(default=None, gt=0.0, lt=1.0, example=0.7)
 
 
-app = FastAPI()
+app = Sanic('opt')
 
 
 @app.post('/generation')
-async def generate(data: GenerationTaskReq, request: Request):
-    logger.info(f'{request.client.host}:{request.client.port} - "{request.method} {request.url.path}" - {data}')
-    key = (data.prompt, data.max_tokens)
+@validate(json=GenerationTaskReq)
+async def generate(request: Request, body: GenerationTaskReq):
+    logger.info(f'{request.ip}:{request.port} - "{request.method} {request.path}" - {body}')
+    key = (body.prompt, body.max_tokens)
     try:
         if cache is None:
             raise MissCacheError()
@@ -36,94 +38,81 @@ async def generate(data: GenerationTaskReq, request: Request):
         output = random.choice(outputs)
         logger.info('Cache hit')
     except MissCacheError:
-        inputs = tokenizer(data.prompt, truncation=True, max_length=512)
+        inputs = tokenizer(body.prompt, truncation=True, max_length=512)
+        inputs['max_tokens'] = body.max_tokens
+        inputs['top_k'] = body.top_k
+        inputs['top_p'] = body.top_p
+        inputs['temperature'] = body.temperature
         try:
-            handle = executor.submit(inputs, data.max_tokens, data.top_k, data.top_p, data.temperature)
-            output = await executor.wait(handle)
+            uid = id(body)
+            engine.submit(uid, inputs)
+            output = await engine.wait(uid)
             output = tokenizer.decode(output, skip_special_tokens=True)
             if cache is not None:
                 cache.add(key, output)
         except QueueFullError as e:
-            raise HTTPException(status_code=406, detail=e.args[0])
-    return {'text': output}
+            return json({'detail': e.args[0]}, status=406)
+
+    return json({'text': output})
 
 
-@app.on_event("shutdown")
-async def shutdown():
-    executor.teardown()
-    engine.clear()
-    server.should_exit = True
-    server.force_exit = True
-    await server.shutdown()
+@app.after_server_stop
+def shutdown(*_):
+    engine.shutdown()
 
 
-def launch_engine(model_class,
-                  model_type,
-                  max_batch_size: int = 1,
-                  tp_init_size: int = -1,
-                  pp_init_size: int = -1,
-                  host: str = "localhost",
-                  port: int = 29500,
-                  dtype=torch.float,
-                  checkpoint: str = None,
-                  tokenizer_path: str = None,
-                  server_host="localhost",
-                  server_port=8005,
-                  log_level="info",
-                  allow_cors: bool = False,
-                  executor_max_batch_size: int = 16,
-                  cache_size: int = 50,
-                  cache_list_size: int = 1,
-                  fixed_cache_keys: list = [],
-                  timeout_keep_alive: int = 60,
-                  executor_max_queue_size: int = 0
-                  ):
-    if allow_cors:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=['*'],
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
-    global logger
+def get_model_fn(model_name: str):
+    model_map = {
+        'opt-125m': opt_125M,
+        'opt-30b': opt_30B,
+        'opt-175b': opt_175B
+    }
+    return model_map[model_name]
+
+
+def print_args(args: argparse.Namespace):
+    print('\n==> Args:')
+    for k, v in args.__dict__.items():
+        print(f'{k} = {v}')
+
+
+FIXED_CACHE_KEYS = [
+    ('Question: What is the name of the largest continent on earth?\nAnswer: Asia\n\nQuestion: What is at the center of the solar system?\nAnswer:', 64),
+    ('A chat between a salesman and a student.\n\nSalesman: Hi boy, are you looking for a new phone?\nStudent: Yes, my phone is not functioning well.\nSalesman: What is your budget? \nStudent: I have received my scholarship so I am fine with any phone.\nSalesman: Great, then perhaps this latest flagship phone is just right for you.', 64),
+    ("English: I am happy today.\nChinese: 我今天很开心。\n\nEnglish: I am going to play basketball.\nChinese: 我一会去打篮球。\n\nEnglish: Let's celebrate our anniversary.\nChinese:", 64)
+]
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('model', choices=['opt-125m', 'opt-30b', 'opt-175b'])
+    parser.add_argument('--tp', type=int, default=1)
+    parser.add_argument('--master_host', default='localhost')
+    parser.add_argument('--master_port', type=int, default=19990)
+    parser.add_argument('--rpc_port', type=int, default=19980)
+    parser.add_argument('--max_batch_size', type=int, default=8)
+    parser.add_argument('--pipe_size', type=int, default=1)
+    parser.add_argument('--queue_size', type=int, default=0)
+    parser.add_argument('--http_host', default='0.0.0.0')
+    parser.add_argument('--http_port', type=int, default=7070)
+    parser.add_argument('--checkpoint', default=None)
+    parser.add_argument('--cache_size', type=int, default=0)
+    parser.add_argument('--cache_list_size', type=int, default=1)
+    args = parser.parse_args()
+    print_args(args)
+    model_kwargs = {}
+    if args.checkpoint is not None:
+        model_kwargs['checkpoint'] = args.checkpoint
+
     logger = logging.getLogger(__name__)
-    # only for the generation task
-    global tokenizer
-    if(tokenizer_path):
-        tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_path, padding_side='left', truncation_side='left')
-
-    if checkpoint:
-        model_config = {'dtype': dtype, 'checkpoint': checkpoint}
+    tokenizer = GPT2Tokenizer.from_pretrained('facebook/opt-30b')
+    if args.cache_size > 0:
+        cache = ListCache(args.cache_size, args.cache_list_size, fixed_keys=FIXED_CACHE_KEYS)
     else:
-        model_config = {'dtype': dtype}
-
-    global engine
-    engine = InferenceEngine(model_class,
-                             model_config,
-                             model_type,
-                             max_batch_size=max_batch_size,
-                             tp_init_size=tp_init_size,
-                             pp_init_size=pp_init_size,
-                             host=host,
-                             port=port,
-                             dtype=dtype)
-    global cache
-    if cache_size <= 0:
         cache = None
-    else:
-        cache = ListCache(cache_size, cache_list_size, fixed_keys=fixed_cache_keys)
-
-    global executor
-    executor = Executor(engine, pad_token_id=tokenizer.pad_token_id,
-                        max_batch_size=executor_max_batch_size, max_queue_size=executor_max_queue_size)
-    executor.start()
-
-    global server
-
-    # Expose prometheus metrics
-    Instrumentator().instrument(app).expose(app)
-
-    config = uvicorn.Config(app, host=server_host, port=server_port,
-                            log_level=log_level, timeout_keep_alive=timeout_keep_alive)
-    server = uvicorn.Server(config=config)
-    server.run()
+    engine = launch_engine(args.tp, 1, args.master_host, args.master_port, args.rpc_port, get_model_fn(args.model),
+                           batch_manager=BatchManagerForGeneration(max_batch_size=args.max_batch_size,
+                                                                   pad_token_id=tokenizer.pad_token_id),
+                           pipe_size=args.pipe_size,
+                           queue_size=args.queue_size,
+                           **model_kwargs)
+    app.run(args.http_host, args.http_port)

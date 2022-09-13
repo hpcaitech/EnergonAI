@@ -7,7 +7,7 @@ from torch import nn as nn, Tensor, dtype
 
 from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
-from energonai.logging import get_dist_logger
+from colossalai.logging import get_dist_logger
 from colossalai.nn.layer.utils import divide, ACT2FN
 from colossalai.nn import Linear1D_Col, Linear1D_Row, LayerNorm1D, VocabParallelEmbedding1D
 from energonai.kernel import transpose_pad, transpose_depad, depad

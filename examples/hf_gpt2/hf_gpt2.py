@@ -6,7 +6,7 @@ from torch import nn as nn, Tensor, dtype
 from typing import Callable
 
 
-from energonai.logging import get_dist_logger
+from colossalai.logging import get_dist_logger
 from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
 from colossalai.nn.layer.utils import divide, ACT2FN
@@ -422,7 +422,7 @@ def partition_uniform(num_items, pipeline_parallel_size, num_chunks):
     assert num_items % num_chunks == 0, \
         "Layer length should be divided by the number of chunks, otherwise parameter method is recomended"
 
-    logger = get_dist_logger()
+    logger = get_dist_logger('energonai')
     parts = [[] for _ in range(pipeline_parallel_size)]  # 4
     partition_items = num_items // num_chunks  # 96 // 2
     for idx in range(num_chunks):
@@ -441,7 +441,7 @@ def partition_uniform(num_items, pipeline_parallel_size, num_chunks):
 
 
 def _create_gpt_pipeline_model(depth=48, num_chunks=1, layer_partitions=None, **model_kwargs):
-    logger = get_dist_logger()
+    logger = get_dist_logger('energonai')
     pipeline_size = 0
     pipeline_rank = 0
 

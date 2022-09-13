@@ -4,7 +4,7 @@ from typing import Callable
 import os
 import torch
 from torch import nn as nn, dtype
-from energonai.logging import get_dist_logger
+from colossalai.logging import get_dist_logger
 from colossalai.nn.layer.utils import divide
 from energonai.utils import get_current_device, is_using_pp
 from colossalai.context import ParallelMode
@@ -105,7 +105,7 @@ class BertSelfAttention(nn.Module):
 
         attention_output = torch.matmul(q, k.permute(0, 1, 3, 2))
         # permute(0, 1, 3, 2)transpose(-1, -2)
-        
+
         attention_output = attention_output / math.sqrt(self.attention_head_size)
         attention_output = nn.functional.softmax(attention_output, dim=-1)
         attention_output = torch.matmul(attention_output, v)
@@ -163,17 +163,17 @@ class BertTransformerLayer(nn.Module):
         super().__init__()
 
         self.attention = BertSelfAttention(hidden_size,
-                                             num_heads,
-                                             bias,
-                                             fuse_scale_mask_softmax,
-                                             layernorm_epsilon,
-                                             dtype)
+                                           num_heads,
+                                           bias,
+                                           fuse_scale_mask_softmax,
+                                           layernorm_epsilon,
+                                           dtype)
         self.mlp = BertMLP(hidden_size,
-                             mlp_ratio,
-                             activation,
-                             layernorm_epsilon,
-                             dtype,
-                             bias)
+                           mlp_ratio,
+                           activation,
+                           layernorm_epsilon,
+                           dtype,
+                           bias)
 
     def forward(self, hidden_states, attention_mask):
         hidden_states = self.attention(hidden_states, attention_mask)
@@ -223,8 +223,8 @@ class PipelineBert(nn.Module):
                                             dtype=dtype,
                                             bias=bias,
                                             fuse_scale_mask_softmax=fuse_scale_mask_softmax,
-                                        )
-                                        )
+            )
+            )
 
     def forward(self, hidden_states=None, attention_mask=None):
 
@@ -253,7 +253,7 @@ def partition_uniform(num_items, pipeline_parallel_size, num_chunks):
     assert num_items % num_chunks == 0, \
         "Layer length should be divided by the number of chunks, otherwise parameter method is recomended"
 
-    logger = get_dist_logger()
+    logger = get_dist_logger('energonai')
     parts = [[] for _ in range(pipeline_parallel_size)]  # 4
     partition_items = num_items // num_chunks  # 96 // 2
     for idx in range(num_chunks):
@@ -272,7 +272,7 @@ def partition_uniform(num_items, pipeline_parallel_size, num_chunks):
 
 
 def _create_bert_pipeline_model(depth=48, num_chunks=1, layer_partitions=None, **model_kwargs):
-    logger = get_dist_logger()
+    logger = get_dist_logger('energonai')
     pipeline_size = 0
     pipeline_rank = 0
     if gpc.is_initialized(ParallelMode.PIPELINE):

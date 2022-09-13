@@ -1,4 +1,5 @@
 import colossalai
+import time
 import torch
 import torch.nn as nn
 import torch.distributed.rpc as trpc
@@ -64,10 +65,13 @@ class Worker:
     def _start(self) -> None:
         with self._lifespan():
             while True:
-                task_entry: TaskEntry = self.input_pipe.recv()
-                with torch.inference_mode():
-                    outputs = self._forward(task_entry.batch)
-                self.output_pipe.send(TaskEntry(task_entry.uids, outputs))
+                try:
+                    task_entry: TaskEntry = self.input_pipe.recv_nowait()
+                    with torch.inference_mode():
+                        outputs = self._forward(task_entry.batch)
+                    self.output_pipe.send(TaskEntry(task_entry.uids, outputs))
+                except RuntimeError:
+                    time.sleep(0.01)
 
     def _shutdown(self) -> None:
         Terminator.shield()

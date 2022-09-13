@@ -3,7 +3,7 @@ from collections import OrderedDict
 import torch
 import torch.distributed as dist
 
-from . import is_using_pp
+from colossalai.utils import is_using_pp
 from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
 from typing import Optional, Callable

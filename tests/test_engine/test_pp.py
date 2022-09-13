@@ -1,24 +1,13 @@
-from energonai.testing import BoringModel, get_correct_output
 from colossalai.testing import rerun_if_address_is_in_use
-from energonai import launch_engine
-from colossalai.utils import free_port
+from test_engine.boring_model_utils import run_boring_model
 import pytest
-import torch
-import asyncio
 
 
 @pytest.mark.dist
+@pytest.mark.standalone
 @rerun_if_address_is_in_use()
 def test_pp():
-    engine = launch_engine(1, 2, 'localhost', free_port(), free_port(), BoringModel)
-    x = torch.ones(4)
-    correct_output = get_correct_output(x, 2)
-    engine.submit(0, x)
-    output = asyncio.run(engine.wait(0))
-    try:
-        assert torch.equal(output, correct_output)
-    finally:
-        engine.shutdown()
+    run_boring_model(1, 2)
 
 
 if __name__ == '__main__':

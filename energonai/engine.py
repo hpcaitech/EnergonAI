@@ -3,7 +3,7 @@ import time
 import signal
 import torch.distributed.rpc as trpc
 import torch.nn as nn
-from threading import Thread
+from threading import Thread, Lock
 from typing import Any, Dict, Deque, Optional, List, Hashable, Callable, Tuple
 from collections import deque
 from colossalai.logging import get_dist_logger
@@ -11,7 +11,7 @@ from .batch_mgr import BatchManager, SubmitEntry
 from .pipe import Pipe
 from .task import TaskEntry
 from .worker import launch_workers
-from .utils import build_device_maps, Terminator
+from .utils import build_device_maps, Terminator, use_lock
 
 
 class QueueFullError(Exception):
@@ -21,6 +21,7 @@ class QueueFullError(Exception):
 class AsyncEngine:
     def __init__(self, tp_world_size: int, pp_world_size: int, master_host: str, rpc_port: int, n_proc_per_node: int,
                  batch_manager: Optional[BatchManager] = None, pipe_size: int = 1, queue_size: int = 0) -> None:
+        self.lock = Lock()
         self.logger = get_dist_logger('energonai')
         if batch_manager is None:
             self.batch_manager = BatchManager()
@@ -100,9 +101,10 @@ class AsyncEngine:
         self.completion_thread.start()
 
     def shutdown(self) -> None:
-        if not self.running:
-            return
-        self.running = False
+        with use_lock(self.lock):
+            if not self.running:
+                return
+            self.running = False
         Terminator.shield()
         for i in range(self.world_size):
             trpc.rpc_sync(f'worker{i}', Terminator.terminate)

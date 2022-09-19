@@ -5,7 +5,7 @@ from transformers import GPT2Tokenizer
 from fastapi import FastAPI
 from fastapi import Response, Body
 from energonai.engine import InferenceEngine
-from energonai.server.dynamic_batch_manager import Dynamic_Batch_Manager
+from energonai.legacy_batch_mgr.dynamic_batch_manager import Dynamic_Batch_Manager
 
 app = FastAPI()
 

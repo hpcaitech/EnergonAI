@@ -13,7 +13,7 @@ python opt_fastapi.py opt-125m
 
 ## Configure
 
-### Configure model:
+### Configure model
 ```shell
 python opt_fastapi.py <model>
 ```

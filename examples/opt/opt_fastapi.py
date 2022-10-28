@@ -1,15 +1,17 @@
-import logging
 import argparse
+import logging
 import random
-import uvicorn
-from pydantic import BaseModel, Field
 from typing import Optional
-from energonai.model import opt_125M, opt_30B, opt_175B
+
+import uvicorn
+from energonai import QueueFullError, launch_engine
+from energonai.model import opt_6B, opt_30B, opt_125M, opt_175B
+from fastapi import FastAPI, HTTPException, Request
+from pydantic import BaseModel, Field
 from transformers import GPT2Tokenizer
-from energonai import launch_engine, QueueFullError
+
 from batch import BatchManagerForGeneration
 from cache import ListCache, MissCacheError
-from fastapi import FastAPI, Request, HTTPException
 
 
 class GenerationTaskReq(BaseModel):
@@ -64,6 +66,7 @@ async def shutdown(*_):
 def get_model_fn(model_name: str):
     model_map = {
         'opt-125m': opt_125M,
+        'opt-6.7b': opt_6B,
         'opt-30b': opt_30B,
         'opt-175b': opt_175B
     }
@@ -84,7 +87,7 @@ FIXED_CACHE_KEYS = [
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('model', choices=['opt-125m', 'opt-30b', 'opt-175b'])
+    parser.add_argument('model', choices=['opt-125m', 'opt-6.7b', 'opt-30b', 'opt-175b'])
     parser.add_argument('--tp', type=int, default=1)
     parser.add_argument('--master_host', default='localhost')
     parser.add_argument('--master_port', type=int, default=19990)

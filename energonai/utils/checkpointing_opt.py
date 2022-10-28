@@ -42,6 +42,8 @@ def module_name_mapping(ori_name: str):
         return "embed.position_embeddings.weight"
     elif "decoder.layer_norm" in ori_name:
         return ori_name.replace('decoder.layer_norm', 'norm')
+    elif "decoder.final_layer_norm" in ori_name:  # hugging face style
+        return ori_name.replace('decoder.final_layer_norm', 'norm')
     # elif ".attn.bias" in ori_name:
     #     return ""
     else:
@@ -94,7 +96,8 @@ def processing_OPT(state_dict: OrderedDict):
     if 'head.dense.weight' not in new_dict:
         new_dict['head.dense.weight'] = new_dict['embed.word_embeddings.weight'].clone()
 
-    del new_dict['decoder.version']
+    if 'decoder.version' in new_dict:
+        del new_dict['decoder.version']
     # print("="*100)
     # print(new_dict.keys())
     # print("---------------------------")

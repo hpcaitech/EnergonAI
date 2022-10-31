@@ -11,6 +11,8 @@ Run OPT-125M:
 python opt_fastapi.py opt-125m
 ```
 
+It will launch a HTTP server on `0.0.0.0:7070` by default and you can customize host and port. You can open `localhost:7070/docs` in your browser to see the openapi docs.
+
 ## Configure
 
 ### Configure model
@@ -65,3 +67,11 @@ locust
 ```
 
 Then open the web interface link which is on your console.
+
+# Pre-process pre-trained weights
+
+## OPT-66B
+See [script/processing_ckpt_66b.py](./script/processing_ckpt_66b.py).
+
+## OPT-175B
+See [script/process-opt-175b](./script/process-opt-175b/).

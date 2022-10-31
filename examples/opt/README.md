@@ -67,3 +67,11 @@ locust
 ```
 
 Then open the web interface link which is on your console.
+
+# Pre-process pre-trained weights
+
+## OPT-66B
+See [script/processing_ckpt_66b.py](./script/processing_ckpt_66b.py).
+
+## OPT-175B
+See [script/process-opt-175b](./script/process-opt-175b/).

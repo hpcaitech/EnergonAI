@@ -1,16 +1,15 @@
-import logging
 import argparse
+import logging
 import random
-from torch import Tensor
-from pydantic import BaseModel, Field
 from typing import Optional
-from energonai.model import opt_125M, opt_30B, opt_175B, opt_6B
+
+import uvicorn
+from energonai import QueueFullError, launch_engine
+from energonai.model import opt_6B, opt_30B, opt_125M, opt_175B
+from fastapi import FastAPI, HTTPException, Request
+from pydantic import BaseModel, Field
 from transformers import GPT2Tokenizer
-from energonai import launch_engine, QueueFullError
-from sanic import Sanic
-from sanic.request import Request
-from sanic.response import json
-from sanic_ext import validate, openapi
+
 from batch import BatchManagerForGeneration
 from cache import ListCache, MissCacheError
 
@@ -24,15 +23,13 @@ class GenerationTaskReq(BaseModel):
     temperature: Optional[float] = Field(default=None, gt=0.0, lt=1.0, example=0.7)
 
 
-app = Sanic('opt')
+app = FastAPI()
 
 
 @app.post('/generation')
-@openapi.body(GenerationTaskReq)
-@validate(json=GenerationTaskReq)
-async def generate(request: Request, body: GenerationTaskReq):
-    logger.info(f'{request.ip}:{request.port} - "{request.method} {request.path}" - {body}')
-    key = (body.prompt, body.max_tokens)
+async def generate(data: GenerationTaskReq, request: Request):
+    logger.info(f'{request.client.host}:{request.client.port} - "{request.method} {request.url.path}" - {data}')
+    key = (data.prompt, data.max_tokens)
     try:
         if cache is None:
             raise MissCacheError()
@@ -40,28 +37,30 @@ async def generate(request: Request, body: GenerationTaskReq):
         output = random.choice(outputs)
         logger.info('Cache hit')
     except MissCacheError:
-        inputs = tokenizer(body.prompt, truncation=True, max_length=512)
-        inputs['max_tokens'] = body.max_tokens
-        inputs['top_k'] = body.top_k
-        inputs['top_p'] = body.top_p
-        inputs['temperature'] = body.temperature
+        inputs = tokenizer(data.prompt, truncation=True, max_length=512)
+        inputs['max_tokens'] = data.max_tokens
+        inputs['top_k'] = data.top_k
+        inputs['top_p'] = data.top_p
+        inputs['temperature'] = data.temperature
         try:
-            uid = id(body)
+            uid = id(data)
             engine.submit(uid, inputs)
             output = await engine.wait(uid)
-            assert isinstance(output, Tensor)
             output = tokenizer.decode(output, skip_special_tokens=True)
             if cache is not None:
                 cache.add(key, output)
         except QueueFullError as e:
-            return json({'detail': e.args[0]}, status=406)
+            raise HTTPException(status_code=406, detail=e.args[0])
 
-    return json({'text': output})
+    return {'text': output}
 
 
-@app.after_server_stop
-def shutdown(*_):
+@app.on_event("shutdown")
+async def shutdown(*_):
     engine.shutdown()
+    server.should_exit = True
+    server.force_exit = True
+    await server.shutdown()
 
 
 def get_model_fn(model_name: str):
@@ -119,4 +118,6 @@ if __name__ == '__main__':
                            pipe_size=args.pipe_size,
                            queue_size=args.queue_size,
                            **model_kwargs)
-    app.run(args.http_host, args.http_port)
+    config = uvicorn.Config(app, host=args.http_host, port=args.http_port)
+    server = uvicorn.Server(config=config)
+    server.run()

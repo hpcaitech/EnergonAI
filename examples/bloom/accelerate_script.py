@@ -11,13 +11,11 @@ from colossalai.tensor import ShardSpec, ComputeSpec, ComputePattern, ColoParame
 from energonai import QueueFullError, launch_engine
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
-from transformers import GPT2Tokenizer
 
 from batch import BatchManagerForGeneration
 from cache import ListCache, MissCacheError
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
-from transformers import BloomTokenizerFast, BloomForCausalLM
-
+from transformers import AutoTokenizer, BloomForCausalLM
+from transformers import BloomConfig
 
 class GenerationTaskReq(BaseModel):
     max_new_tokens: int = Field(gt=0, le=256, example=64)
@@ -83,7 +81,17 @@ class WrapCallModule(torch.nn.Module):
 
 def model_fn(**model_kwargs):
     model_name = model_kwargs['name']
+    
     model = BloomForCausalLM.from_pretrained(model_name)
+    print(model.config)
+    
+    # model config only:
+    # configuration = BloomConfig(hidden_size=1024, #64
+    #                             n_layer=32, #2
+    #                             n_head=128, #8
+    #                             ) 
+    # model = BloomForCausalLM(configuration)
+    
     # for name, p in model.named_parameters():
     #     print(name)
     return WrapCallModule(model)

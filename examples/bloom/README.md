@@ -7,6 +7,11 @@ While the service is running, send `POST` requests to https://[ip]:[port]/genera
 
 send POST body as json file:
 ```
+curl -X POST http://ip:port/generation -H "Content-Type: application/json" -d @test.json
+```
+
+test.json looks like follows:
+```
 {
     "prompt": "However, there are still immense benefits to learning quantum computing.",
     "top_p": 0.90,

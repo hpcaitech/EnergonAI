@@ -6,18 +6,15 @@ bash run.sh
 While the service is running, send `POST` requests to https://[ip]:[port]/generation     
 
 send POST body as json file:
-```
-{
-    "prompt": "However, there are still immense benefits to learning quantum computing.",
-    "top_p": 0.90,
-    "top_k": 40,
-    "max_new_tokens": 60
-}
-```  
 
+```
+curl -X POST https://[ip]:[port]/generation -H "Content-Type: application/json" -d '{"prompt": "However, there are still immense benefits to learning quantum computing.", "max_new_tokens": 60}'
+```
 received message: 
 ```
 {
-    "text": "However, there are still immense benefits to learning quantum computing. For example, quantum computing can be used to solve problems that are difficult to solve by classical methods. Quantum computing can also be used to solve problems that are difficult to solve by classical methods. Quantum computing can also be used to solve problems that are"
+    "text": [
+        "Four years after her last encounter with masked killer Michael Myers, Laurie Strode is living with her mother, who is now a widow. Her mother, who is also a widow, is a member of the New York City police force. Myers is a member of the New York City police force, and he is a member of the New York City police force. Myers is a member of the"
+    ]
 }
 ```

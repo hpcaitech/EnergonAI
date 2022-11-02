@@ -21,9 +21,9 @@ class GenerationTaskReq(BaseModel):
     max_new_tokens: int = Field(gt=0, le=256, example=64)
     prompt: str = Field(
         min_length=1, example='Question: Where were the 2004 Olympics held?\nAnswer: Athens, Greece\n\nQuestion: What is the longest river on the earth?\nAnswer:')
-    top_k: Optional[int] = Field(default=None, gt=0, example=50)
-    top_p: Optional[float] = Field(default=None, gt=0.0, lt=1.0, example=0.5)
-    greedy: Optional[bool] = False
+    # top_k: Optional[int] = Field(default=None, gt=0, example=50)
+    # top_p: Optional[float] = Field(default=None, gt=0.0, lt=1.0, example=0.5)
+    greedy: Optional[bool] = True
 
 
 app = FastAPI()
@@ -37,25 +37,26 @@ async def generate(data: GenerationTaskReq, request: Request):
     try:
         if cache is None:
             raise MissCacheError()
-        outputs = cache.get(key)
-        outputs = random.choice(outputs)
+        output_str = cache.get(key)
+        output_str = random.choice(output_str)
         logger.info('Cache hit')
     except MissCacheError:
         input_tokens = tokenizer.encode_plus(data.prompt, return_tensors="pt", padding=True)
         input_tokens['max_new_tokens'] = data.max_new_tokens
-        input_tokens['top_k'] = data.top_k
-        input_tokens['top_p'] = data.top_p
         try:
+            output_str = []
             uid = id(data)
             engine.submit(uid, input_tokens)
             outputs = await engine.wait(uid)
-            outputs = tokenizer.decode(outputs, skip_special_tokens=True)
+            outputs = list(map(torch.squeeze, outputs))
+            for output in outputs:
+                output_str.append(tokenizer.decode(output, skip_special_tokens=True))
             if cache is not None:
                 cache.add(key, outputs)
         except QueueFullError as e:
             raise HTTPException(status_code=406, detail=e.args[0])
 
-    return {'text': outputs}
+    return {'text': output_str}
 
 
 @app.on_event("shutdown")
@@ -77,14 +78,24 @@ class WrapCallModule(torch.nn.Module):
         self.model = model
         
     def forward(self, **generate_kwargs):
-        return self.model.generate(**generate_kwargs)
+        generate_kwargs["do_sample"] = False
+        print(generate_kwargs)
+        input_ids_batch = generate_kwargs["input_ids"]
+        attention_mask_batch = generate_kwargs["attention_mask"]
+        generated = []
+        for input_ids, attention_mask in zip(input_ids_batch, attention_mask_batch):
+            generate_kwargs["input_ids"] = input_ids
+            generate_kwargs["attention_mask"] = attention_mask
+            generated.append(self.model.generate(**generate_kwargs))
+        return generated
 
 def model_fn(**model_kwargs):
     model_name = model_kwargs['name']
-    
-    model = BloomForCausalLM.from_pretrained(model_name)
+    kwargs = dict(device_map='auto', load_in_8bit=False,)
+    print("kwargs", kwargs)
+    model = BloomForCausalLM.from_pretrained(model_name, **kwargs)
     print(model.config)
-    
+    print(model.hf_device_map)
     # model config only:
     # configuration = BloomConfig(hidden_size=1024, #64
     #                             n_layer=32, #2
@@ -107,13 +118,13 @@ if __name__ == '__main__':
     parser.add_argument('--name', type=str, help="Name path", required=True)
     parser.add_argument('--tp', type=int, default=1)
     parser.add_argument('--master_host', default='localhost')
-    parser.add_argument('--master_port', type=int, default=19991)
-    parser.add_argument('--rpc_port', type=int, default=19981)
+    parser.add_argument('--master_port', type=int, default=19812)
+    parser.add_argument('--rpc_port', type=int, default=16885)
     parser.add_argument('--max_batch_size', type=int, default=8)
     parser.add_argument('--pipe_size', type=int, default=1)
     parser.add_argument('--queue_size', type=int, default=0)
     parser.add_argument('--http_host', default='0.0.0.0')
-    parser.add_argument('--http_port', type=int, default=7070)
+    parser.add_argument('--http_port', type=int, default=7078)
     parser.add_argument('--cache_size', type=int, default=0)
     parser.add_argument('--cache_list_size', type=int, default=1)
     args = parser.parse_args()

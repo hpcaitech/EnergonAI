@@ -22,14 +22,14 @@ class BatchManagerForGeneration(BatchManager):
             attention_mask = torch.cat((padding, attention_mask),0)
             outputs['input_ids'].append(input_ids)
             outputs['attention_mask'].append(attention_mask)
-        outputs['input_ids'] = torch.cat(outputs['input_ids'], 0)
-        outputs['attention_mask'] = torch.cat(outputs['attention_mask'], 0)
+        # outputs['input_ids'] = torch.cat(outputs['input_ids'], 0)
+        # outputs['attention_mask'] = torch.cat(outputs['attention_mask'], 0)
         return outputs, max_len
 
     @staticmethod
     def _make_batch_key(entry: SubmitEntry) -> tuple:
         data = entry.data
-        return (data['top_k'], data['top_p'])
+        return ()
 
     def make_batch(self, q: Deque[SubmitEntry]) -> Tuple[TaskEntry, dict]:
         entry = q.popleft()
@@ -49,8 +49,6 @@ class BatchManagerForGeneration(BatchManager):
         trunc_lens = []
         for data in batch:
             trunc_lens.append(max_len + data['max_new_tokens'])
-        inputs['top_k'] = entry.data['top_k']
-        inputs['top_p'] = entry.data['top_p']
         inputs['max_new_tokens'] = max_len + entry.data['max_new_tokens']
         return TaskEntry(tuple(uids), inputs), {'trunc_lens': trunc_lens}
 

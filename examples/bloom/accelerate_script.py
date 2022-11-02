@@ -81,10 +81,10 @@ class WrapCallModule(torch.nn.Module):
 
 def model_fn(**model_kwargs):
     model_name = model_kwargs['name']
-    use_tp = True
 
+
+    use_tp = True
     if use_tp:
-        # colossalai.launch_from_torch(config={})
         print(f'init TP world size {torch.distributed.get_world_size()}')
         with ColoInitContext(device=torch.cuda.current_device()):
             colo_model = BloomForCausalLM.from_pretrained("/data2/users/lczht/bloom-560m")
@@ -108,19 +108,18 @@ def model_fn(**model_kwargs):
         print('initialize TP OK')
         return WrapCallModule(colo_model)
     else:
+        # This is for single process debug
+        # model config only:
+        # configuration = BloomConfig(hidden_size=1024, #64
+        #                             n_layer=32, #2
+        #                             n_head=128, #8
+        #                             ) 
+        # model = BloomForCausalLM(configuration)
+
         model = BloomForCausalLM.from_pretrained(model_name)
         print(model.config)
         return WrapCallModule(model)
-    # model config only:
-    # configuration = BloomConfig(hidden_size=1024, #64
-    #                             n_layer=32, #2
-    #                             n_head=128, #8
-    #                             ) 
-    # model = BloomForCausalLM(configuration)
-    
-    # for name, p in model.named_parameters():
-    #     print(name)
-    
+
 
 FIXED_CACHE_KEYS = [
     ('Question: What is the name of the largest continent on earth?\nAnswer: Asia\n\nQuestion: What is at the center of the solar system?\nAnswer:', 64),

@@ -81,20 +81,46 @@ class WrapCallModule(torch.nn.Module):
 
 def model_fn(**model_kwargs):
     model_name = model_kwargs['name']
-    
-    model = BloomForCausalLM.from_pretrained(model_name)
-    print(model.config)
-    
-    # model config only:
-    # configuration = BloomConfig(hidden_size=1024, #64
-    #                             n_layer=32, #2
-    #                             n_head=128, #8
-    #                             ) 
-    # model = BloomForCausalLM(configuration)
-    
-    # for name, p in model.named_parameters():
-    #     print(name)
-    return WrapCallModule(model)
+    use_tp = True
+    if use_tp:
+        with ColoInitContext(device=torch.cuda.current_device()):
+            colo_model = BloomForCausalLM.from_pretrained(model_name)
+        
+        def split_param_single_dim_tp1d(dim: int, param: ColoParameter, pg: ProcessGroup):
+            spec = (ShardSpec([dim], [pg.tp_world_size()]), ComputeSpec(ComputePattern.TP1D))
+            if param.process_group.tp_world_size() == 1:
+                param.set_process_group(pg)
+            param.set_tensor_spec(*spec)
+
+        def split_param_row_tp1d(param: ColoParameter, pg: ProcessGroup):
+            split_param_single_dim_tp1d(0, param, pg)
+        
+        tp_world_size = torch.distributed.get_world_size()
+        print(f'init TP world size {tp_world_size}')
+
+        pg = ProcessGroup(tp_degree=tp_world_size)
+        for mn, module in colo_model.named_modules():
+            for pn, param in module.named_parameters(recurse=False):
+                # reset process group for all parameters
+                param.set_process_group(pg)
+
+                if 'dense_h_to_4h.weight' in pn or 'self_attention.query_key_value' in pn or 'mlp.dense_4h_to_h' in pn:
+                    split_param_row_tp1d(param, pg)  # colmn slice
+        print('initialize TP OK')
+        return WrapCallModule(colo_model)
+    else:
+        # This is for single process debug
+        # model config only:
+        # configuration = BloomConfig(hidden_size=1024, #64
+        #                             n_layer=32, #2
+        #                             n_head=128, #8
+        #                             ) 
+        # model = BloomForCausalLM(configuration)
+
+        model = BloomForCausalLM.from_pretrained(model_name)
+        print(model.config)
+        return WrapCallModule(model)
+
 
 FIXED_CACHE_KEYS = [
     ('Question: What is the name of the largest continent on earth?\nAnswer: Asia\n\nQuestion: What is at the center of the solar system?\nAnswer:', 64),

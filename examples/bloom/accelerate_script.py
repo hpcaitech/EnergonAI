@@ -108,7 +108,7 @@ def model_fn(**model_kwargs):
         print('initialize TP OK')
         return WrapCallModule(colo_model)
     else:
-        model = BloomForCausalLM.from_pretrained(model_name, **kwargs)
+        model = BloomForCausalLM.from_pretrained(model_name)
         print(model.config)
         return WrapCallModule(model)
     # model config only:

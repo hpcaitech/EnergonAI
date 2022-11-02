@@ -13,7 +13,7 @@ CUDA_VISIBLE_DEVICES_set_n_least_memory_usage() {
     echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
 }
 
-export GPU_NUM=8
+export GPU_NUM=2
 CUDA_VISIBLE_DEVICES_set_n_least_memory_usage ${GPU_NUM} 
 
-python accelerate_script.py --name /data2/users/lczht/bloom-560m --cache_size 0
+python accelerate_script.py --tp ${GPU_NUM} --name /data2/users/lczht/bloom-560m --cache_size 0

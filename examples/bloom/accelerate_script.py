@@ -81,13 +81,10 @@ class WrapCallModule(torch.nn.Module):
 
 def model_fn(**model_kwargs):
     model_name = model_kwargs['name']
-
-
     use_tp = True
     if use_tp:
-        print(f'init TP world size {torch.distributed.get_world_size()}')
         with ColoInitContext(device=torch.cuda.current_device()):
-            colo_model = BloomForCausalLM.from_pretrained("/data2/users/lczht/bloom-560m")
+            colo_model = BloomForCausalLM.from_pretrained(model_name)
         
         def split_param_single_dim_tp1d(dim: int, param: ColoParameter, pg: ProcessGroup):
             spec = (ShardSpec([dim], [pg.tp_world_size()]), ComputeSpec(ComputePattern.TP1D))
@@ -97,7 +94,11 @@ def model_fn(**model_kwargs):
 
         def split_param_row_tp1d(param: ColoParameter, pg: ProcessGroup):
             split_param_single_dim_tp1d(0, param, pg)
-        pg = ProcessGroup(tp_degree=torch.distributed.get_world_size())
+        
+        tp_world_size = torch.distributed.get_world_size()
+        print(f'init TP world size {tp_world_size}')
+
+        pg = ProcessGroup(tp_degree=tp_world_size)
         for mn, module in colo_model.named_modules():
             for pn, param in module.named_parameters(recurse=False):
                 # reset process group for all parameters

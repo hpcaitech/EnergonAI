@@ -43,21 +43,19 @@ async def generate(data: GenerationTaskReq, request: Request):
     except MissCacheError:
         input_tokens = tokenizer.encode_plus(data.prompt, return_tensors="pt", padding=True)
         input_tokens['max_new_tokens'] = data.max_new_tokens
-        # input_tokens['top_k'] = data.top_k
-        # input_tokens['top_p'] = data.top_p
         try:
-            output_str = []
             uid = id(data)
             engine.submit(uid, input_tokens)
             outputs = await engine.wait(uid)
-            outputs = list(map(torch.squeeze, outputs))
-            for output in outputs:
-                output_str.append(tokenizer.decode(output, skip_special_tokens=True))
+            # outputs = list(map(torch.squeeze, outputs))
+            # for output in outputs:
+            #     output_str.append(tokenizer.decode(output, skip_special_tokens=True))
+            outputs = tokenizer.batch_decode(outputs, skip_special_tokens=True)
             if cache is not None:
                 cache.add(key, outputs)
+            output_str = outputs
         except QueueFullError as e:
             raise HTTPException(status_code=406, detail=e.args[0])
-
     return {'text': output_str}
 
 
@@ -82,12 +80,17 @@ class WrapCallModule(torch.nn.Module):
     def forward(self, **generate_kwargs):
         input_ids_batch = generate_kwargs["input_ids"]
         attention_mask_batch = generate_kwargs["attention_mask"]
-        generated = []
-        for input_ids, attention_mask in zip(input_ids_batch, attention_mask_batch):
-            generate_kwargs["input_ids"] = input_ids
-            generate_kwargs["attention_mask"] = attention_mask
-            generated.append(self.model.generate(**generate_kwargs))
-        return generated
+        generate_kwargs["input_ids"] = torch.cat(input_ids_batch, 0)
+        generate_kwargs["attention_mask"] = torch.cat(attention_mask_batch, 0)
+        # assert padded to the same shape
+        return self.model.generate(**generate_kwargs)
+        # generated = []
+        # for input_ids, attention_mask in zip(input_ids_batch, attention_mask_batch):
+        #     generate_kwargs["input_ids"] = input_ids
+        #     generate_kwargs["attention_mask"] = attention_mask
+        #     generated.append(self.model.generate(**generate_kwargs))
+        # 
+        # return generated
 
 def model_fn(**model_kwargs):
     model_name = model_kwargs['name']

@@ -22,8 +22,6 @@ class BatchManagerForGeneration(BatchManager):
             attention_mask = torch.cat((padding, attention_mask),0)
             outputs['input_ids'].append(input_ids)
             outputs['attention_mask'].append(attention_mask)
-        # outputs['input_ids'] = torch.cat(outputs['input_ids'], 0)
-        # outputs['attention_mask'] = torch.cat(outputs['attention_mask'], 0)
         return outputs, max_len
 
     @staticmethod
@@ -55,5 +53,5 @@ class BatchManagerForGeneration(BatchManager):
     def split_batch(self, task_entry: TaskEntry, trunc_lens: List[int] = []) -> List[Tuple[Hashable, Any]]:
         retval = []
         for uid, output, trunc_len in zip(task_entry.uids, task_entry.batch, trunc_lens):
-            retval.append((uid, output[:trunc_len]))
+            retval.append((uid, (output[:trunc_len]).reshape(1,-1)))
         return retval

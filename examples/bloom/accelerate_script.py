@@ -17,6 +17,7 @@ from cache import ListCache, MissCacheError
 from transformers import AutoTokenizer, BloomForCausalLM
 from transformers import BloomConfig
 
+
 class GenerationTaskReq(BaseModel):
     max_new_tokens: int = Field(gt=0, le=256, example=64)
     prompt: str = Field(
@@ -47,9 +48,6 @@ async def generate(data: GenerationTaskReq, request: Request):
             uid = id(data)
             engine.submit(uid, input_tokens)
             outputs = await engine.wait(uid)
-            # outputs = list(map(torch.squeeze, outputs))
-            # for output in outputs:
-            #     output_str.append(tokenizer.decode(output, skip_special_tokens=True))
             outputs = tokenizer.batch_decode(outputs, skip_special_tokens=True)
             if cache is not None:
                 cache.add(key, outputs)
@@ -70,27 +68,21 @@ async def shutdown(*_):
 def print_args(args: argparse.Namespace):
     print('\n==> Args:')
     for k, v in args.__dict__.items():
-        print(f'{k} = {v}')        
-    
+        print(f'{k} = {v}')
+
+
 class WrapCallModule(torch.nn.Module):
-    def __init__(self, model:torch.nn.Module):
+    def __init__(self, model: torch.nn.Module):
         super(WrapCallModule, self).__init__()
         self.model = model
-        
+
     def forward(self, **generate_kwargs):
         input_ids_batch = generate_kwargs["input_ids"]
         attention_mask_batch = generate_kwargs["attention_mask"]
         generate_kwargs["input_ids"] = torch.cat(input_ids_batch, 0)
         generate_kwargs["attention_mask"] = torch.cat(attention_mask_batch, 0)
-        # assert padded to the same shape
         return self.model.generate(**generate_kwargs)
-        # generated = []
-        # for input_ids, attention_mask in zip(input_ids_batch, attention_mask_batch):
-        #     generate_kwargs["input_ids"] = input_ids
-        #     generate_kwargs["attention_mask"] = attention_mask
-        #     generated.append(self.model.generate(**generate_kwargs))
-        # 
-        # return generated
+
 
 def model_fn(**model_kwargs):
     model_name = model_kwargs['name']
@@ -98,7 +90,7 @@ def model_fn(**model_kwargs):
     if use_tp:
         with ColoInitContext(device=torch.cuda.current_device()):
             colo_model = BloomForCausalLM.from_pretrained(model_name)
-        
+
         def split_param_single_dim_tp1d(dim: int, param: ColoParameter, pg: ProcessGroup):
             spec = (ShardSpec([dim], [pg.tp_world_size()]), ComputeSpec(ComputePattern.TP1D))
             if param.process_group.tp_world_size() == 1:
@@ -107,7 +99,7 @@ def model_fn(**model_kwargs):
 
         def split_param_row_tp1d(param: ColoParameter, pg: ProcessGroup):
             split_param_single_dim_tp1d(0, param, pg)
-        
+
         tp_world_size = torch.distributed.get_world_size()
         print(f'init TP world size {tp_world_size}')
 
@@ -127,7 +119,7 @@ def model_fn(**model_kwargs):
         # configuration = BloomConfig(hidden_size=1024, #64
         #                             n_layer=32, #2
         #                             n_head=128, #8
-        #                             ) 
+        #                             )
         # model = BloomForCausalLM(configuration)
 
         model = BloomForCausalLM.from_pretrained(model_name)

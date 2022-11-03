@@ -17,9 +17,9 @@ class BatchManagerForGeneration(BatchManager):
             padding_len = max_len - len(input_ids)
             padding = torch.tensor([self.pad_token_id] * padding_len, device=input_ids.device, dtype=torch.int)
             input_ids = torch.cat((padding, input_ids), 0)
-            
+
             padding = torch.tensor([0] * padding_len, device=attention_mask.device, dtype=torch.int)
-            attention_mask = torch.cat((padding, attention_mask),0)
+            attention_mask = torch.cat((padding, attention_mask), 0)
             outputs['input_ids'].append(input_ids)
             outputs['attention_mask'].append(attention_mask)
         return outputs, max_len
@@ -53,5 +53,5 @@ class BatchManagerForGeneration(BatchManager):
     def split_batch(self, task_entry: TaskEntry, trunc_lens: List[int] = []) -> List[Tuple[Hashable, Any]]:
         retval = []
         for uid, output, trunc_len in zip(task_entry.uids, task_entry.batch, trunc_lens):
-            retval.append((uid, (output[:trunc_len]).reshape(1,-1)))
+            retval.append((uid, (output[:trunc_len]).reshape(1, -1)))
         return retval

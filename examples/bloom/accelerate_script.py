@@ -17,12 +17,13 @@ from cache import ListCache, MissCacheError
 from transformers import AutoTokenizer, BloomForCausalLM
 from transformers import BloomConfig
 
+
 class GenerationTaskReq(BaseModel):
     max_new_tokens: int = Field(gt=0, le=256, example=64)
     prompt: str = Field(
         min_length=1, example='Question: Where were the 2004 Olympics held?\nAnswer: Athens, Greece\n\nQuestion: What is the longest river on the earth?\nAnswer:')
-    top_k: Optional[int] = Field(default=None, gt=0, example=50)
-    top_p: Optional[float] = Field(default=None, gt=0.0, lt=1.0, example=0.5)
+    # top_k: Optional[int] = Field(default=None, gt=0, example=50)
+    # top_p: Optional[float] = Field(default=None, gt=0.0, lt=1.0, example=0.5)
     greedy: Optional[bool] = False
 
 
@@ -38,24 +39,22 @@ async def generate(data: GenerationTaskReq, request: Request):
         if cache is None:
             raise MissCacheError()
         outputs = cache.get(key)
-        outputs = random.choice(outputs)
+        output_str = random.choice(outputs)
         logger.info('Cache hit')
     except MissCacheError:
         input_tokens = tokenizer.encode_plus(data.prompt, return_tensors="pt", padding=True)
         input_tokens['max_new_tokens'] = data.max_new_tokens
-        input_tokens['top_k'] = data.top_k
-        input_tokens['top_p'] = data.top_p
         try:
             uid = id(data)
             engine.submit(uid, input_tokens)
             outputs = await engine.wait(uid)
-            outputs = tokenizer.decode(outputs, skip_special_tokens=True)
+            outputs = tokenizer.batch_decode(outputs, skip_special_tokens=True)
             if cache is not None:
                 cache.add(key, outputs)
+            output_str = outputs
         except QueueFullError as e:
             raise HTTPException(status_code=406, detail=e.args[0])
-
-    return {'text': outputs}
+    return {'text': output_str}
 
 
 @app.on_event("shutdown")
@@ -69,15 +68,21 @@ async def shutdown(*_):
 def print_args(args: argparse.Namespace):
     print('\n==> Args:')
     for k, v in args.__dict__.items():
-        print(f'{k} = {v}')        
-    
+        print(f'{k} = {v}')
+
+
 class WrapCallModule(torch.nn.Module):
-    def __init__(self, model:torch.nn.Module):
+    def __init__(self, model: torch.nn.Module):
         super(WrapCallModule, self).__init__()
         self.model = model
-        
+
     def forward(self, **generate_kwargs):
+        input_ids_batch = generate_kwargs["input_ids"]
+        attention_mask_batch = generate_kwargs["attention_mask"]
+        generate_kwargs["input_ids"] = torch.cat(input_ids_batch, 0)
+        generate_kwargs["attention_mask"] = torch.cat(attention_mask_batch, 0)
         return self.model.generate(**generate_kwargs)
+
 
 def model_fn(**model_kwargs):
     model_name = model_kwargs['name']
@@ -85,7 +90,7 @@ def model_fn(**model_kwargs):
     if use_tp:
         with ColoInitContext(device=torch.cuda.current_device()):
             colo_model = BloomForCausalLM.from_pretrained(model_name)
-        
+
         def split_param_single_dim_tp1d(dim: int, param: ColoParameter, pg: ProcessGroup):
             spec = (ShardSpec([dim], [pg.tp_world_size()]), ComputeSpec(ComputePattern.TP1D))
             if param.process_group.tp_world_size() == 1:
@@ -94,7 +99,7 @@ def model_fn(**model_kwargs):
 
         def split_param_row_tp1d(param: ColoParameter, pg: ProcessGroup):
             split_param_single_dim_tp1d(0, param, pg)
-        
+
         tp_world_size = torch.distributed.get_world_size()
         print(f'init TP world size {tp_world_size}')
 
@@ -114,7 +119,7 @@ def model_fn(**model_kwargs):
         # configuration = BloomConfig(hidden_size=1024, #64
         #                             n_layer=32, #2
         #                             n_head=128, #8
-        #                             ) 
+        #                             )
         # model = BloomForCausalLM(configuration)
 
         model = BloomForCausalLM.from_pretrained(model_name)
@@ -135,7 +140,7 @@ if __name__ == '__main__':
     parser.add_argument('--master_host', default='localhost')
     parser.add_argument('--master_port', type=int, default=19991)
     parser.add_argument('--rpc_port', type=int, default=19981)
-    parser.add_argument('--max_batch_size', type=int, default=8)
+    parser.add_argument('--max_batch_size', type=int, default=1)
     parser.add_argument('--pipe_size', type=int, default=1)
     parser.add_argument('--queue_size', type=int, default=0)
     parser.add_argument('--http_host', default='0.0.0.0')

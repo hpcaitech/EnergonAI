@@ -17,7 +17,7 @@ from cache import ListCache, MissCacheError
 from transformers import AutoTokenizer, BloomForCausalLM
 from transformers import BloomConfig
 
-
+TP_TARGET = ['mlp', 'self_attention.dense', 'self_attention.query_key_value'] # 'self_attention.attention_dropout', 
 class GenerationTaskReq(BaseModel):
     max_new_tokens: int = Field(gt=0, le=256, example=64)
     prompt: str = Field(
@@ -72,25 +72,30 @@ def print_args(args: argparse.Namespace):
 
 
 class WrapCallModule(torch.nn.Module):
-    def __init__(self, model: torch.nn.Module):
+    def __init__(self, model: torch.nn.Module, rank : int = 0):
         super(WrapCallModule, self).__init__()
-        self.model = model
-
+        self.rank = rank
+        if rank == 0:
+            self.model = model
+        else :
+            pass
     def forward(self, **generate_kwargs):
-        input_ids_batch = generate_kwargs["input_ids"]
-        attention_mask_batch = generate_kwargs["attention_mask"]
-        generate_kwargs["input_ids"] = torch.cat(input_ids_batch, 0)
-        generate_kwargs["attention_mask"] = torch.cat(attention_mask_batch, 0)
-        return self.model.generate(**generate_kwargs)
-
+        if self.rank == 0:
+            input_ids_batch = generate_kwargs["input_ids"]
+            attention_mask_batch = generate_kwargs["attention_mask"]
+            generate_kwargs["input_ids"] = torch.cat(input_ids_batch, 0)
+            generate_kwargs["attention_mask"] = torch.cat(attention_mask_batch, 0)
+            return self.model.generate(**generate_kwargs)
+        else :
+            return None
 
 def model_fn(**model_kwargs):
     model_name = model_kwargs['name']
     use_tp = True
     if use_tp:
-        with ColoInitContext(device=torch.cuda.current_device()):
-            colo_model = BloomForCausalLM.from_pretrained(model_name)
-
+        rank = torch.distributed.get_rank()
+        tp_world_size = torch.distributed.get_world_size()
+        print(f'init TP world size {tp_world_size}')
         def split_param_single_dim_tp1d(dim: int, param: ColoParameter, pg: ProcessGroup):
             spec = (ShardSpec([dim], [pg.tp_world_size()]), ComputeSpec(ComputePattern.TP1D))
             if param.process_group.tp_world_size() == 1:
@@ -99,20 +104,36 @@ def model_fn(**model_kwargs):
 
         def split_param_row_tp1d(param: ColoParameter, pg: ProcessGroup):
             split_param_single_dim_tp1d(0, param, pg)
-
-        tp_world_size = torch.distributed.get_world_size()
-        print(f'init TP world size {tp_world_size}')
-
+            
+        # model config only:
+        configuration = BloomConfig(hidden_size=8192, #64
+                                    n_layer=48, #2
+                                    n_head=16, #8
+                                    )
+        with torch.no_grad():
+            with ColoInitContext(device=torch.device('cpu')):
+                #colo_model = BloomForCausalLM(configuration)
+                colo_model = BloomForCausalLM.from_pretrained(model_name)
+        # print(colo_model.config)
+        
+        num_params = 0
         pg = ProcessGroup(tp_degree=tp_world_size)
         for mn, module in colo_model.named_modules():
+            # print(mn)
             for pn, param in module.named_parameters(recurse=False):
                 # reset process group for all parameters
+                param.requires_grad_(False)
+                param = param.to(device=torch.cuda.current_device())
                 param.set_process_group(pg)
-
-                if 'dense_h_to_4h.weight' in pn or 'self_attention.query_key_value' in pn or 'mlp.dense_4h_to_h' in pn:
-                    split_param_row_tp1d(param, pg)  # colmn slice
+                for target in TP_TARGET:
+                    if target in mn:
+                        split_param_row_tp1d(param, pg)# colmn slice
+                        break
+                num_params += param.numel()
         print('initialize TP OK')
-        return WrapCallModule(colo_model)
+        print("num_params: ", num_params)
+        return WrapCallModule(colo_model, rank)
+    
     else:
         # This is for single process debug
         # model config only:
@@ -124,7 +145,7 @@ def model_fn(**model_kwargs):
 
         model = BloomForCausalLM.from_pretrained(model_name)
         print(model.config)
-        return WrapCallModule(model)
+        return WrapCallModule(model, rank)
 
 
 FIXED_CACHE_KEYS = [

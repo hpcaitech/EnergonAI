@@ -83,11 +83,11 @@ class WrapCallModule(torch.nn.Module):
         self.model = model
 
     def forward(self, **generate_kwargs):
-        num_params = 0
-        for mn, module in self.model.named_modules():
-            for pn, param in module.named_parameters(recurse=False):
-                num_params += param.numel()
-        print(num_params)
+        # num_params = 0
+        # for mn, module in self.model.named_modules():
+        #     for pn, param in module.named_parameters(recurse=False):
+        #         num_params += param.numel()
+        # print(num_params)
         input_ids_batch = generate_kwargs["input_ids"]
         attention_mask_batch = generate_kwargs["attention_mask"]
         generate_kwargs["input_ids"] = torch.cat(input_ids_batch, 0)
@@ -112,12 +112,8 @@ def model_fn(**model_kwargs):
         def split_param_row_tp1d(param: ColoParameter, pg: ProcessGroup):
             split_param_single_dim_tp1d(0, param, pg)
 
-        # configuration = BloomConfig(hidden_size=4096,  # 64
-        #                             n_layer=96,  # 2
-        #                             n_head=16,  # 8
-        #                             )
-        # group_cpu = dist.new_group(backend='gloo')
         with torch.no_grad():
+            # group_cpu = dist.new_group(backend='gloo')
             # if rank == 0:
             #     # with ColoInitContext(device=torch.device('cpu')):  # load module on cpu
             #     colo_model = BloomForCausalLM(configuration)
@@ -135,6 +131,7 @@ def model_fn(**model_kwargs):
             # print(f"rank {rank} received")
             colo_model = model_kwargs['shared_cpu_model']
             num_params = 0
+            storage = 0
             pg = ProcessGroup(tp_degree=tp_world_size)
             
             for mn, module in colo_model.named_modules():
@@ -146,7 +143,7 @@ def model_fn(**model_kwargs):
                     if target in mn:
                         tp_flag = True
                         break
-                for pn, param in module.named_parameters(recurse=False):
+                for pn, param in module.named_parameters(recurse=True):
                     # reset process group for all parameters
                     module._parameters[pn] = ColoParameter.from_torch_tensor(param)
                     param = module._parameters[pn]
@@ -155,15 +152,11 @@ def model_fn(**model_kwargs):
                     if tp_flag:
                         split_param_row_tp1d(param, pg)  # colmn slice
                     num_params += param.numel()
-            
+                    storage += param.element_size() * param.nelement()
             print('initialize TP OK')
             print("num_params: ", num_params)
-            # num_params = 0
-            # for mn, module in colo_model.named_modules():
-            #     for pn, param in module.named_parameters(recurse=False):
-            #         num_params += param.numel()
-            # print(num_params)
-        return WrapCallModule(colo_model, rank)
+            print("storage: ", storage)
+        return WrapCallModule(colo_model, rank).cuda()
 
     else:
         # This is for single process debug
@@ -213,14 +206,14 @@ if __name__ == '__main__':
                                     n_head=64,  # 8
                                     )
     with torch.no_grad():
-        colo_model = BloomForCausalLM(configuration)
-        #colo_model = BloomForCausalLM.from_pretrained(model_name)
-        colo_model.share_memory()
+        #colo_model = BloomForCausalLM(configuration)
+        colo_model = BloomForCausalLM.from_pretrained(model_name)
         for param in colo_model.parameters():
             param.requires_grad_(False)
             param.to(dtype=torch.float16)
-    model_kwargs['shared_cpu_model'] = colo_model
+        colo_model.share_memory()
     print("loaded")
+    model_kwargs['shared_cpu_model'] = colo_model
     
     logger = logging.getLogger(__name__)
 

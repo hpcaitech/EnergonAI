@@ -3,6 +3,7 @@ import logging
 import random
 from typing import Optional
 import torch
+import torch.distributed as dist
 import uvicorn
 import colossalai
 from colossalai.utils.model.colo_init_context import ColoInitContext
@@ -17,7 +18,11 @@ from cache import ListCache, MissCacheError
 from transformers import AutoTokenizer, BloomForCausalLM
 from transformers import BloomConfig
 
-TP_TARGET = ['mlp', 'self_attention.dense', 'self_attention.query_key_value'] # 'self_attention.attention_dropout', 
+import copy
+
+TP_TARGET = ['mlp', 'self_attention.dense', 'self_attention.query_key_value']  # 'self_attention.attention_dropout',
+
+
 class GenerationTaskReq(BaseModel):
     max_new_tokens: int = Field(gt=0, le=256, example=64)
     prompt: str = Field(
@@ -72,22 +77,23 @@ def print_args(args: argparse.Namespace):
 
 
 class WrapCallModule(torch.nn.Module):
-    def __init__(self, model: torch.nn.Module, rank : int = 0):
+    def __init__(self, model: torch.nn.Module, rank: int = 0):
         super(WrapCallModule, self).__init__()
         self.rank = rank
-        if rank == 0:
-            self.model = model
-        else :
-            pass
+        self.model = model
+
     def forward(self, **generate_kwargs):
-        if self.rank == 0:
-            input_ids_batch = generate_kwargs["input_ids"]
-            attention_mask_batch = generate_kwargs["attention_mask"]
-            generate_kwargs["input_ids"] = torch.cat(input_ids_batch, 0)
-            generate_kwargs["attention_mask"] = torch.cat(attention_mask_batch, 0)
-            return self.model.generate(**generate_kwargs)
-        else :
-            return None
+        num_params = 0
+        for mn, module in self.model.named_modules():
+            for pn, param in module.named_parameters(recurse=False):
+                num_params += param.numel()
+        print(num_params)
+        input_ids_batch = generate_kwargs["input_ids"]
+        attention_mask_batch = generate_kwargs["attention_mask"]
+        generate_kwargs["input_ids"] = torch.cat(input_ids_batch, 0)
+        generate_kwargs["attention_mask"] = torch.cat(attention_mask_batch, 0)
+        return self.model.generate(**generate_kwargs)
+
 
 def model_fn(**model_kwargs):
     model_name = model_kwargs['name']
@@ -96,6 +102,7 @@ def model_fn(**model_kwargs):
         rank = torch.distributed.get_rank()
         tp_world_size = torch.distributed.get_world_size()
         print(f'init TP world size {tp_world_size}')
+
         def split_param_single_dim_tp1d(dim: int, param: ColoParameter, pg: ProcessGroup):
             spec = (ShardSpec([dim], [pg.tp_world_size()]), ComputeSpec(ComputePattern.TP1D))
             if param.process_group.tp_world_size() == 1:
@@ -104,36 +111,60 @@ def model_fn(**model_kwargs):
 
         def split_param_row_tp1d(param: ColoParameter, pg: ProcessGroup):
             split_param_single_dim_tp1d(0, param, pg)
-            
-        # model config only:
-        configuration = BloomConfig(hidden_size=8192, #64
-                                    n_layer=48, #2
-                                    n_head=16, #8
-                                    )
+
+        # configuration = BloomConfig(hidden_size=4096,  # 64
+        #                             n_layer=96,  # 2
+        #                             n_head=16,  # 8
+        #                             )
+        # group_cpu = dist.new_group(backend='gloo')
         with torch.no_grad():
-            with ColoInitContext(device=torch.device('cpu')):
-                #colo_model = BloomForCausalLM(configuration)
-                colo_model = BloomForCausalLM.from_pretrained(model_name)
-        # print(colo_model.config)
-        
-        num_params = 0
-        pg = ProcessGroup(tp_degree=tp_world_size)
-        for mn, module in colo_model.named_modules():
-            # print(mn)
-            for pn, param in module.named_parameters(recurse=False):
-                # reset process group for all parameters
-                param.requires_grad_(False)
-                param = param.to(device=torch.cuda.current_device())
-                param.set_process_group(pg)
+            # if rank == 0:
+            #     # with ColoInitContext(device=torch.device('cpu')):  # load module on cpu
+            #     colo_model = BloomForCausalLM(configuration)
+            #     #colo_model = BloomForCausalLM.from_pretrained(model_name)
+            #     colo_model.share_memory()
+            #     print("broadcast model")
+            # else :
+            #     colo_model = None
+            # bcast_model = [colo_model]
+            # bcast_model
+            # dist.broadcast_object_list(bcast_model, 0, group_cpu)
+            # if rank != 0:
+            #     colo_model = bcast_model[0]
+            #     # colo_model = copy.deepcopy(colo_model)
+            # print(f"rank {rank} received")
+            colo_model = model_kwargs['shared_cpu_model']
+            num_params = 0
+            pg = ProcessGroup(tp_degree=tp_world_size)
+            
+            for mn, module in colo_model.named_modules():
+                tp_flag = False
+                # colo_model._modules[mn] = copy.deepcopy(module)
+                # module = colo_model._modules[mn]
+                module.to(device=torch.cuda.current_device())
                 for target in TP_TARGET:
                     if target in mn:
-                        split_param_row_tp1d(param, pg)# colmn slice
+                        tp_flag = True
                         break
-                num_params += param.numel()
-        print('initialize TP OK')
-        print("num_params: ", num_params)
+                for pn, param in module.named_parameters(recurse=False):
+                    # reset process group for all parameters
+                    module._parameters[pn] = ColoParameter.from_torch_tensor(param)
+                    param = module._parameters[pn]
+                    param.requires_grad_(False)
+                    param.set_process_group(pg)
+                    if tp_flag:
+                        split_param_row_tp1d(param, pg)  # colmn slice
+                    num_params += param.numel()
+            
+            print('initialize TP OK')
+            print("num_params: ", num_params)
+            # num_params = 0
+            # for mn, module in colo_model.named_modules():
+            #     for pn, param in module.named_parameters(recurse=False):
+            #         num_params += param.numel()
+            # print(num_params)
         return WrapCallModule(colo_model, rank)
-    
+
     else:
         # This is for single process debug
         # model config only:
@@ -175,6 +206,22 @@ if __name__ == '__main__':
     model_kwargs = dict(max_new_tokens=num_tokens, do_sample=False)
     model_name = args.name
     model_kwargs['name'] = model_name
+    
+    print("loading cpu model")
+    configuration = BloomConfig(hidden_size=4096,  # 64
+                                    n_layer=48,  # 2
+                                    n_head=64,  # 8
+                                    )
+    with torch.no_grad():
+        colo_model = BloomForCausalLM(configuration)
+        #colo_model = BloomForCausalLM.from_pretrained(model_name)
+        colo_model.share_memory()
+        for param in colo_model.parameters():
+            param.requires_grad_(False)
+            param.to(dtype=torch.float16)
+    model_kwargs['shared_cpu_model'] = colo_model
+    print("loaded")
+    
     logger = logging.getLogger(__name__)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)

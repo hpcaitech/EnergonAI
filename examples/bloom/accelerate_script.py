@@ -109,7 +109,7 @@ def model_fn(**model_kwargs):
                 # reset process group for all parameters
                 param.set_process_group(pg)
 
-                if 'dense_h_to_4h.weight' in pn or 'self_attention.query_key_value' in pn or 'mlp.dense_4h_to_h' in pn:
+                if 'dense_h_to_4h.weight' in mn or 'self_attention.query_key_value' in mn or 'mlp.dense_4h_to_h' in mn:
                     split_param_row_tp1d(param, pg)  # colmn slice
         print('initialize TP OK')
         return WrapCallModule(colo_model)

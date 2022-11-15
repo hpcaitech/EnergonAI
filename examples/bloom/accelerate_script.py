@@ -96,21 +96,20 @@ def model_fn(**model_kwargs):
 
         # for test
         from_config = True
-        configuration = BloomConfig(hidden_size=2048,  # 64
-                                    n_layer=48,  # 2
-                                    n_head=32,  # 8
+        configuration = BloomConfig(hidden_size=12288,  # 64
+                                    n_layer=64,  # 2
+                                    n_head=64,  # 8
                                     )
         if from_config:
             default_shard_plan = {'pg': pg, 'shard_spec': ShardSpec(dims=[0], num_partitions=[pg.tp_world_size()])}
         else:
             default_shard_plan = None
-            
+        
         with ColoInitContext(device=torch.cuda.current_device(), default_shard_plan=default_shard_plan):
             if from_config:
-                colo_model = BloomForCausalLM(configuration)
+                colo_model = BloomForCausalLM(configuration).half()
             else:
-                colo_model = BloomForCausalLM.from_pretrained(model_name)
-
+                colo_model = BloomForCausalLM.from_pretrained(model_name).half()
         def split_param_single_dim_tp1d(dim: int, param: ColoParameter, pg: ProcessGroup):
             spec = (ShardSpec([dim], [pg.tp_world_size()]), ComputeSpec(ComputePattern.TP1D))
             if param.process_group.tp_world_size() == 1:
@@ -121,7 +120,7 @@ def model_fn(**model_kwargs):
             split_param_single_dim_tp1d(0, param, pg)
 
         num_params = 0
-        
+        num_params_unshard = 0
         for mn, module in colo_model.named_modules():
             for pn, param in module.named_parameters(recurse=True):
                 # reset process group for all parameters
@@ -137,10 +136,15 @@ def model_fn(**model_kwargs):
                         break
                 if not tp_flag:
                     param.set_dist_spec(ReplicaSpec())
+                if tp_flag:
+                    num_params_unshard += param.numel() * tp_world_size
+                else:
+                    num_params_unshard += param.numel()
                 num_params += param.numel()
                 param.is_visited = True
         print('initialize TP OK')
         print(f"num_params: {num_params}")
+        print(f"num_params_unshard: {num_params_unshard}")
         return WrapCallModule(colo_model)
     else:
         # This is for single process debug

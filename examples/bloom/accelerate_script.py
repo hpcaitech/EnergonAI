@@ -6,7 +6,7 @@ import torch
 import uvicorn
 import colossalai
 from colossalai.utils.model.colo_init_context import ColoInitContext
-from colossalai.tensor import ShardSpec, ComputeSpec, ComputePattern, ColoParameter, ProcessGroup
+from colossalai.tensor import ShardSpec, ComputeSpec, ComputePattern, ColoParameter, ProcessGroup, ReplicaSpec
 
 from energonai import QueueFullError, launch_engine
 from fastapi import FastAPI, HTTPException, Request
@@ -16,6 +16,8 @@ from batch import BatchManagerForGeneration
 from cache import ListCache, MissCacheError
 from transformers import AutoTokenizer, BloomForCausalLM
 from transformers import BloomConfig
+
+TP_TARGET = ['mlp', 'self_attention.dense', 'self_attention.query_key_value', 'word_embeddings.weight']  # 'self_attention.attention_dropout',
 
 
 class GenerationTaskReq(BaseModel):
@@ -88,8 +90,26 @@ def model_fn(**model_kwargs):
     model_name = model_kwargs['name']
     use_tp = True
     if use_tp:
-        with ColoInitContext(device=torch.cuda.current_device()):
-            colo_model = BloomForCausalLM.from_pretrained(model_name)
+        tp_world_size = torch.distributed.get_world_size()
+        print(f'init TP world size {tp_world_size}')
+        pg = ProcessGroup(tp_degree=tp_world_size)
+
+        # for test
+        from_config = True
+        configuration = BloomConfig(hidden_size=2048,  # 64
+                                    n_layer=48,  # 2
+                                    n_head=32,  # 8
+                                    )
+        if from_config:
+            default_shard_plan = {'pg': pg, 'shard_spec': ShardSpec(dims=[0], num_partitions=[pg.tp_world_size()])}
+        else:
+            default_shard_plan = None
+            
+        with ColoInitContext(device=torch.cuda.current_device(), default_shard_plan=default_shard_plan):
+            if from_config:
+                colo_model = BloomForCausalLM(configuration)
+            else:
+                colo_model = BloomForCausalLM.from_pretrained(model_name)
 
         def split_param_single_dim_tp1d(dim: int, param: ColoParameter, pg: ProcessGroup):
             spec = (ShardSpec([dim], [pg.tp_world_size()]), ComputeSpec(ComputePattern.TP1D))
@@ -100,23 +120,32 @@ def model_fn(**model_kwargs):
         def split_param_row_tp1d(param: ColoParameter, pg: ProcessGroup):
             split_param_single_dim_tp1d(0, param, pg)
 
-        tp_world_size = torch.distributed.get_world_size()
-        print(f'init TP world size {tp_world_size}')
-
-        pg = ProcessGroup(tp_degree=tp_world_size)
+        num_params = 0
+        
         for mn, module in colo_model.named_modules():
-            for pn, param in module.named_parameters(recurse=False):
+            for pn, param in module.named_parameters(recurse=True):
                 # reset process group for all parameters
-                param.set_process_group(pg)
-
-                if 'dense_h_to_4h.weight' in pn or 'self_attention.query_key_value' in pn or 'mlp.dense_4h_to_h' in pn:
-                    split_param_row_tp1d(param, pg)  # colmn slice
+                if hasattr(param, 'is_visited'):
+                    continue
+                param_name = f"{mn}.{pn}"
+                print(param_name)
+                tp_flag = False
+                for target in TP_TARGET:
+                    if target in param_name:
+                        split_param_row_tp1d(param, pg)
+                        tp_flag = True
+                        break
+                if not tp_flag:
+                    param.set_dist_spec(ReplicaSpec())
+                num_params += param.numel()
+                param.is_visited = True
         print('initialize TP OK')
+        print(f"num_params: {num_params}")
         return WrapCallModule(colo_model)
     else:
         # This is for single process debug
         # model config only:
-        # configuration = BloomConfig(hidden_size=1024, #64
+        # configuration = BloomConfig(hidden_size=1024, s#64
         #                             n_layer=32, #2
         #                             n_head=128, #8
         #                             )

@@ -136,6 +136,8 @@ def model_fn(**model_kwargs):
                         break
                 if not use_shard:
                     param.set_dist_spec(ReplicaSpec())
+                param.requires_grad_(False)
+                print(param.requires_grad)
                 if use_shard:
                     num_params_total += param.numel() * tp_world_size
                 else:

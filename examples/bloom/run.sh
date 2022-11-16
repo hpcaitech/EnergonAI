@@ -17,4 +17,4 @@ export GPU_NUM=1
 export DATASET=/data2/users/lczht/bloom-560m # /data2/users/lczht/bloom-560m /data2/users/lccsr/bloom3b/data /data2/users/lccsr/bloom1b7/data
 CUDA_VISIBLE_DEVICES_set_n_least_memory_usage ${GPU_NUM} 
 
-python accelerate_script.py --tp ${GPU_NUM} --name ${DATASET} --max_batch_size 4
+python server.py --tp ${GPU_NUM} --name ${DATASET} --max_batch_size 4

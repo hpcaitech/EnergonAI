@@ -20,7 +20,6 @@ from transformers import BloomConfig
 
 TP_TARGET = ['mlp', 'self_attention.dense', 'self_attention.query_key_value', 'word_embeddings.weight']  # 'self_attention.attention_dropout',
 
-
 class GenerationTaskReq(BaseModel):
     max_new_tokens: int = Field(gt=0, le=256, example=64)
     prompt: str = Field(
@@ -90,6 +89,7 @@ def model_fn(**model_kwargs):
     use_tp = True
     if use_tp:
         tp_world_size = torch.distributed.get_world_size()
+        rank = torch.distributed.get_rank()
         print(f'init TP world size {tp_world_size}')
         pg = ProcessGroup(tp_degree=tp_world_size)
 
@@ -120,33 +120,46 @@ def model_fn(**model_kwargs):
         def split_param_row_tp1d(param: ColoParameter, pg: ProcessGroup):
             split_param_single_dim_tp1d(0, param, pg)
 
-        num_params = 0
-        num_params_total = 0
-        for mn, module in colo_model.named_modules():
-            for pn, param in module.named_parameters(recurse=True):
-                # reset process group for all parameters
+        if model_kwargs["dtype"] == "fp16":
+            num_params = 0
+            num_params_total = 0
+            for mn, module in colo_model.named_modules():
+                for pn, param in module.named_parameters(recurse=True):
+                    # reset process group for all parameters
+                    if hasattr(param, 'is_visited'):
+                        continue
+                    param_name = f"{mn}.{pn}"
+                    use_shard = False
+                    for target in TP_TARGET:
+                        if target in param_name:
+                            split_param_row_tp1d(param, pg)
+                            use_shard = True
+                            break
+                    if not use_shard:
+                        param.set_dist_spec(ReplicaSpec())
+                    param.requires_grad_(False)
+                    print(param.requires_grad)
+                    if use_shard:
+                        num_params_total += param.numel() * tp_world_size
+                    else:
+                        num_params_total += param.numel()
+                    num_params += param.numel()
+                    param.is_visited = True
+            print('initialize TP OK')
+            print(f"num_params: {num_params}")
+            print(f"num_params_total: {num_params_total}")
+        elif model_kwargs["dtype"] == "int8":
+            from utils import get_8bit_tp_model,replace_8bit_linear_tp_coloparam
+            colo_model = replace_8bit_linear_tp_coloparam(colo_model).to(rank)
+            colo_model = get_8bit_tp_model(colo_model, rank, tp_world_size)
+            num_params = 0
+            for pn, param in colo_model.named_parameters(recurse=True):
                 if hasattr(param, 'is_visited'):
                     continue
-                param_name = f"{mn}.{pn}"
-                use_shard = False
-                for target in TP_TARGET:
-                    if target in param_name:
-                        split_param_row_tp1d(param, pg)
-                        use_shard = True
-                        break
-                if not use_shard:
-                    param.set_dist_spec(ReplicaSpec())
-                param.requires_grad_(False)
-                print(param.requires_grad)
-                if use_shard:
-                    num_params_total += param.numel() * tp_world_size
-                else:
-                    num_params_total += param.numel()
                 num_params += param.numel()
+                print(pn,param.dtype)
                 param.is_visited = True
-        print('initialize TP OK')
-        print(f"num_params: {num_params}")
-        print(f"num_params_total: {num_params_total}")
+            print(f"num_params: {num_params}")
         return WrapCallModule(colo_model)
     else:
         # This is for single process debug
@@ -183,6 +196,7 @@ if __name__ == '__main__':
     parser.add_argument('--cache_size', type=int, default=0)
     parser.add_argument('--cache_list_size', type=int, default=1)
     parser.add_argument('--use_config', dest="use_config", action="store_true", help="set up a random model from config.json")
+    parser.add_argument('--dtype', type=str, help="module dtype", default="fp16", choices=["fp16", "int8"])
     args = parser.parse_args()
     print_args(args)
 
@@ -190,6 +204,7 @@ if __name__ == '__main__':
     model_kwargs = dict(max_new_tokens=num_tokens, do_sample=False)
     model_name = args.name
     model_kwargs['name'] = model_name
+    model_kwargs['dtype'] = args.dtype
     if args.use_config:
         model_kwargs['use_config'] = True
     else:

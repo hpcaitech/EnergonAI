@@ -14,14 +14,23 @@ CUDA_VISIBLE_DEVICES_set_n_least_memory_usage() {
 }
 
 export GPU_NUM=2
-export DATASET=/data2/users/lczht/bloom-560m # /data2/users/lczht/bloom-560m /data2/users/lccsr/bloom3b/data /data2/users/lccsr/bloom1b7/data
+export DATASET=/data2/users/lczht/bloom-560m # /data2/users/lczht/bloom-560m 
+                                            #/data2/users/lccsr/bloom3b/data 
+                                            #/data2/users/lccsr/bloom1b7/data
 CUDA_VISIBLE_DEVICES_set_n_least_memory_usage ${GPU_NUM} 
 # set up a random model from config.json
-export USE_CONFIG=1
+export USE_CONFIG=0
+export USE_INT8=1
 if [[ ${USE_CONFIG} == 1 ]]; then
 USE_CONFIG_FLAG="--use_config"
 else
 USE_CONFIG_FLAG=""
 fi
 
-python server.py --tp ${GPU_NUM} --name ${DATASET} ${USE_CONFIG_FLAG} --max_batch_size 4
+if [[ ${USE_INT8} == 1 ]]; then
+DTYPE="int8"
+else
+DTYPE="fp16"
+fi
+
+python server.py --tp ${GPU_NUM} --name ${DATASET} ${USE_CONFIG_FLAG} --dtype ${DTYPE} --max_batch_size 4

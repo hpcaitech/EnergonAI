@@ -1,5 +1,6 @@
 import argparse
 import logging
+import json
 import random
 from typing import Optional
 import torch
@@ -72,7 +73,6 @@ def print_args(args: argparse.Namespace):
     for k, v in args.__dict__.items():
         print(f'{k} = {v}')
 
-
 class WrapCallModule(torch.nn.Module):
     def __init__(self, model: torch.nn.Module):
         super(WrapCallModule, self).__init__()
@@ -85,7 +85,6 @@ class WrapCallModule(torch.nn.Module):
         generate_kwargs["attention_mask"] = torch.cat(attention_mask_batch, 0)
         return self.model.generate(**generate_kwargs)
 
-
 def model_fn(**model_kwargs):
     model_name = model_kwargs['name']
     use_tp = True
@@ -95,21 +94,22 @@ def model_fn(**model_kwargs):
         pg = ProcessGroup(tp_degree=tp_world_size)
 
         # for test
-        from_config = True
-        configuration = BloomConfig(hidden_size=2048,  # 64
-                                    n_layer=48,  # 2
-                                    n_head=32,  # 8
-                                    )
+        from_config = model_kwargs['use_config']
+        # configuration = BloomConfig(hidden_size=8192,  # 64
+        #                             n_layer=40,  # 2
+        #                             n_head=64,  # 8
+        #                             )
+        with open('config.json') as f:
+            config_dict = json.load(f)['random_model']
+            configuration = BloomConfig(**config_dict)
         if from_config:
-            default_shard_plan = {'pg': pg, 'shard_spec': ShardSpec(dims=[0], num_partitions=[pg.tp_world_size()])}
+            with ColoInitContext(device=torch.cuda.current_device(), dtype=torch.float16, default_pg=pg, default_dist_spec=ShardSpec(dims=[0], num_partitions=[pg.tp_world_size()])):
+                with torch.no_grad():
+                    colo_model = BloomForCausalLM(configuration)
         else:
-            default_shard_plan = None
-            
-        with ColoInitContext(device=torch.cuda.current_device(), default_shard_plan=default_shard_plan):
-            if from_config:
-                colo_model = BloomForCausalLM(configuration)
-            else:
-                colo_model = BloomForCausalLM.from_pretrained(model_name)
+            with ColoInitContext(device=torch.cuda.current_device(), dtype=torch.float16, default_pg=pg):
+                with torch.no_grad():
+                    colo_model = BloomForCausalLM.from_pretrained(model_name)
 
         def split_param_single_dim_tp1d(dim: int, param: ColoParameter, pg: ProcessGroup):
             spec = (ShardSpec([dim], [pg.tp_world_size()]), ComputeSpec(ComputePattern.TP1D))
@@ -121,26 +121,32 @@ def model_fn(**model_kwargs):
             split_param_single_dim_tp1d(0, param, pg)
 
         num_params = 0
-        
+        num_params_total = 0
         for mn, module in colo_model.named_modules():
             for pn, param in module.named_parameters(recurse=True):
                 # reset process group for all parameters
                 if hasattr(param, 'is_visited'):
                     continue
                 param_name = f"{mn}.{pn}"
-                print(param_name)
-                tp_flag = False
+                use_shard = False
                 for target in TP_TARGET:
                     if target in param_name:
                         split_param_row_tp1d(param, pg)
-                        tp_flag = True
+                        use_shard = True
                         break
-                if not tp_flag:
+                if not use_shard:
                     param.set_dist_spec(ReplicaSpec())
+                param.requires_grad_(False)
+                print(param.requires_grad)
+                if use_shard:
+                    num_params_total += param.numel() * tp_world_size
+                else:
+                    num_params_total += param.numel()
                 num_params += param.numel()
                 param.is_visited = True
         print('initialize TP OK')
         print(f"num_params: {num_params}")
+        print(f"num_params_total: {num_params_total}")
         return WrapCallModule(colo_model)
     else:
         # This is for single process debug
@@ -176,6 +182,7 @@ if __name__ == '__main__':
     parser.add_argument('--http_port', type=int, default=7070)
     parser.add_argument('--cache_size', type=int, default=0)
     parser.add_argument('--cache_list_size', type=int, default=1)
+    parser.add_argument('--use_config', dest="use_config", action="store_true", help="set up a random model from config.json")
     args = parser.parse_args()
     print_args(args)
 
@@ -183,6 +190,10 @@ if __name__ == '__main__':
     model_kwargs = dict(max_new_tokens=num_tokens, do_sample=False)
     model_name = args.name
     model_kwargs['name'] = model_name
+    if args.use_config:
+        model_kwargs['use_config'] = True
+    else:
+        model_kwargs['use_config'] = False
     logger = logging.getLogger(__name__)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)

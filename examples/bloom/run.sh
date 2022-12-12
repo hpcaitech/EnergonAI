@@ -29,4 +29,7 @@ CUDA_VISIBLE_DEVICES_set_n_least_memory_usage ${GPU_NUM}
 # --random_init:(bool) random init or not(if you don't have whole model data), default=False
 # --random_model_size:(str) size of random init model,["560m", "7b1", "175b"],default="560m"
 
+
 python server.py --tp ${GPU_NUM} --name ${DATASET}  --dtype "int8" --max_batch_size 4 --random_model_size "7b1" --random_init True
+
+

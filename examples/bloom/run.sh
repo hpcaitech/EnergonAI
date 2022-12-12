@@ -13,24 +13,20 @@ CUDA_VISIBLE_DEVICES_set_n_least_memory_usage() {
     echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
 }
 
+
 export GPU_NUM=2
-export DATASET=/data2/users/lczht/bloom-560m # /data2/users/lczht/bloom-560m 
-                                            #/data2/users/lccsr/bloom3b/data 
-                                            #/data2/users/lccsr/bloom1b7/data
+
+export DATASET=/data2/users/lczht/bloom-560m 
 CUDA_VISIBLE_DEVICES_set_n_least_memory_usage ${GPU_NUM} 
-# set up a random model from config.json
-export USE_CONFIG=0
-export USE_INT8=1
-if [[ ${USE_CONFIG} == 1 ]]; then
-USE_CONFIG_FLAG="--use_config"
-else
-USE_CONFIG_FLAG=""
-fi
 
-if [[ ${USE_INT8} == 1 ]]; then
-DTYPE="int8"
-else
-DTYPE="fp16"
-fi
+# param list
+# --name :Name Path
+# --tp: (int) GPU_NUM, default=1
+# --http_host: (x.x.x.x)  your IP address, default=0.0.0.0
+# --http_port: (xxxx) your port, default=7070
+# --dtype:(str) use int8-quant or not ["fp16", "int8"], default="fp16"
+# --max_batchsize:(int) limitation of batchsize, default=1
+# --random_init:(bool) random init or not(if you don't have whole model data), default=False
+# --random_model_size:(str) size of random init model,["560m", "7b1", "175b"],default="560m"
 
-python server.py --tp ${GPU_NUM} --name ${DATASET} ${USE_CONFIG_FLAG} --dtype ${DTYPE} --max_batch_size 4
+python server.py --tp ${GPU_NUM} --name ${DATASET}  --dtype "int8" --max_batch_size 4 --random_model_size "7b1" --random_init True

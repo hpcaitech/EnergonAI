@@ -123,7 +123,6 @@ if __name__ == '__main__':
     parser.add_argument('--http_port', type=int, default=7070)
     parser.add_argument('--cache_size', type=int, default=0)
     parser.add_argument('--cache_list_size', type=int, default=1)
-    parser.add_argument('--use_config', dest="use_config", action="store_true", help="set up a random model from config.json")
     parser.add_argument('--dtype', type=str, help="module dtype", default="fp16", choices=["fp16", "int8"])
     parser.add_argument('--random_init',type=bool, help="If have no model params", default=False)
     args = parser.parse_args()
@@ -136,10 +135,6 @@ if __name__ == '__main__':
     model_kwargs['dtype'] = args.dtype
     model_kwargs['random_init'] = args.random_init
     model_kwargs['tp'] = args.tp
-    if args.use_config:
-        model_kwargs['use_config'] = True
-    else:
-        model_kwargs['use_config'] = False
     logger = logging.getLogger(__name__)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)

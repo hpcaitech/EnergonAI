@@ -4,9 +4,11 @@ import torch.distributed as dist
 import bitsandbytes as bnb
 import torch.nn.functional as F
 from typing import Optional, List
+import time
+import datetime
 from torch.distributed.distributed_c10d import ReduceOp
 import copy
-
+from transformers import BloomTokenizerFast, BloomForCausalLM, BloomConfig, AutoModelForCausalLM
 
 def getModelSize(model):
     param_size = 0
@@ -438,3 +440,122 @@ def convert_param_attr_context(dtype=torch.float32, use_skip_init : bool = False
             yield
     finally:
         nn.Module.register_parameter = old_register_parameter
+
+
+class ModelScatter(object):
+    def __init__(self) -> None:
+        self.cpu_group = dist.new_group(backend='gloo', timeout=datetime.timedelta(seconds=18000))
+        self.rank = dist.get_rank()
+        self.world_size = dist.get_world_size()
+
+    def _add_param(self, model, param_tensor, name):
+        param = torch.nn.Parameter(param_tensor, requires_grad=False)
+        name_list = name.split('.')
+        module = model._modules[name_list[0]]
+        for i in range(1, len(name_list) - 1):
+            module = module._modules[name_list[i]]
+        module._parameters[name_list[-1]] = param.to(self.rank)
+        del param_tensor
+
+    def scatter_model(self, src_model : torch.nn.Module, target_model : torch.nn.Module, use_int8 : bool = True) -> torch.nn.Module:
+        """scatter_model
+
+        Args:
+            src_model (torch.nn.Module): a global materailized model
+            target_model (torch.nn.Module): a meta model with the same structure as `src_model`
+            use_int8(bool): use int8 quantization. Defaults to True
+        
+        Returns:
+            torch.nn.Module: a local materailized model
+        """
+        if self.rank == 0:
+            assert src_model.dtype == target_model.dtype, f"the src model and the target model should have the same dtype"
+            assert src_model.device.type == 'cpu'
+            assert target_model.device.type == 'meta'
+
+            # get quant & sharded model_list
+            time0 = time.time()
+            model_list = get_tp_model_list(src_model, target_model, self.world_size, use_int8=use_int8)
+            print("Model init complete", time.time() - time0)
+
+            dist.barrier(self.cpu_group)
+            # send out
+            for name, param in model_list[0].named_parameters():
+                param_list = [param.data]
+                for i in range(1, self.world_size):
+                    param_list.append(model_list[i].state_dict()[name])
+                param_tensor = torch.zeros_like(
+                    param_list[0], dtype=param_list[0].dtype)
+                dist.scatter(param_tensor, scatter_list=param_list,
+                                src=0, group=self.cpu_group)
+                del param_list, param_tensor
+            model = model_list[0]
+            del model_list
+            return model
+        else:
+            model = get_tp_model(target_model, self.rank, self.world_size, use_int8=use_int8)
+            dist.barrier(self.cpu_group)
+            for name, param in model.named_parameters():
+                param_tensor = torch.zeros(
+                    param.data.size(), dtype=param.dtype)
+                dist.scatter(param_tensor, src=0, group=self.cpu_group)
+                self._add_param(model, param_tensor, name)
+            return model
+
+def run_int8_bloom_inference(use_int8=True, from_pretrain=False, data_path=None):
+    rank = dist.get_rank()
+    world_size = dist.get_world_size()
+
+    model_scatter = ModelScatter()
+
+    if from_pretrain:
+        configuration = BloomConfig.from_json_file(data_path + '/config.json')
+    else:
+        configuration = BloomConfig(
+            hidden_size=14336,
+            n_layer=70,
+            n_head=112,)
+        
+    # meta init
+    # get meta_model
+    with init_empty_weights():
+        meta_model = AutoModelForCausalLM.from_config(configuration).half()
+    if rank == 0:           
+        # get pre_trained model
+        if from_pretrain:
+            src_model = AutoModelForCausalLM.from_pretrained(
+                data_path, low_cpu_mem_usage=True, torch_dtype=torch.float16)
+        else:
+            with convert_param_attr_context(dtype=torch.float16, use_skip_init=True):
+                src_model = AutoModelForCausalLM.from_config(configuration)
+        print("src_model_load_complete")
+            
+        model = model_scatter.scatter_model(src_model, meta_model, use_int8)
+
+    else:
+        model = model_scatter.scatter_model(None, meta_model, use_int8)
+        model._modules['lm_head']._parameters['weight'] = model._modules['transformer']._modules['word_embeddings'].weight
+    
+    getModelSize(model)
+    return model
+
+def run_fp16(from_pretrain=False, data_path=None):
+    if from_pretrain:
+        model = BloomForCausalLM.from_pretrained(
+            data_path, low_cpu_mem_usage=True).half().to(0)
+    else:
+        cfg = BloomConfig(
+            hidden_size=14336,
+            n_layer=70,
+            n_head=112,)
+        with convert_param_attr_context(dtype=torch.float16, use_skip_init=True):
+            model = BloomForCausalLM(cfg)
+    
+    return model
+
+def run(tp=True, from_pretrain=False, data_path=None, use_int8=True):
+    if tp:
+        model = run_int8_bloom_inference(from_pretrain=from_pretrain, data_path=data_path, use_int8=use_int8)
+    else:
+        model = run_fp16(from_pretrain, data_path)
+    return model

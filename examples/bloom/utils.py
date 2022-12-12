@@ -502,7 +502,7 @@ class ModelScatter(object):
                 self._add_param(model, param_tensor, name)
             return model
 
-def run_int8_bloom_inference(use_int8=True, from_pretrain=False, data_path=None):
+def run_int8_bloom_inference(use_int8=True, from_pretrain=False, data_path=None, size="560m"):
     rank = dist.get_rank()
     world_size = dist.get_world_size()
 
@@ -511,10 +511,21 @@ def run_int8_bloom_inference(use_int8=True, from_pretrain=False, data_path=None)
     if from_pretrain:
         configuration = BloomConfig.from_json_file(data_path + '/config.json')
     else:
-        configuration = BloomConfig(
-            hidden_size=14336,
-            n_layer=70,
-            n_head=112,)
+        if size == "175b":
+            configuration = BloomConfig(
+                hidden_size=14336,
+                n_layer=70,
+                n_head=112,)
+        elif size == "7b1":
+            configuration = BloomConfig(
+                hidden_size=4096,
+                n_layer=30,
+                n_head=32,)
+        elif size == "560m":
+            configuration = BloomConfig(
+                hidden_size=1024,
+                n_layer=24,
+                n_head=16,)
         
     # meta init
     # get meta_model
@@ -553,9 +564,9 @@ def run_fp16(from_pretrain=False, data_path=None):
     
     return model
 
-def run(tp=True, from_pretrain=False, data_path=None, use_int8=True):
+def run(tp=True, from_pretrain=False, data_path=None, use_int8=True, size="560m"):
     if tp:
-        model = run_int8_bloom_inference(from_pretrain=from_pretrain, data_path=data_path, use_int8=use_int8)
+        model = run_int8_bloom_inference(from_pretrain=from_pretrain, data_path=data_path, use_int8=use_int8, size=size)
     else:
         model = run_fp16(from_pretrain, data_path)
     return model

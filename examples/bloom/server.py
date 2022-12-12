@@ -119,7 +119,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_batch_size', type=int, default=1)
     parser.add_argument('--pipe_size', type=int, default=1)
     parser.add_argument('--queue_size', type=int, default=0)
-    parser.add_argument('--http_host', default='59.108.228.2')
+    parser.add_argument('--http_host', default='0.0.0.0')
     parser.add_argument('--http_port', type=int, default=7070)
     parser.add_argument('--cache_size', type=int, default=0)
     parser.add_argument('--cache_list_size', type=int, default=1)

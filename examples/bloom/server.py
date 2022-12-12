@@ -99,7 +99,8 @@ def model_fn(**model_kwargs):
     else:
         from_pretrain = False
     data_path = model_kwargs['name']
-    model = run(tp=tp, from_pretrain=from_pretrain, data_path=data_path, use_int8=use_int8)
+    size = model_kwargs['size']
+    model = run(tp=tp, from_pretrain=from_pretrain, data_path=data_path, use_int8=use_int8, size=size)
     return WrapCallModule(model)
 
 
@@ -124,7 +125,8 @@ if __name__ == '__main__':
     parser.add_argument('--cache_size', type=int, default=0)
     parser.add_argument('--cache_list_size', type=int, default=1)
     parser.add_argument('--dtype', type=str, help="module dtype", default="fp16", choices=["fp16", "int8"])
-    parser.add_argument('--random_init',type=bool, help="If have no model params", default=False)
+    parser.add_argument('--random_init', type=bool, help="If have no model params", default=False)
+    parser.add_argument('--random_model_size', type=str, help="size of random init model", default="560m", choices=["560m", "7b1", "175b"])
     args = parser.parse_args()
     print_args(args)
 
@@ -135,6 +137,8 @@ if __name__ == '__main__':
     model_kwargs['dtype'] = args.dtype
     model_kwargs['random_init'] = args.random_init
     model_kwargs['tp'] = args.tp
+    model_kwargs['size'] = args.random_model_size
+    
     logger = logging.getLogger(__name__)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)

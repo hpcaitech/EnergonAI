@@ -85,94 +85,22 @@ class WrapCallModule(torch.nn.Module):
         return self.model.generate(**generate_kwargs)
 
 def model_fn(**model_kwargs):
-    model_name = model_kwargs['name']
-    use_tp = True
-    if use_tp:
-        tp_world_size = torch.distributed.get_world_size()
-        rank = torch.distributed.get_rank()
-        print(f'init TP world size {tp_world_size}')
-        pg = ProcessGroup(tp_degree=tp_world_size)
-
-        # for test
-        from_config = model_kwargs['use_config']
-        # configuration = BloomConfig(hidden_size=8192,  # 64
-        #                             n_layer=40,  # 2
-        #                             n_head=64,  # 8
-        #                             )
-        with open('config.json') as f:
-            config_dict = json.load(f)['random_model']
-            configuration = BloomConfig(**config_dict)
-        if from_config:
-            with ColoInitContext(device=torch.cuda.current_device(), dtype=torch.float16, default_pg=pg, default_dist_spec=ShardSpec(dims=[0], num_partitions=[pg.tp_world_size()])):
-                with torch.no_grad():
-                    colo_model = BloomForCausalLM(configuration)
-        else:
-            with ColoInitContext(device=torch.cuda.current_device(), dtype=torch.float16, default_pg=pg):
-                with torch.no_grad():
-                    colo_model = BloomForCausalLM.from_pretrained(model_name)
-
-        def split_param_single_dim_tp1d(dim: int, param: ColoParameter, pg: ProcessGroup):
-            spec = (ShardSpec([dim], [pg.tp_world_size()]), ComputeSpec(ComputePattern.TP1D))
-            if param.process_group.tp_world_size() == 1:
-                param.set_process_group(pg)
-            param.set_tensor_spec(*spec)
-
-        def split_param_row_tp1d(param: ColoParameter, pg: ProcessGroup):
-            split_param_single_dim_tp1d(0, param, pg)
-
-        if model_kwargs["dtype"] == "fp16":
-            num_params = 0
-            num_params_total = 0
-            for mn, module in colo_model.named_modules():
-                for pn, param in module.named_parameters(recurse=True):
-                    # reset process group for all parameters
-                    if hasattr(param, 'is_visited'):
-                        continue
-                    param_name = f"{mn}.{pn}"
-                    use_shard = False
-                    for target in TP_TARGET:
-                        if target in param_name:
-                            split_param_row_tp1d(param, pg)
-                            use_shard = True
-                            break
-                    if not use_shard:
-                        param.set_dist_spec(ReplicaSpec())
-                    param.requires_grad_(False)
-                    print(param.requires_grad)
-                    if use_shard:
-                        num_params_total += param.numel() * tp_world_size
-                    else:
-                        num_params_total += param.numel()
-                    num_params += param.numel()
-                    param.is_visited = True
-            print('initialize TP OK')
-            print(f"num_params: {num_params}")
-            print(f"num_params_total: {num_params_total}")
-        elif model_kwargs["dtype"] == "int8":
-            from utils import get_8bit_tp_model,replace_8bit_linear_tp_coloparam
-            colo_model = replace_8bit_linear_tp_coloparam(colo_model).to(rank)
-            colo_model = get_8bit_tp_model(colo_model, rank, tp_world_size)
-            num_params = 0
-            for pn, param in colo_model.named_parameters(recurse=True):
-                if hasattr(param, 'is_visited'):
-                    continue
-                num_params += param.numel()
-                print(pn,param.dtype)
-                param.is_visited = True
-            print(f"num_params: {num_params}")
-        return WrapCallModule(colo_model)
+    from utils import run
+    if model_kwargs['tp']!=1:
+        tp = True
     else:
-        # This is for single process debug
-        # model config only:
-        # configuration = BloomConfig(hidden_size=1024, s#64
-        #                             n_layer=32, #2
-        #                             n_head=128, #8
-        #                             )
-        # model = BloomForCausalLM(configuration)
-
-        model = BloomForCausalLM.from_pretrained(model_name)
-        print(model.config)
-        return WrapCallModule(model)
+        tp = False
+    if model_kwargs['dtype']=="int8":
+        use_int8 = True
+    else:
+        use_int8 = False
+    if model_kwargs['random_init']==False:
+        from_pretrain = True
+    else:
+        from_pretrain = False
+    data_path = model_kwargs['name']
+    model = run(tp=tp, from_pretrain=from_pretrain, data_path=data_path, use_int8=use_int8)
+    return WrapCallModule(model)
 
 
 FIXED_CACHE_KEYS = [
@@ -197,6 +125,7 @@ if __name__ == '__main__':
     parser.add_argument('--cache_list_size', type=int, default=1)
     parser.add_argument('--use_config', dest="use_config", action="store_true", help="set up a random model from config.json")
     parser.add_argument('--dtype', type=str, help="module dtype", default="fp16", choices=["fp16", "int8"])
+    parser.add_argument('--random_init',type=bool, help="If have no model params", default=False)
     args = parser.parse_args()
     print_args(args)
 
@@ -205,6 +134,8 @@ if __name__ == '__main__':
     model_name = args.name
     model_kwargs['name'] = model_name
     model_kwargs['dtype'] = args.dtype
+    model_kwargs['random_init'] = args.random_init
+    model_kwargs['tp'] = args.tp
     if args.use_config:
         model_kwargs['use_config'] = True
     else:

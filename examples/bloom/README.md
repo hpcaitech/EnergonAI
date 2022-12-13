@@ -8,7 +8,7 @@ bash run.sh
 You can change the args in `run.sh` as follow:
 ```
  param list
- --name :Name Path
+ --name :Name Path (required)
  --tp: (int) GPU_NUM, default=1
  --http_host: (x.x.x.x)  your IP address, default=0.0.0.0
  --http_port: (xxxx) your port, default=7070
@@ -18,6 +18,7 @@ You can change the args in `run.sh` as follow:
  --random_model_size:(str) size of random init model,["560m", "7b1", "175b"],default="560m"
 
 Once use [--random_init True], the [--random_model_size] option will be used. 
+Name is also required while using[--random_init True], for getting tokenizer. 
 ```
 
 While the service is running, send `POST` requests to https://[ip]:[port]/generation     

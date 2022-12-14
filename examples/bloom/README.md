@@ -56,8 +56,12 @@ Bigger MaxBatchSize may speed up concurrent requests in a single batched forward
 # Testing Result
 ## Memory
 Int8_model_size = 1/2 FP16_model_size
-To inference the 175B Bloom model with 8 GPUs, we reduce the MAX_GPU_MEM_ALLOCATED from 85GB per GPU to 21.68GB per GPU !
-Also we use no more cpu_mem than fp16 model.
+To inference the 175B Bloom model with 8 GPUs, we reduce the MAX_GPU_MEM_ALLOCATED from `85GB(FP32)`or `42.88GB(FP16)` to `21.68GB` per GPU !
+Also we use no more CPU_mem than fp16 model.
+<img width="600" alt="image" src="https://user-images.githubusercontent.com/70618399/207521302-d4823b3a-63b7-45b8-af68-da09997936d1.png">
 ## Time
-TODO
+<img width="600" alt="image" src="https://user-images.githubusercontent.com/70618399/207521883-a277795f-d21b-4f71-bbba-b110e3a22186.png">
+
+
+
 

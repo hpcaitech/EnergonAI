@@ -60,7 +60,11 @@ To inference the 175B Bloom model with 8 GPUs, we reduce the MAX_GPU_MEM_ALLOCAT
 Also we use no more CPU_mem than fp16 model.
 <img width="600" alt="image" src="https://user-images.githubusercontent.com/70618399/207521302-d4823b3a-63b7-45b8-af68-da09997936d1.png">
 ## Time
+### Inference
 <img width="600" alt="image" src="https://user-images.githubusercontent.com/70618399/207521883-a277795f-d21b-4f71-bbba-b110e3a22186.png">
+
+### Generate
+<img width="600" alt="image" src="https://user-images.githubusercontent.com/70618399/207755302-b131d940-9028-4d4c-a5b4-1fa1189d27e4.png">
 
 
 

@@ -133,7 +133,7 @@ def _communicate(tensor_send_next=None,
 def recv_forward(input_tensor_shape, prev_rank=None, dtype=torch.float, scatter_gather_tensors=False):
     """Receives the input tensor from the previous member in pipeline.
 
-    :param input_tensor_shape: The shape of the tensor to be recieved
+    :param input_tensor_shape: The shape of the tensor to be received
     :param prev_rank: The rank of the source of the tensor
     :type input_tensor_shape: torch.Size
     :type prev_rank: int, optional
@@ -154,7 +154,7 @@ def recv_forward(input_tensor_shape, prev_rank=None, dtype=torch.float, scatter_
 def recv_backward(output_grad_shape, next_rank=None, dtype=torch.float, scatter_gather_tensors=False):
     """Receives the grad tensor from the next member in pipeline.
 
-    :param output_grad_shape: The shape of the tensor to be recieved
+    :param output_grad_shape: The shape of the tensor to be received
     :param next_rank: The rank of the source of the tensor
     :type output_grad_shape: torch.Size
     :type next_rank: int, optional
@@ -205,11 +205,11 @@ def send_forward_recv_backward(output_tensor,
                                dtype=torch.float,
                                scatter_gather_tensors=False):
     """Batched communication operation. Sends the input tensor to the 
-    next member in pipeline, while recieves the grad tensor from the
+    next member in pipeline, while receives the grad tensor from the
     next member in pipeline.
 
     :param output_tensor: Tensor to be sent
-    :param output_grad_shape: The shape of the tensor to be recieved
+    :param output_grad_shape: The shape of the tensor to be received
     :type output_tensor: :class:`torch.Tensor`
     :type output_grad_shape: :class:`torch.Size`
     :return: The grad of output tensor in forward step
@@ -234,11 +234,11 @@ def send_backward_recv_forward(input_tensor_grad,
                                dtype=torch.float,
                                scatter_gather_tensors=False):
     """Batched communication operation. Sends the grad tensor to the 
-    previous member in pipeline, while recieves the input tensor from the
+    previous member in pipeline, while receives the input tensor from the
     previous member in pipeline.
 
     :param input_tensor_grad: Tensor to be sent
-    :param input_tensor_shape: The shape of the tensor to be recieved
+    :param input_tensor_shape: The shape of the tensor to be received
     :type input_tensor_grad: :class:`torch.Tensor`
     :type input_tensor_shape: :class:`torch.Size`
     :return: The input tensor in forward step
@@ -264,11 +264,11 @@ def send_forward_recv_forward(output_tensor,
                               dtype=torch.float,
                               scatter_gather_tensors=False):
     """Batched communication operation. Sends the input tensor to the 
-    next member in pipeline, while recieves the input tensor from the
+    next member in pipeline, while receives the input tensor from the
     previous member in pipeline.
 
     :param output_tensor: Tensor to be sent
-    :param input_tensor_shape: The shape of the tensor to be recieved
+    :param input_tensor_shape: The shape of the tensor to be received
     :type output_tensor: :class:`torch.Tensor`
     :type input_tensor_shape: :class:`torch.Size`
     :return: The input tensor in forward step
@@ -292,11 +292,11 @@ def send_backward_recv_backward(input_tensor_grad,
                                 dtype=torch.float,
                                 scatter_gather_tensors=False):
     """Batched communication operation. Sends the grad tensor to the 
-    previous member in pipeline, while recieves the grad tensor from the
+    previous member in pipeline, while receives the grad tensor from the
     next member in pipeline.
 
     :param input_tensor_grad: Tensor to be sent
-    :param output_grad_shape: The shape of the tensor to be recieved
+    :param output_grad_shape: The shape of the tensor to be received
     :type input_tensor_grad: :class:`torch.Tensor`
     :type output_grad_shape: :class:`torch.Size`
     :return: The grad of output tensor in forward step
@@ -323,13 +323,13 @@ def send_forward_backward_recv_forward_backward(output_tensor,
                                                 dtype=torch.float,
                                                 scatter_gather_tensors=False):
     """Batched communication operation. Sends the input tensor to the next and 
-    the grad tensor to the previous, while recieves the grad tensor from the
+    the grad tensor to the previous, while receives the grad tensor from the
     next and the input tensor from the previous.
 
     :param output_tensor: Tensor sent to the next
     :param input_tensor_grad: Tensor sent to the previous
-    :param input_tensor_shape: The shape of the tensor recieved from the previous
-    :param output_grad_shape: The shape of the tensor recieved from the next
+    :param input_tensor_shape: The shape of the tensor received from the previous
+    :param output_grad_shape: The shape of the tensor received from the next
     :type output_tensor: :class:`torch.Tensor`
     :type input_tensor_grad: :class:`torch.Tensor`
     :type input_tensor_shape: :class:`torch.Size`

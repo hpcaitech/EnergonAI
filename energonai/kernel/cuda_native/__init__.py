@@ -3,4 +3,3 @@ from .transpose_pad import ft_build_padding_offsets, ft_remove_padding, ft_rebui
 from .scale_mask_softmax import scale_mask_softmax
 from .layer_norm import MixedFusedLayerNorm as LayerNorm
 from .linear_func import linear, find_algo
-# from .one_layer_norm import MixedFusedLayerNorm as OneLayerNorm

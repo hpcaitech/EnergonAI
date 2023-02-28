@@ -81,7 +81,8 @@ class Linear8bitTP(nn.Linear):
         dist.all_gather(tensor_list, out)
         out = torch.cat(tensor_list, dim=2)
         del tensor_list
-        del self.state.CxB
+        if self.state.CxB is not None:
+            del self.state.CxB
         
         return out
 

@@ -54,9 +54,9 @@ class Linear8bitTP(nn.Linear):
         self.world_size = dist.get_world_size()
         self.register_parameter("SCB", nn.Parameter(torch.empty(0), requires_grad=False))
         self.weight = weight_data
+        
 
-
-    def quant(self):
+    def quant(self):  
         weight = self.weight.data.contiguous().half().to(self.rank)
         CB, _, SCB, _, _ = bnb.functional.double_quant(weight)
         delattr(self, "weight")
@@ -69,21 +69,20 @@ class Linear8bitTP(nn.Linear):
 
     def forward(self, x):
         self.state.is_training = self.training
-
+        
         if self.bias is not None and self.bias.dtype != torch.float16:
             self.bias.data = self.bias.data.half()
-
+        
         self.state.CB = self.weight.data
         self.state.SCB = self.SCB.data
-
+        
         out = bnb.matmul(x, self.weight, bias=self.bias, state=self.state)
         tensor_list = [torch.zeros_like(out) for _ in range(self.world_size)]
         dist.all_gather(tensor_list, out)
         out = torch.cat(tensor_list, dim=2)
         del tensor_list
-        if self.state.CxB is not None:
-            del self.state.CxB
-
+        del self.state.CxB
+        
         return out
 
 class LinearTP(nn.Module):
@@ -91,7 +90,7 @@ class LinearTP(nn.Module):
     in_features: int
     out_features: int
     weight: Tensor
-
+    
     def __init__(self, in_features:int, out_features:int, bias:bool=False,
                  weight_data=None, bias_data=None, device="meta", dtype=None,
                  use_int8:bool=True
@@ -110,7 +109,7 @@ class LinearTP(nn.Module):
         else:
             self.weight = weight_data
             self.bias = bias_data
-
+        
     def forward(self, x):
         if self.use_int8 == True:
             x = x.chunk(self.world_size, dim=2)[self.rank]
@@ -160,7 +159,7 @@ class EmbeddingTP(nn.Embedding):
             self.scale_grad_by_freq,
             self.sparse,
         )
-
+        
         tensor_list = [torch.zeros_like(emb) for _ in range(self.world_size)]
         dist.all_gather(tensor_list, emb)
         emb = torch.cat(tensor_list, dim=2)
@@ -168,12 +167,12 @@ class EmbeddingTP(nn.Embedding):
         return emb
 
 @torch.no_grad()
-def replace_tp_module(model : torch.nn.Module,
-                      threshold : float = 6.0,
+def replace_tp_module(model : torch.nn.Module, 
+                      threshold : float = 6.0, 
                       modules_to_not_convert : str = "lm_head",
                       use_int8: bool = True
                       ) -> torch.nn.Module:
-    """replace_tp_module
+    """replace_tp_module 
     Args:
         model (torch.nn.Module): a meta model
         threshold (float, optional): _description_. Defaults to 6.0.
@@ -187,7 +186,7 @@ def replace_tp_module(model : torch.nn.Module,
             replace_tp_module(module, threshold, modules_to_not_convert, use_int8)
 
         if isinstance(module, nn.Linear) and name not in modules_to_not_convert:
-            if use_int8 == True:
+            if use_int8 == True:    
                 model._modules[name] = Linear8bitTP(
                         input_features=module.in_features,
                         output_features=module.out_features,
@@ -205,7 +204,7 @@ def replace_tp_module(model : torch.nn.Module,
                         bias = module.bias is not None,
                         use_int8 = use_int8
                 )
-
+        
         elif isinstance(module, nn.Embedding):
             model._modules[name] = EmbeddingTP(
                 num_embeddings=module.num_embeddings,
@@ -217,7 +216,7 @@ def replace_tp_module(model : torch.nn.Module,
                 sparse=module.sparse,
                 weight=module.weight,
             )
-
+        
         elif isinstance(module, nn.Linear) and name == 'lm_head':
             model._modules[name] = LinearTP(
                 in_features=module.in_features,
@@ -230,7 +229,7 @@ def replace_tp_module(model : torch.nn.Module,
 @torch.no_grad()
 def get_tp_model(model : nn.Module,
                  rank : int,
-                 world_size : int,
+                 world_size : int, 
                  use_int8 : bool = True)-> torch.nn.Module:
     """get_tp_model
     Shard a meta model for rank process.
@@ -247,27 +246,27 @@ def get_tp_model(model : nn.Module,
         if isinstance(module, Linear8bitTP):
             bias_list = list(module.bias.data.chunk(world_size, dim=0))
             bias = bias_list[rank]
-
+            
             weight_list = list(module.weight.data.chunk(world_size, dim=0))
             weight = weight_list[rank]
             SCB = torch.zeros_like(bias).to("meta")
-
+            
             delattr(module, "weight")
             setattr(module, "weight", nn.Parameter(weight.to(torch.int8), requires_grad=False))
-
+            
             delattr(module, "SCB")
             setattr(module, "SCB", nn.Parameter(SCB.to(torch.float32), requires_grad=False))
-
+            
             delattr(module, "bias")
             setattr(module, "bias", nn.Parameter(bias))
-
-
-        if isinstance(module, EmbeddingTP):
+            
+            
+        if isinstance(module, EmbeddingTP):   
             weight_list = list(module.weight.chunk(world_size, dim=1))
             delattr(module, 'weight')
             weight = nn.Parameter(weight_list[rank])
             setattr(module, 'weight', weight)
-
+            
         if isinstance(module, LinearTP):
             if name == 'lm_head':
                 delattr(module, 'weight')
@@ -275,16 +274,16 @@ def get_tp_model(model : nn.Module,
             else:
                 bias_list = list(module.bias.data.chunk(world_size, dim=0))
                 bias = bias_list[rank]
-
+            
                 weight_list = list(module.weight.data.chunk(world_size, dim=0))
                 weight = weight_list[rank]
-
+                
                 delattr(module, "weight")
                 setattr(module, "weight", nn.Parameter(weight, requires_grad=False))
-
+            
                 delattr(module, "bias")
                 setattr(module, "bias", nn.Parameter(bias))
-
+                
     return model
 
 @torch.no_grad()
@@ -304,12 +303,12 @@ def get_tp_model_list(model : torch.nn.Module,
         List[torch.nn.Module]: a list of materialized models after sharding and quantization.
     """
     model = replace_tp_module(model, use_int8=use_int8)
-
+    
     model_list = []
     dist_meta_model = replace_tp_module(meta_model, use_int8=use_int8)
     for i in range(world_size):
         model_list.append(copy.deepcopy(dist_meta_model))
-
+    
     # quantize and shard parameters
     for name, module in model.named_modules():
         if isinstance(module, Linear8bitTP):
@@ -317,7 +316,7 @@ def get_tp_model_list(model : torch.nn.Module,
             weight_list = list(module.weight.data.chunk(world_size, dim=0))
             SCB_list = list(module.SCB.data.chunk(world_size, dim=0))
             bias_list = list(module.bias.data.chunk(world_size, dim=0))
-
+            
             name_list = name.split('.')
             for rank in range(world_size):
                 module_tmp = model_list[rank]._modules[name_list[0]]
@@ -342,7 +341,7 @@ def get_tp_model_list(model : torch.nn.Module,
                 module_tmp.weight = nn.Parameter(weight_list[rank].clone().detach(), requires_grad=False)
             del name_list, weight_list
             module.to("meta")
-
+            
         elif isinstance(module, LinearTP):
             if name == 'lm_head':
                 name_list = name.split('.')
@@ -365,8 +364,8 @@ def get_tp_model_list(model : torch.nn.Module,
                     setattr(module_tmp, "bias", nn.Parameter(bias_list[rank].clone().detach()))
                 del name_list, weight_list, bias_list
             module.to("meta")
-
-
+                
+            
         elif len(list(module.children())) == 0:
             name_list = name.split('.')
             for rank in range(world_size):
@@ -382,22 +381,22 @@ def get_tp_model_list(model : torch.nn.Module,
                 except:
                     pass
             module.to("meta")
-
+    
     return model_list
-
+            
 
 from contextlib import contextmanager
 @contextmanager
 def init_empty_weights():
     old_register_parameter = nn.Module.register_parameter
-
+    
     def register_empty_param(module, name, param):
         old_register_parameter(module, name, param)
         if param is not None:
             param_cls = type(module._parameters[name])
             kwargs = module._parameters[name].__dict__
             module._parameters[name] = param_cls(module._parameters[name].to(torch.device("meta")), **kwargs)
-
+            
     try:
         nn.Module.register_parameter = register_empty_param
         yield
@@ -408,12 +407,12 @@ def init_empty_weights():
 def skip_init_context():
     old_init = nn.Linear.reset_parameters
     old_emb_init = nn.Embedding.reset_parameters
-
+    
     def new_init(self):
         pass
     def new_emb_init(self):
         self._fill_padding_idx_with_zero()
-
+        
     try:
         nn.Linear.reset_parameters = new_init
         nn.Embedding.reset_parameters = new_emb_init
@@ -422,16 +421,16 @@ def skip_init_context():
     finally:
         nn.Linear.reset_parameters = old_init
         nn.Embedding.reset_parameters = old_emb_init
-
+        
 @contextmanager
 def convert_param_attr_context(dtype=torch.float32, use_skip_init : bool = False):
     old_register_parameter = nn.Module.register_parameter
-
+    
     def register_empty_param(module, name, param):
         if param is not None:
             param = nn.Parameter(param.data.to(dtype))
         old_register_parameter(module, name, param)
-
+            
     try:
         nn.Module.register_parameter = register_empty_param
         if use_skip_init:
@@ -465,7 +464,7 @@ class ModelScatter(object):
             src_model (torch.nn.Module): a global materailized model
             target_model (torch.nn.Module): a meta model with the same structure as `src_model`
             use_int8(bool): use int8 quantization. Defaults to True
-
+        
         Returns:
             torch.nn.Module: a local materailized model
         """
@@ -527,12 +526,12 @@ def run_int8_bloom_inference(use_int8=True, from_pretrain=False, data_path=None,
                 hidden_size=1024,
                 n_layer=24,
                 n_head=16,)
-
+        
     # meta init
     # get meta_model
     with init_empty_weights():
         meta_model = AutoModelForCausalLM.from_config(configuration).half()
-    if rank == 0:
+    if rank == 0:           
         # get pre_trained model
         if from_pretrain:
             src_model = AutoModelForCausalLM.from_pretrained(
@@ -541,13 +540,13 @@ def run_int8_bloom_inference(use_int8=True, from_pretrain=False, data_path=None,
             with convert_param_attr_context(dtype=torch.float16, use_skip_init=True):
                 src_model = AutoModelForCausalLM.from_config(configuration)
         print("src_model_load_complete")
-
+            
         model = model_scatter.scatter_model(src_model, meta_model, use_int8)
 
     else:
         model = model_scatter.scatter_model(None, meta_model, use_int8)
         model._modules['lm_head']._parameters['weight'] = model._modules['transformer']._modules['word_embeddings'].weight
-
+    
     getModelSize(model)
     return model
 
@@ -562,7 +561,7 @@ def run_fp16(from_pretrain=False, data_path=None):
             n_head=112,)
         with convert_param_attr_context(dtype=torch.float16, use_skip_init=True):
             model = BloomForCausalLM(cfg)
-
+    
     return model
 
 def run(tp=True, from_pretrain=False, data_path=None, use_int8=True, size="560m"):

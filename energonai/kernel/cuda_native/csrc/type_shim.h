@@ -1,38 +1,50 @@
+/*This code from NVIDIA apex:
+ *     https://github.com/NVIDIA/apex
+ *     with minor changes. */
 #include "compat.h"
 #include <ATen/ATen.h>
 
-#define DISPATCH_HALF_AND_BFLOAT(TYPE, NAME, ...)                              \
-  switch (TYPE) {                                                              \
-  case at::ScalarType::Half: {                                                 \
-    using scalar_t = at::Half;                                                 \
-    __VA_ARGS__;                                                               \
-    break;                                                                     \
-  }                                                                            \
-  case at::ScalarType::BFloat16: {                                             \
-    using scalar_t = at::BFloat16;                                             \
-    __VA_ARGS__;                                                               \
-    break;                                                                     \
-  }                                                                            \
-  default:                                                                     \
-    AT_ERROR(#NAME, " not implemented for '", toString(TYPE), "'");            \
+#define DISPATCH_HALF_AND_BFLOAT(TYPE, NAME, ...)                   \
+  switch (TYPE)                                                     \
+  {                                                                 \
+  case at::ScalarType::Half:                                        \
+  {                                                                 \
+    using scalar_t = at::Half;                                      \
+    __VA_ARGS__;                                                    \
+    break;                                                          \
+  }                                                                 \
+  case at::ScalarType::BFloat16:                                    \
+  {                                                                 \
+    using scalar_t = at::BFloat16;                                  \
+    __VA_ARGS__;                                                    \
+    break;                                                          \
+  }                                                                 \
+  default:                                                          \
+    AT_ERROR(#NAME, " not implemented for '", toString(TYPE), "'"); \
   }
 
 #define DISPATCH_FLOAT_HALF_AND_BFLOAT_INOUT_TYPES(TYPEIN, TYPEOUT, NAME, ...) \
-  switch (TYPEIN) {                                                            \
-  case at::ScalarType::Float: {                                                \
+  switch (TYPEIN)                                                              \
+  {                                                                            \
+  case at::ScalarType::Float:                                                  \
+  {                                                                            \
     using scalar_t_in = float;                                                 \
-    switch (TYPEOUT) {                                                         \
-    case at::ScalarType::Float: {                                              \
+    switch (TYPEOUT)                                                           \
+    {                                                                          \
+    case at::ScalarType::Float:                                                \
+    {                                                                          \
       using scalar_t_out = float;                                              \
       __VA_ARGS__;                                                             \
       break;                                                                   \
     }                                                                          \
-    case at::ScalarType::Half: {                                               \
+    case at::ScalarType::Half:                                                 \
+    {                                                                          \
       using scalar_t_out = at::Half;                                           \
       __VA_ARGS__;                                                             \
       break;                                                                   \
     }                                                                          \
-    case at::ScalarType::BFloat16: {                                           \
+    case at::ScalarType::BFloat16:                                             \
+    {                                                                          \
       using scalar_t_out = at::BFloat16;                                       \
       __VA_ARGS__;                                                             \
       break;                                                                   \
@@ -42,13 +54,15 @@
     }                                                                          \
     break;                                                                     \
   }                                                                            \
-  case at::ScalarType::Half: {                                                 \
+  case at::ScalarType::Half:                                                   \
+  {                                                                            \
     using scalar_t_in = at::Half;                                              \
     using scalar_t_out = at::Half;                                             \
     __VA_ARGS__;                                                               \
     break;                                                                     \
   }                                                                            \
-  case at::ScalarType::BFloat16: {                                             \
+  case at::ScalarType::BFloat16:                                               \
+  {                                                                            \
     using scalar_t_in = at::BFloat16;                                          \
     using scalar_t_out = at::BFloat16;                                         \
     __VA_ARGS__;                                                               \
@@ -71,100 +85,123 @@
 //   //operator at::ScalarType(){ return payload.; };
 // };
 
-#define DISPATCH_FLOAT_AND_HALF(TYPE, LEVEL, NAME, ...)                        \
-  switch (TYPE) {                                                              \
-  case at::ScalarType::Float: {                                                \
-    using scalar_t_##LEVEL = float;                                            \
-    __VA_ARGS__;                                                               \
-    break;                                                                     \
-  }                                                                            \
-  case at::ScalarType::Half: {                                                 \
-    using scalar_t_##LEVEL = at::Half;                                         \
-    __VA_ARGS__;                                                               \
-    break;                                                                     \
-  }                                                                            \
-  default:                                                                     \
-    AT_ERROR(#NAME, " not implemented for '", toString(TYPE), "'");            \
+#define DISPATCH_FLOAT_AND_HALF(TYPE, LEVEL, NAME, ...)             \
+  switch (TYPE)                                                     \
+  {                                                                 \
+  case at::ScalarType::Float:                                       \
+  {                                                                 \
+    using scalar_t_##LEVEL = float;                                 \
+    __VA_ARGS__;                                                    \
+    break;                                                          \
+  }                                                                 \
+  case at::ScalarType::Half:                                        \
+  {                                                                 \
+    using scalar_t_##LEVEL = at::Half;                              \
+    __VA_ARGS__;                                                    \
+    break;                                                          \
+  }                                                                 \
+  default:                                                          \
+    AT_ERROR(#NAME, " not implemented for '", toString(TYPE), "'"); \
   }
 
-#define DISPATCH_FLOAT_HALF_AND_BYTE(TYPE, LEVEL, NAME, ...)                   \
-  switch (TYPE) {                                                              \
-  case at::ScalarType::Float: {                                                \
-    using scalar_t_##LEVEL = float;                                            \
-    __VA_ARGS__;                                                               \
-    break;                                                                     \
-  }                                                                            \
-  case at::ScalarType::Half: {                                                 \
-    using scalar_t_##LEVEL = at::Half;                                         \
-    __VA_ARGS__;                                                               \
-    break;                                                                     \
-  }                                                                            \
-  case at::ScalarType::Byte: {                                                 \
-    using scalar_t_##LEVEL = uint8_t;                                          \
-    __VA_ARGS__;                                                               \
-    break;                                                                     \
-  }                                                                            \
-  default:                                                                     \
-    AT_ERROR(#NAME, " not implemented for '", toString(TYPE), "'");            \
+#define DISPATCH_FLOAT_HALF_AND_BYTE(TYPE, LEVEL, NAME, ...)        \
+  switch (TYPE)                                                     \
+  {                                                                 \
+  case at::ScalarType::Float:                                       \
+  {                                                                 \
+    using scalar_t_##LEVEL = float;                                 \
+    __VA_ARGS__;                                                    \
+    break;                                                          \
+  }                                                                 \
+  case at::ScalarType::Half:                                        \
+  {                                                                 \
+    using scalar_t_##LEVEL = at::Half;                              \
+    __VA_ARGS__;                                                    \
+    break;                                                          \
+  }                                                                 \
+  case at::ScalarType::Byte:                                        \
+  {                                                                 \
+    using scalar_t_##LEVEL = uint8_t;                               \
+    __VA_ARGS__;                                                    \
+    break;                                                          \
+  }                                                                 \
+  default:                                                          \
+    AT_ERROR(#NAME, " not implemented for '", toString(TYPE), "'"); \
   }
 
-#define DISPATCH_DOUBLE_FLOAT_AND_HALF(TYPE, LEVEL, NAME, ...)                 \
-  switch (TYPE) {                                                              \
-  case at::ScalarType::Double: {                                               \
-    using scalar_t_##LEVEL = double;                                           \
-    __VA_ARGS__;                                                               \
-    break;                                                                     \
-  }                                                                            \
-  case at::ScalarType::Float: {                                                \
-    using scalar_t_##LEVEL = float;                                            \
-    __VA_ARGS__;                                                               \
-    break;                                                                     \
-  }                                                                            \
-  case at::ScalarType::Half: {                                                 \
-    using scalar_t_##LEVEL = at::Half;                                         \
-    __VA_ARGS__;                                                               \
-    break;                                                                     \
-  }                                                                            \
-  default:                                                                     \
-    AT_ERROR(#NAME, " not implemented for '", toString(TYPE), "'");            \
+#define DISPATCH_DOUBLE_FLOAT_AND_HALF(TYPE, LEVEL, NAME, ...)      \
+  switch (TYPE)                                                     \
+  {                                                                 \
+  case at::ScalarType::Double:                                      \
+  {                                                                 \
+    using scalar_t_##LEVEL = double;                                \
+    __VA_ARGS__;                                                    \
+    break;                                                          \
+  }                                                                 \
+  case at::ScalarType::Float:                                       \
+  {                                                                 \
+    using scalar_t_##LEVEL = float;                                 \
+    __VA_ARGS__;                                                    \
+    break;                                                          \
+  }                                                                 \
+  case at::ScalarType::Half:                                        \
+  {                                                                 \
+    using scalar_t_##LEVEL = at::Half;                              \
+    __VA_ARGS__;                                                    \
+    break;                                                          \
+  }                                                                 \
+  default:                                                          \
+    AT_ERROR(#NAME, " not implemented for '", toString(TYPE), "'"); \
   }
 
-#define DISPATCH_DOUBLE_AND_FLOAT(TYPE, LEVEL, NAME, ...)                      \
-  switch (TYPE) {                                                              \
-  case at::ScalarType::Double: {                                               \
-    using scalar_t_##LEVEL = double;                                           \
-    __VA_ARGS__;                                                               \
-    break;                                                                     \
-  }                                                                            \
-  case at::ScalarType::Float: {                                                \
-    using scalar_t_##LEVEL = float;                                            \
-    __VA_ARGS__;                                                               \
-    break;                                                                     \
-  }                                                                            \
-  default:                                                                     \
-    AT_ERROR(#NAME, " not implemented for '", toString(TYPE), "'");            \
+#define DISPATCH_DOUBLE_AND_FLOAT(TYPE, LEVEL, NAME, ...)           \
+  switch (TYPE)                                                     \
+  {                                                                 \
+  case at::ScalarType::Double:                                      \
+  {                                                                 \
+    using scalar_t_##LEVEL = double;                                \
+    __VA_ARGS__;                                                    \
+    break;                                                          \
+  }                                                                 \
+  case at::ScalarType::Float:                                       \
+  {                                                                 \
+    using scalar_t_##LEVEL = float;                                 \
+    __VA_ARGS__;                                                    \
+    break;                                                          \
+  }                                                                 \
+  default:                                                          \
+    AT_ERROR(#NAME, " not implemented for '", toString(TYPE), "'"); \
   }
 
 #define DISPATCH_FLOAT_AND_HALF_FOR_G_P(GTYPE, PTYPE, LEVEL, NAME, ...)        \
-  if (GTYPE == at::ScalarType::Float && PTYPE == at::ScalarType::Float) {      \
+  if (GTYPE == at::ScalarType::Float && PTYPE == at::ScalarType::Float)        \
+  {                                                                            \
     using g_scalar_t_##LEVEL = float;                                          \
     using p_scalar_t_##LEVEL = float;                                          \
     __VA_ARGS__;                                                               \
-  } else if (GTYPE == at::ScalarType::Float &&                                 \
-             PTYPE == at::ScalarType::Half) {                                  \
+  }                                                                            \
+  else if (GTYPE == at::ScalarType::Float &&                                   \
+           PTYPE == at::ScalarType::Half)                                      \
+  {                                                                            \
     using g_scalar_t_##LEVEL = float;                                          \
     using p_scalar_t_##LEVEL = at::Half;                                       \
     __VA_ARGS__;                                                               \
-  } else if (GTYPE == at::ScalarType::Half &&                                  \
-             PTYPE == at::ScalarType::Float) {                                 \
+  }                                                                            \
+  else if (GTYPE == at::ScalarType::Half &&                                    \
+           PTYPE == at::ScalarType::Float)                                     \
+  {                                                                            \
     using g_scalar_t_##LEVEL = at::Half;                                       \
     using p_scalar_t_##LEVEL = float;                                          \
     __VA_ARGS__;                                                               \
-  } else if (GTYPE == at::ScalarType::Half && PTYPE == at::ScalarType::Half) { \
+  }                                                                            \
+  else if (GTYPE == at::ScalarType::Half && PTYPE == at::ScalarType::Half)     \
+  {                                                                            \
     using g_scalar_t_##LEVEL = at::Half;                                       \
     using p_scalar_t_##LEVEL = at::Half;                                       \
     __VA_ARGS__;                                                               \
-  } else {                                                                     \
+  }                                                                            \
+  else                                                                         \
+  {                                                                            \
     AT_ERROR(#NAME, "not implemented for '", toString(GTYPE), toString(PTYPE), \
              "'");                                                             \
   }
@@ -178,13 +215,15 @@ __device__ __forceinline__ T reduce_block_into_lanes(
   int blockSize =
       blockDim.x * blockDim.y; // blockSize is intended to be a multiple of 32.
 
-  if (blockSize >= 64) {
+  if (blockSize >= 64)
+  {
     x[tid] = val;
     __syncthreads();
   }
 
 #pragma unroll
-  for (int i = (blockSize >> 1); i >= 64; i >>= 1) {
+  for (int i = (blockSize >> 1); i >= 64; i >>= 1)
+  {
     if (tid < i)
       x[tid] = x[tid] + x[tid + i];
     __syncthreads();
@@ -192,7 +231,8 @@ __device__ __forceinline__ T reduce_block_into_lanes(
 
   T final;
 
-  if (tid < 32) {
+  if (tid < 32)
+  {
     if (blockSize >= 64)
       final = x[tid] + x[tid + 32];
     else
@@ -204,7 +244,8 @@ __device__ __forceinline__ T reduce_block_into_lanes(
       final = final + __shfl_down_sync(0xffffffff, final, i);
   }
 
-  if (share_result) {
+  if (share_result)
+  {
     if (tid < lanes)
       x[tid] = final; // EpilogueOp
     // Make sure the smem result is visible to all warps.
@@ -223,13 +264,15 @@ __device__ __forceinline__ T reduce_block_into_lanes_max_op(
   int blockSize =
       blockDim.x * blockDim.y; // blockSize is intended to be a multiple of 32.
 
-  if (blockSize >= 64) {
+  if (blockSize >= 64)
+  {
     x[tid] = val;
     __syncthreads();
   }
 
 #pragma unroll
-  for (int i = (blockSize >> 1); i >= 64; i >>= 1) {
+  for (int i = (blockSize >> 1); i >= 64; i >>= 1)
+  {
     if (tid < i)
       x[tid] = fmaxf(fabsf(x[tid]), fabsf(x[tid + i]));
     __syncthreads();
@@ -237,7 +280,8 @@ __device__ __forceinline__ T reduce_block_into_lanes_max_op(
 
   T final;
 
-  if (tid < 32) {
+  if (tid < 32)
+  {
     if (blockSize >= 64)
       final = fmaxf(fabsf(x[tid]), fabsf(x[tid + 32]));
     else
@@ -250,7 +294,8 @@ __device__ __forceinline__ T reduce_block_into_lanes_max_op(
           fmaxf(fabsf(final), fabsf(__shfl_down_sync(0xffffffff, final, i)));
   }
 
-  if (share_result) {
+  if (share_result)
+  {
     if (tid < lanes)
       x[tid] = final; // EpilogueOp
     // Make sure the smem result is visible to all warps.

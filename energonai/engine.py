@@ -128,6 +128,15 @@ class AsyncEngine:
                 return output
             await asyncio.sleep(0.1)
 
+    def get(self, uid: Hashable, interval: float = 0.05) -> Any:
+        assert self.completion_thread.is_alive()
+        while True:
+            if uid in self.completion_map:
+                output = self.completion_map[uid]
+                del self.completion_map[uid]
+                return output
+            time.sleep(interval)
+
     def _sigint_handler(self, *_):
         self.shutdown()
         raise KeyboardInterrupt

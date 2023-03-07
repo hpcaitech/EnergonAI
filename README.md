@@ -1,6 +1,7 @@
-<!-- <div  align="center">    
+<div  align="center">
     <img src="https://user-images.githubusercontent.com/12018307/170214566-b611b131-fff1-41c0-9447-786a8a6f0bac.png" width = "600" height = "148" alt="Architecture" align=center />
-</div> -->
+</div>
+
 # Energon-AI
 
 ![](https://img.shields.io/badge/Made%20with-ColossalAI-blueviolet?style=flat)
@@ -17,23 +18,34 @@ For models trained by [Colossal-AI](https://github.com/hpcaitech/ColossalAI), th
 For single-device models, they require manual coding works to introduce tensor parallelism and pipeline parallelism.
 
 
-### Installation
-**Install from source**
+## Installation
+
+There are three ways to install energonai.
+
+- **Install from pypi**
+
+``` bash
+pip install energonai
+```
+
+
+- **Install from source**
 ``` bash
 $ git clone git@github.com:hpcaitech/EnergonAI.git
 $ pip install -r requirements.txt
 $ pip install .
 ```
-**Use docker**
+
+- **Use docker**
 ``` bash
 $ docker pull hpcaitech/energon-ai:latest
 ```
 
 
-### Build an online OPT service in 5 minutes
+## Build an online OPT service in 5 minutes
 
 1. **Download OPT model:**
-  To launch the distributed inference service quickly, you can download the checkpoint of OPT-125M [here](https://huggingface.co/patrickvonplaten/opt_metaseq_125m/blob/main/model/restored.pt). You can get details for loading other sizes of models [here](https://github.com/hpcaitech/EnergonAI/tree/main/examples/opt/script).
+To launch the distributed inference service quickly, you can download the checkpoint of OPT-125M [here](https://huggingface.co/patrickvonplaten/opt_metaseq_125m/blob/main/model/restored.pt). You can get details for loading other sizes of models [here](https://github.com/hpcaitech/EnergonAI/tree/main/examples/opt/script).
 
 2. **Launch an HTTP service:**
 To launch a service, we need to provide python scripts to describe the model type and related configurations, and start an http service.
@@ -55,7 +67,7 @@ For example, set the model class as opt_125M and set the correct checkpoint path
     Then open ***https://[ip]:[port]/docs*** in your browser and try out!
 
 
-### Publication
+## Publication
 You can find technical details in our blog and manuscript:
 
 [Build an online OPT service using Colossal-AI in 5 minutes](https://www.colossalai.org/docs/advanced_tutorials/opt_service/)
@@ -73,7 +85,7 @@ You can find technical details in our blog and manuscript:
 }
 ```
 
-### Contributing
+## Contributing
 
 If interested in making your own contribution to the project, please refer to [Contributing](./CONTRIBUTING.md) for guidance.
 

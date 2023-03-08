@@ -1,17 +1,19 @@
 import asyncio
-import time
 import signal
+import time
+from collections import deque
+from threading import Lock, Thread
+from typing import Any, Callable, Deque, Dict, Hashable, List, Optional, Tuple
+
 import torch.distributed.rpc as trpc
 import torch.nn as nn
-from threading import Thread, Lock
-from typing import Any, Dict, Deque, Optional, List, Hashable, Callable, Tuple
-from collections import deque
 from colossalai.logging import get_dist_logger
+
 from .batch_mgr import BatchManager, SubmitEntry
 from .pipe import Pipe
 from .task import TaskEntry
+from .utils import Terminator, build_device_maps, use_lock
 from .worker import launch_workers
-from .utils import build_device_maps, Terminator, use_lock
 
 
 class QueueFullError(Exception):
@@ -20,7 +22,7 @@ class QueueFullError(Exception):
 
 class AsyncEngine:
     def __init__(self, tp_world_size: int, pp_world_size: int, master_host: str, rpc_port: int, n_proc_per_node: int,
-                 batch_manager: Optional[BatchManager] = None, pipe_size: int = 1, queue_size: int = 0) -> None:
+                 batch_manager: Optional[BatchManager] = None, pipe_size: int = 1, queue_size: int = 0, rpc_disable_shm: bool = True) -> None:
         self.lock = Lock()
         self.logger = get_dist_logger('energonai')
         if batch_manager is None:
@@ -30,10 +32,17 @@ class AsyncEngine:
             self.batch_manager = batch_manager
         self.world_size = tp_world_size * pp_world_size
 
+        rpc_options = {}
+        if rpc_disable_shm:
+            # SHM may lead to timeout error. Disabling SHM and only enabling uv transport can solve this problem.
+            # See https://discuss.pytorch.org/t/rpc-behavior-difference-between-pytorch-1-7-0-vs-1-9-0/124772/5
+            # This is a workaround and may be solved in the future.
+            rpc_options['_transports'] = ['uv']
         trpc.init_rpc('master', rank=0, world_size=self.world_size + 1,
                       rpc_backend_options=trpc.TensorPipeRpcBackendOptions(
                           init_method=f'tcp://{master_host}:{rpc_port}',
-                          device_maps=build_device_maps(self.world_size, n_proc_per_node)
+                          device_maps=build_device_maps(self.world_size, n_proc_per_node),
+                          **rpc_options
                       ))
         self.from_worker_pipes: List[Pipe] = []
         for i in range(self.world_size):
@@ -147,7 +156,7 @@ class AsyncEngine:
 
 def launch_engine(tp_world_size: int, pp_world_size: int, master_host: str, master_port: int, rpc_port: int,
                   model_fn: Callable[[Any], nn.Module], n_nodes: int = 1, node_rank: int = 0, batch_manager: Optional[BatchManager] = None,
-                  pipe_size: int = 1, queue_size: int = 0, **model_kwargs: Any) -> Optional[AsyncEngine]:
+                  pipe_size: int = 1, queue_size: int = 0, rpc_disable_shm: bool = True, **model_kwargs: Any) -> Optional[AsyncEngine]:
     world_size = tp_world_size * pp_world_size
     assert world_size % n_nodes == 0
     n_proc_per_node = world_size // n_nodes
@@ -155,5 +164,5 @@ def launch_engine(tp_world_size: int, pp_world_size: int, master_host: str, mast
                    model_fn, n_proc_per_node=n_proc_per_node, node_rank=node_rank, pipe_size=pipe_size, **model_kwargs)
     if node_rank == 0:
         engine = AsyncEngine(tp_world_size, pp_world_size, master_host, rpc_port,
-                             n_proc_per_node, batch_manager=batch_manager, pipe_size=pipe_size, queue_size=queue_size)
+                             n_proc_per_node, batch_manager=batch_manager, pipe_size=pipe_size, queue_size=queue_size, rpc_disable_shm=rpc_disable_shm)
         return engine

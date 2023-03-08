@@ -1,22 +1,32 @@
 import os
-import time
-import torch
 import random
-from torch import nn, dtype
+import time
 from typing import Callable, Optional
-from .endecoder import Block1D
-from .embedding import Embedding1D
-from .downstream import LMHead1D
 
-from colossalai.nn import LayerNorm1D
-from colossalai.core import global_context as gpc
+import torch
 from colossalai.context import ParallelMode
-from colossalai.utils import is_using_pp, get_current_device
+from colossalai.core import global_context as gpc
 from colossalai.logging import get_dist_logger
+from colossalai.nn import LayerNorm1D
+from colossalai.utils import get_current_device, is_using_pp
+from torch import dtype, nn
+
 from energonai.utils.checkpointing import load_checkpoint
 from energonai.utils.checkpointing_hf_gpt2 import processing_HF_GPT
-from energonai.utils.checkpointing_opt import processing_OPT, load_175b
-from transformers.generation_logits_process import TopKLogitsWarper, TopPLogitsWarper, TemperatureLogitsWarper, LogitsProcessorList
+from energonai.utils.checkpointing_opt import load_175b, processing_OPT
+
+from .downstream import LMHead1D
+from .embedding import Embedding1D
+from .endecoder import Block1D
+
+try:
+    from transformers.generation_logits_process import (
+        LogitsProcessorList, TemperatureLogitsWarper, TopKLogitsWarper,
+        TopPLogitsWarper)
+except ImportError:
+    from transformers.generation import (LogitsProcessorList,
+                                         TemperatureLogitsWarper,
+                                         TopKLogitsWarper, TopPLogitsWarper)
 
 
 def gelu_impl(x):

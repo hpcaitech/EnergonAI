@@ -1,11 +1,11 @@
-import re
 import os
-import torch
+import re
 from collections import OrderedDict
-from colossalai.core import global_context as gpc
-from colossalai.context import ParallelMode
 from typing import Dict
 
+import torch
+from colossalai.context import ParallelMode
+from colossalai.core import global_context as gpc
 
 __all__ = [
     'processing_OPT'
@@ -19,8 +19,8 @@ name_map = {
     'self_attn.k_proj': 'attn.key_',
     'self_attn.v_proj': 'attn.value_',
     'self_attn.out_proj': 'attn.dense',
-    'self_attn_layer_norm': 'norm1',
-    'final_layer_norm': 'norm2',
+    'self_attn_layer_norm': 'norm1.module',
+    'final_layer_norm': 'norm2.module',
     'fc1': 'mlp.dense_1',
     'fc2': 'mlp.dense_2'
 }
@@ -41,9 +41,9 @@ def module_name_mapping(ori_name: str):
     elif ori_name == 'decoder.embed_positions.weight':
         return "embed.position_embeddings.weight"
     elif "decoder.layer_norm" in ori_name:
-        return ori_name.replace('decoder.layer_norm', 'norm')
+        return ori_name.replace('decoder.layer_norm', 'norm.module')
     elif "decoder.final_layer_norm" in ori_name:  # hugging face style
-        return ori_name.replace('decoder.final_layer_norm', 'norm')
+        return ori_name.replace('decoder.final_layer_norm', 'norm.module')
     # elif ".attn.bias" in ori_name:
     #     return ""
     else:

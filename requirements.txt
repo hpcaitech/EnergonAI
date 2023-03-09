@@ -1,9 +1,10 @@
-numpy
+colossalai
 tqdm
 psutil
 packaging
-fastapi~=0.75.1
-uvicorn==0.14
+numpy~=1.23.5
+fastapi~=0.92.0
+uvicorn~=0.20.0
 typer
 redis
 scipy
@@ -12,11 +13,10 @@ requests
 click
 transformers
 readerwriterlock
---extra-index-url https://download.pytorch.org/whl/cu113
 torch
 torchvision
-torchaudio 
-colossalai
+torchaudio
 omegaconf
+hiq-python
 prometheus-fastapi-instrumentator
 

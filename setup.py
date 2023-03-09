@@ -1,14 +1,14 @@
 import os
 import subprocess
 import sys
-
+import hiq
 import torch
 from setuptools import setup, find_packages
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension, CUDA_HOME
 
 # ninja build does not work unless include_dirs are abs path
 this_dir = os.path.dirname(os.path.abspath(__file__))
-build_cuda_ext = True
+build_cuda_ext = torch.cuda.is_available()
 
 if '--no_cuda_ext' in sys.argv:
     sys.argv.remove('--no_cuda_ext')
@@ -16,6 +16,8 @@ if '--no_cuda_ext' in sys.argv:
 
 
 def get_cuda_bare_metal_version(cuda_dir):
+    if cuda_dir is None or not os.path.exists(cuda_dir + "/bin/nvcc"):
+      return [None]*3
     raw_output = subprocess.check_output([cuda_dir + "/bin/nvcc", "-V"], universal_newlines=True)
     output = raw_output.split()
     release_idx = output.index("release") + 1
@@ -35,12 +37,11 @@ def check_cuda_torch_binary_vs_bare_metal(cuda_dir):
     print(raw_output + "from " + cuda_dir + "/bin\n")
 
     if (bare_metal_major != torch_binary_major) or (bare_metal_minor != torch_binary_minor):
-        raise RuntimeError("Cuda extensions are being compiled with a version of Cuda that does " +
-                           "not match the version used to compile Pytorch binaries.  " +
-                           "Pytorch binaries were compiled with Cuda {}.\n".format(torch.version.cuda) +
-                           "In some cases, a minor-version mismatch will not cause later errors:  " +
-                           "https://github.com/NVIDIA/apex/pull/323#discussion_r287021798.  "
-                           "You can try commenting out this check (at your own risk).")
+      print("*"*40 + "!!!Warning!!!" + "*"*40)
+      print(f"CUDA(nvcc) version({bare_metal_major}.{bare_metal_minor}) does not match the version({torch.version.cuda}) used to compile Pytorch binaries.")
+      print(f"We strongly recommend you reinstall Pytorch compiled with CUDA version {bare_metal_major}.{bare_metal_minor}.")
+      print("In some cases, even a minor-version mismatch will cause subtle error. Pleas refer to: https://github.com/NVIDIA/apex/pull/323#discussion_r287021798.")
+      print("*"*90)
 
 
 def append_nvcc_threads(nvcc_extra_args):
@@ -48,11 +49,6 @@ def append_nvcc_threads(nvcc_extra_args):
     if int(bare_metal_major) >= 11 and int(bare_metal_minor) >= 2:
         return nvcc_extra_args + ["--threads", "4"]
     return nvcc_extra_args
-
-
-def fetch_requirements(path):
-    with open(path, 'r') as fd:
-        return [r.strip() for r in fd.readlines()]
 
 
 if not torch.cuda.is_available():
@@ -69,14 +65,14 @@ if not torch.cuda.is_available():
         'and, if the CUDA version is >= 11.0, Ampere (compute capability 8.0).\n'
         'If you wish to cross-compile for a single specific architecture,\n'
         'export TORCH_CUDA_ARCH_LIST="compute capability" before running setup.py.\n')
-    if os.environ.get("TORCH_CUDA_ARCH_LIST", None) is None:
+    if CUDA_HOME is not None and os.environ.get("TORCH_CUDA_ARCH_LIST", None) is None:
         _, bare_metal_major, _ = get_cuda_bare_metal_version(CUDA_HOME)
         if int(bare_metal_major) == 11:
             os.environ["TORCH_CUDA_ARCH_LIST"] = "6.0;6.1;6.2;7.0;7.5;8.0"
         else:
             os.environ["TORCH_CUDA_ARCH_LIST"] = "6.0;6.1;6.2;7.0;7.5"
 
-print("\n\ntorch.__version__  = {}\n\n".format(torch.__version__))
+print("torch.__version__  = {}".format(torch.__version__))
 TORCH_MAJOR = int(torch.__version__.split('.')[0])
 TORCH_MINOR = int(torch.__version__.split('.')[1])
 
@@ -160,10 +156,25 @@ def get_version():
             version += f'+torch{torch_version}cu{cuda_version}'
         return version
 
+def package_files(ds):
+    paths = []
+    for d in ds:
+        for (path, directories, filenames) in os.walk(d):
+            for filename in filenames:
+                if '__pycache__' not in str(filename):
+                    paths.append(str(os.path.join(path, filename))[len('energonai/'):])
+    return paths
 
+extra_files = package_files(['energonai/'])
+
+#print("ext_modules:", ext_modules)
+#print("extra_files:", extra_files)
 setup(
     name='energonai',
-    version=get_version(),
+    maintainer='Juncong Moo;Open Source Community;HPCAiTech',
+    url='https://github.com/hpcaitech/EnergonAI',
+    maintainer_email='juncongmoo@gmail.com',
+    version=hiq.read_file('version.txt')[0],
     packages=find_packages(
         exclude=(
             'benchmark',
@@ -173,17 +184,32 @@ setup(
             'examples',
             'tests',
             'scripts',
-            'requirements',
             '*.egg-info',
             'dist',
             'build',
         )),
-    description='Large-scale Model Inference',
+    description='EnergonAI: An Inference System for Large Transformer Models',
+    long_description=hiq.read_file('README.md', by_line=False),
+    long_description_content_type="text/markdown",
     license='Apache Software License 2.0',
     ext_modules=ext_modules,
     cmdclass={'build_ext': BuildExtension} if ext_modules else {},
-    #   install_requires=fetch_requirements('requirements.txt'),
+    install_requires=hiq.read_file('requirements.txt'),
     entry_points={
         'console_scripts': ['energonai=energonai.cli:typer_click_object', ],
     },
+    package_data={"energonai": extra_files, "": ['requirements.txt']},
+    classifiers=[
+        'Operating System :: POSIX :: Linux',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: Implementation :: CPython',
+        'Programming Language :: Python :: Implementation :: PyPy',
+        'Topic :: Scientific/Engineering :: Artificial Intelligence',
+    ],
 )
+

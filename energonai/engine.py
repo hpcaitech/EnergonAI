@@ -8,13 +8,17 @@ from typing import Any, Callable, Deque, Dict, Hashable, List, Optional, Tuple
 import torch.distributed.rpc as trpc
 import torch.nn as nn
 from colossalai.logging import get_dist_logger
-
+import time
 from .batch_mgr import BatchManager, SubmitEntry
 from .pipe import Pipe
 from .task import TaskEntry
 from .utils import Terminator, build_device_maps, use_lock
 from .worker import launch_workers
+import logging
 
+logging.basicConfig(level=logging.info,format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger=logging.getLogger('engine')
+logger.setLevel(level=logging.INFO)
 
 class QueueFullError(Exception):
     pass
@@ -56,6 +60,7 @@ class AsyncEngine:
                 self.submit_pipes.append(Pipe(f'm_to_{i}', 'master', f'worker{i}', max_size=pipe_size))
             if worker_pp_rank == pp_world_size - 1:
                 self.completion_pipes.append(pipe)
+                logger.debug(f'self.completion_pipes.append(pipe):{self.completion_pipes}')
 
         self.running: bool = False
         self.submit_thread = None
@@ -65,8 +70,9 @@ class AsyncEngine:
         self.batch_info: Dict[Hashable, Any] = {}
         self.timer_info: Dict[Hashable, Tuple[int, float]] = {}
         self.completion_map: Dict[Hashable, Any] = {}
+        logger.debug(f'self.completion_map{self.completion_map}','--'*10)
 
-        self.logger.info('Engine start')
+        self.logger.debug('Engine start')
         self._start()
         self.register_sigint()
 
@@ -83,22 +89,30 @@ class AsyncEngine:
 
     def _completion_loop(self) -> None:
         received_data: Dict[int, Any] = {}
+        logger.debug(f'received_data----:{received_data}')
         while self.running:
+            logger.debug(f'self.running----:{self.running}')
+            logger.debug(f'len(self.completion_pipes)---{len(self.completion_pipes)}')
             for i, pipe in enumerate(self.completion_pipes):
+                logger.debug(f'self.completion_pipes----:{self.completion_pipes}')
                 if i not in received_data:
+                    logger.debug(f'i not in received_data:{i not in received_data}')
                     try:
+                        logger.debug(f' try get received_data')
                         received_data[i] = pipe.recv_nowait()
+                        logger.debug(f"received_data[i]----{received_data[i]}")
                     except RuntimeError:
                         pass
             if len(received_data) == len(self.completion_pipes):
                 # TODO: validate they are all the same
+                logger.debug(f"len(received_data) == len(self.completion_pipes)----{len(received_data)}")
                 task_entries: List[TaskEntry] = list(map(lambda k: received_data[k], sorted(received_data.keys())))
                 received_data.clear()
                 batch_info = self.batch_info.pop(task_entries[0].uids)
                 for uid, output in self.batch_manager.split_batch(task_entries[0], **batch_info):
                     self.completion_map[uid] = output
                 batch_size, start_time = self.timer_info.pop(task_entries[0].uids)
-                self.logger.info(f'batch size: {batch_size}, time: {time.time() -start_time:.3f}')
+                self.logger.debug(f'batch size: {batch_size}, time: {time.time() -start_time:.3f}')
             else:
                 time.sleep(0.01)
 
@@ -108,6 +122,7 @@ class AsyncEngine:
         self.submit_thread.start()
         self.completion_thread = Thread(target=self._completion_loop)
         self.completion_thread.start()
+        # logger.debug(f'self.completion_thread start--'*10)
 
     def shutdown(self) -> None:
         with use_lock(self.lock):
@@ -130,9 +145,18 @@ class AsyncEngine:
 
     async def wait(self, uid: Hashable) -> Any:
         assert self.completion_thread.is_alive()
+        # logger.debug('进入Async的wait--'*5)
+        count=1
+        time.sleep(3)
+        # logger.debug(f'self.completion_map{self.completion_map}','--'*10)
         while True:
+            count += 1
+            if count % 100 == 0:
+                logger.debug(count)
             if uid in self.completion_map:
+                # logger.debug('continue wait ')
                 output = self.completion_map[uid]
+                # logger.debug('process success output--'*5)
                 del self.completion_map[uid]
                 return output
             await asyncio.sleep(0.1)

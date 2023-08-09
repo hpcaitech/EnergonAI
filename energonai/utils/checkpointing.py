@@ -8,7 +8,7 @@ from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
 from typing import Optional, Callable
 from colossalai.utils.checkpointing import partition_pipeline_parallel_state_dict, broadcast_model
-
+import logging
 
 __all__ = [
     "load_checkpoint", "load_state_dict"
@@ -18,6 +18,8 @@ import os
 from multiprocessing import Pool
 from time import time
 
+logger=logging.getLogger('checkpointing')
+logger.setLevel(level=logging.DEBUG)
 
 def load_state_dict(path: str):
     if os.path.isfile(path):
@@ -31,7 +33,7 @@ def load_state_dict(path: str):
             files.append(filepath)
     procs = int(os.environ.get('LOAD_N_PROC', '1'))
     procs = min(procs, len(files))
-    print(f'load {len(files)} files using {procs} procs')
+    logger.info(f'load {len(files)} files using {procs} procs')
     if procs > 1:
         with Pool(procs) as pool:
             state_dicts = pool.map(torch.load, files)
@@ -84,7 +86,7 @@ def load_checkpoint(file,
     else:
         model_state = dict()
     dist.barrier()
-    print(f'Load file time: {time()-start:.3f} s')
+    logger.info(f'Load file time: {time()-start:.3f} s')
     # pipeline
     if is_using_pp():
         model_state = partition_pipeline_parallel_state_dict(model, model_state, **kwargs)

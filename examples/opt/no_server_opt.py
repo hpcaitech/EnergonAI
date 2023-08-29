@@ -12,6 +12,7 @@ from transformers import GPT2Tokenizer, AutoTokenizer , AutoModel
 from batch import BatchManagerForGeneration
 from cache import ListCache, MissCacheError
 import asyncio
+import pdb
 
 class GenerationTaskReq:
     def __init__(self, max_tokens: int, prompt: str, top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):
@@ -23,7 +24,7 @@ class GenerationTaskReq:
 
 def get_model_fn(model_name: str):
     model_map = {
-        'glm-6b': glm_6b,
+        # 'glm-6b': glm_6b,
         'opt-6.7b': opt_6B,
     }
     return model_map[model_name]

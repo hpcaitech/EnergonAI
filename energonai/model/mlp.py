@@ -85,7 +85,7 @@ class MLP1D(nn.Module):
 
     def __init__(self,
                  hidden_size: int,
-                 mlp_ratio: float,
+                 mlp_ratio: float,# 4.0
                  activation: Callable,
                  dtype: dtype = torch.float16,
                  bias: bool = True,

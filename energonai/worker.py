@@ -91,7 +91,10 @@ class Worker:
         if isinstance(inputs, (tuple, list)):
             outputs = self.model(*inputs)
         elif isinstance(inputs, dict):
-            outputs = self.model(**inputs)
+            if hasattr(self.model,'blocks'):
+                outputs = self.model(**inputs)
+            else:
+                outputs = self.model.stream_chat(**inputs)
         else:
             outputs = self.model(inputs)
         return outputs

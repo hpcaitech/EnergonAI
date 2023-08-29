@@ -9,6 +9,8 @@ import math
 from .mlp import default_init
 from torch.nn.utils import skip_init
 from typing import Optional, Tuple, Union, List, Callable, Dict, Any
+from colossalai.context import ParallelMode
+from colossalai.core import global_context as gpc
 
 def rotate_half(x):
     x1, x2 = x[..., :x.shape[-1] // 2], x[..., x.shape[-1] // 2:]
@@ -120,7 +122,7 @@ def attention_fn(
     # [b, np, sq, hn] --> [sq, b, np, hn]
     context_layer = context_layer.permute(2, 0, 1, 3).contiguous()
 
-    # [sq, b, np, hn] --> [sq, b, hp]5*1*4096
+    # [sq, b, np, hn] --> [sq, b, hp]5*1*4096 TODO hidden_size_per_partition是4096
     new_context_layer_shape = context_layer.size()[:-2] + (hidden_size_per_partition,)
     context_layer = context_layer.view(*new_context_layer_shape)
 
@@ -150,12 +152,15 @@ class glm_MultiHeadAttention1D(nn.Module):
 
 
         self.hidden_size = hidden_size
-        self.hidden_size_per_partition = hidden_size
+        self.attention_head_size = divide(hidden_size, num_attention_heads)
 
         self.num_attention_heads = num_attention_heads
         self.num_attention_heads_per_partition = num_attention_heads
         
-        self.query_key_value = Linear1D_Col(hidden_size, 3 * hidden_size, bias=bias, dtype=dtype)
+        # self.query_key_value = Linear1D_Col(hidden_size, 3 * hidden_size, bias=bias, dtype=dtype)
+        self.query = Linear1D_Col(hidden_size, hidden_size, bias=bias, dtype=dtype)
+        self.key = Linear1D_Col(hidden_size, hidden_size, bias=bias, dtype=dtype)
+        self.value = Linear1D_Col(hidden_size, hidden_size, bias=bias, dtype=dtype)
 
         self.position_encoding_2d = position_encoding_2d
 
@@ -167,41 +172,25 @@ class glm_MultiHeadAttention1D(nn.Module):
             precision=torch.half,
             learnable=False,
         )
-        # self.scale_mask_softmax = None
+        # TODO 把这个打开
+        self.scale_mask_softmax = None
         if hidden_size_per_attention_head is None:
             self.hidden_size_per_attention_head=divide(hidden_size, num_attention_heads)
         else:
             self.hidden_size_per_attention_head=hidden_size_per_attention_head
+        # TODO 按照显卡并行数字，切分每张卡上执行的hidden
+        num_partition = gpc.get_world_size(ParallelMode.TENSOR)
+        self.hidden_size_per_attention_head=divide(self.hidden_size_per_attention_head, num_partition)
+        self.hidden_size_per_partition = divide(hidden_size,num_partition)
 
         self.inner_hidden_size=num_attention_heads*self.hidden_size_per_attention_head
-        # self.fused_qkv = fused_qkv
-
-        # self.is_decoder = is_decoder
-        # self.disable_past_cache = disable_past_cache
-        # self.scaling = self.hidden_size_per_attention_head**-0.5
-
-
-        # if fused_qkv:
-        
-        # else:
-        #     self.query_ = Linear1D_Col(hidden_size, hidden_size, bias=bias, dtype=dtype)
-        #     self.key_ = Linear1D_Col(hidden_size, hidden_size, bias=bias, dtype=dtype)
-        #     self.value_ = Linear1D_Col(hidden_size, hidden_size, bias=bias, dtype=dtype)
-        # chatglm no softmax
-        # self.softmax = nn.Softmax(dim=-1)
-
         self.dense = Linear1D_Row(hidden_size, hidden_size, bias=bias, dtype=dtype, parallel_input=True)
-        # chatglm no under context
-        # if is_decoder:
-        #     self.causal_mask = torch.tril(torch.ones((max_seq_len, max_seq_len), dtype=torch.uint8,device=get_current_device())).view(1, 1, max_seq_len, max_seq_len).bool()
-        #     self.causal_mask_bias = torch.tensor(-1e4, dtype=dtype, device=get_current_device())
 
-        # self.past_cache = {}
-
+    # 参考chatglm官方流程，单块是4*1*32*128，双卡，32头变成16头
     def _split_heads(self, tensor, num_heads, attn_head_size):
         new_shape = tensor.size()[:-1] + (num_heads, attn_head_size)
         tensor = tensor.view(new_shape)
-        return tensor.permute(0, 2, 1, 3)
+        return tensor.permute(0, 1, 2, 3)
 
     def last_word(self, hidden_states):
         batch_size = hidden_states.shape[0]
@@ -247,38 +236,29 @@ class glm_MultiHeadAttention1D(nn.Module):
                 seq_lens=None):
         
 
-        # if self.fused_qkv:
-        # if self.disable_past_cache:
-        #     mixed_raw_layer = self.query_key_value(hidden_states)
-        # else:
-        #     if first_cache:
-        #         mixed_raw_layer = self.query_key_value(hidden_states)
-        #         self.past_cache['query_key_value'] = mixed_raw_layer
-        #     else:
-        #         mixed_raw_layer = self.query_key_value(self.last_word(hidden_states))
-        #         self.past_cache['query_key_value'] = torch.cat((self.past_cache['query_key_value'], mixed_raw_layer), 1)
-        #         mixed_raw_layer = self.past_cache['query_key_value']
-        # TODO 倾向于在一个进程中，不应该把qkv拆开，即此处的mixed形状应该为4*1*12288，而不是4*1*6144，不行用torch的linear，而不是colossalai的线性层
+        """
         mixed_raw_layer = self.query_key_value(hidden_states)
-
         new_tensor_shape = mixed_raw_layer.size()[:-1] + (self.num_attention_heads_per_partition,3 * self.hidden_size_per_attention_head,)
-
         mixed_raw_layer = mixed_raw_layer.view(*new_tensor_shape)
-
-        # [seq_len, batch, num_attention_heads, hidden_size_per_attention_head]，四维的后两维是32*128
         (query_layer, key_layer, value_layer) = self.split_tensor_along_last_dim(mixed_raw_layer, 3)
+        """
+        query_layer = self.query(hidden_states)
+        key_layer = self.key(hidden_states)
+        value_layer = self.value(hidden_states)
+        all_head_size = query_layer.shape[-1]
+        num_attention_heads = divide(all_head_size, self.attention_head_size)
 
-        # all_head_size = mixed_raw_layer.shape[-1] // 3
-        # num_attention_heads = divide(all_head_size, self.hidden_size_per_attention_head)
-        # kvq = self._split_heads(kvq, num_attention_heads, 3 * self.attention_head_size)
-        # key_layer, value_layer, query_layer = [t.contiguous() for t in torch.chunk(mixed_raw_layer, 3, dim=-1)]
+        query_layer = self._split_heads(query_layer, num_attention_heads, self.attention_head_size)
+        key_layer = self._split_heads(key_layer, num_attention_heads, self.attention_head_size)
+        value_layer = self._split_heads(value_layer, num_attention_heads, self.attention_head_size)
+
         if self.position_encoding_2d:
-            q1, q2 = query_layer.chunk(2, dim=(query_layer.ndim - 1))#5*1*32*64
+            q1, q2 = query_layer.chunk(2, dim=(query_layer.ndim - 1))#5*1*16*64
             k1, k2 = key_layer.chunk(2, dim=(key_layer.ndim - 1))
             # 计算q1的旋转位置编码
             cos, sin = self.rotary_emb(q1, seq_len=position_ids.max() + 1)#4*1*64
             position_ids, block_position_ids = position_ids[:, 0, :].transpose(0, 1).contiguous(), position_ids[:, 1, :].transpose(0, 1).contiguous()#输出都是5*1
-            # 在q1和k1上应用旋转位置编码，对应于常规的位置信息,输出是5*1*32*64
+            # 在q1和k1上应用旋转位置编码，对应于常规的位置信息,输出是5*1*32*32
             q1, k1 = apply_rotary_pos_emb_index(q1, k1, cos, sin, position_ids)
             # 在q2和k2上，对应于块的位置信息,输出是5*1*32*64
             q2, k2 = apply_rotary_pos_emb_index(q2, k2, cos, sin, block_position_ids)
@@ -303,55 +283,20 @@ class glm_MultiHeadAttention1D(nn.Module):
             layer_id=layer_id,
             layer_past=layer_past,
             use_cache=use_cache
-        )# 5*1*4096,(5*1*32*128,5*1*32*128),32*5*5
+        ) 
         output = self.dense(context_layer)
         outputs = (output, present)
         if output_attentions:
             outputs += (attention_probs,)
         return outputs  # output, present, attention_probs
-        
-        # TODO 以上是chatglm的官方实现，以下是energon源码
-        # query_layer = self._split_heads(query_layer, num_attention_heads, self.hidden_size_per_attention_head)
-        # key_layer = self._split_heads(key_layer, num_attention_heads, self.hidden_size_per_attention_head)
-        # value_layer = self._split_heads(value_layer, num_attention_heads, self.hidden_size_per_attention_head)
-
-        # query_layer *= self.scaling
-        # hidden_states = torch.matmul(query_layer, key_layer.transpose(-1, -2))
-
-        # q_len, k_len = query_layer.size(-2), key_layer.size(-2)
-
-        # if self.is_decoder:
-        #     hidden_states = torch.where(self.causal_mask[:, :, 0:q_len, 0:k_len], hidden_states, self.causal_mask_bias)
-
-        # if attention_mask is not None:
-        #     hidden_states = hidden_states + attention_mask
-        # dtype = hidden_states.dtype
-        # hidden_states = torch.softmax(hidden_states, -1, dtype=torch.float).to(dtype)
-
-        # hidden_states = torch.matmul(hidden_states, value_layer)
-
-        # hidden_states = hidden_states.transpose(1, 2)
-
-        # new_context_layer_shape = hidden_states.size()[:-2] + (all_head_size,)
-
-        # hidden_states = hidden_states.reshape(new_context_layer_shape)
-
-        # if self.disable_past_cache:
-        #     hidden_states = self.dense(hidden_states)
-        # else:
-        #     if first_cache:
-        #         hidden_states = self.dense(hidden_states)
-        #         self.past_cache['dense'] = hidden_states
-        #     else:
-        #         hidden_states = self.dense(self.last_word(hidden_states))
-        #         self.past_cache['dense'] = torch.cat((self.past_cache['dense'], hidden_states), 1)
-        #         hidden_states = self.past_cache['dense']
-        # return hidden_states
 
 
 class RotaryEmbedding(torch.nn.Module):
     def __init__(self, dim, base=10000, precision=torch.half, learnable=False):#dim是4096/(2*32)
         super().__init__()
+        # TODO 旋转位置，在多卡上并行的头数，而旋转位置是每个头中的处理步骤，所以不需要将生成的旋转长度，缩减为hidden_size除以并行数
+        # para_size = gpc.get_world_size(ParallelMode.TENSOR)
+        # dim=divide(dim, para_size)
         inv_freq = 1. / (base ** (torch.arange(0, dim, 2).float() / dim))# dim是64，生成一个0-64，步长为2的浮点数序列，然后规范为0-1，步长为2/dim
         inv_freq = inv_freq.half()
         self.learnable = learnable
@@ -377,7 +322,7 @@ class RotaryEmbedding(torch.nn.Module):
             # 在learnable为true的情况下，max_seq_len_cached为none，相当于if条件每次都成立
             self.max_seq_len_cached = None if self.learnable else seq_len
             t = torch.arange(seq_len, device=x.device, dtype=self.inv_freq.dtype)
-            freqs = torch.einsum('i,j->ij', t, self.inv_freq) # 4*32
+            freqs = torch.einsum('i,j->ij', t, self.inv_freq) 
             # Different from paper, but it uses a different permutation in order to obtain the same calculation
             emb = torch.cat((freqs, freqs), dim=-1).to(x.device)# 4*64
             if self.precision == torch.bfloat16:
@@ -474,7 +419,7 @@ class MultiHeadAttention1D(nn.Module):
                 k = self.key_(hidden_states)
                 v = self.value_(hidden_states)
             else:
-                if first_cache:
+                if first_cache: # 执行的是这个
                     q = self.query_(hidden_states)
                     k = self.key_(hidden_states)
                     v = self.value_(hidden_states)

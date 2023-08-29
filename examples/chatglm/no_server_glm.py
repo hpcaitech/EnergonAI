@@ -1,5 +1,5 @@
 import os,sys
-os.environ["CUDA_VISIBLE_DEVICES"]='1,2'
+os.environ["CUDA_VISIBLE_DEVICES"]='0,1,5,6'
 # os.chdir(sys.path[0])
 # sys.path.append("../../")
 import argparse
@@ -21,6 +21,7 @@ class GenerationTaskReq:
         self.top_k = top_k
         self.top_p = top_p
         self.temperature = temperature
+        
 
 def get_model_fn(model_name: str):
     model_map = {
@@ -29,33 +30,25 @@ def get_model_fn(model_name: str):
     return model_map[model_name]
 
 async def generate(data: GenerationTaskReq):
-    logger.info('已经进入generate函数')
     key = (data.prompt, data.max_tokens)
     try:
         if cache is None:
             raise MissCacheError()
         outputs = cache.get(key)
         output = random.choice(outputs)
-        logger.info('Cache hit')
     except MissCacheError:
-        logger.info('not Cache hit')
         inputs = tokenizer(data.prompt, truncation=True, max_length=512)
-        logger.info(f"inputs:{inputs}")
         inputs['max_tokens'] = data.max_tokens
+        # inputs['do_sample'] = data.do_sample
         inputs['top_k'] = data.top_k
         inputs['top_p'] = data.top_p
         inputs['temperature'] = data.temperature
-        logger.info(f"inputs:{inputs}")
+
         try:
-            logger.info('上传Input--'*10,'\n'*2)
             uid = id(data)
-            logger.info('处理uid--'*5,f'uid{uid}','\n'*2)
             engine.submit(uid, inputs)
-            logger.info('提交uid和inputs---'*10,'\n'*2)
             output = await engine.wait(uid)
-            logger.info(f"已经推理出output--：{output}")
             output = tokenizer.decode(output, skip_special_tokens=True)
-            logger.info(f"已经解码出output--：{output}")
             if cache is not None:
                 cache.add(key, output)
         except QueueFullError as e:
@@ -65,14 +58,14 @@ async def generate(data: GenerationTaskReq):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', choices=['glm-6b','opt-125m'],default='glm-6b')
-    parser.add_argument('--tp', type=int, default=2)
+    parser.add_argument('--tp', type=int, default=4)
     parser.add_argument('--master_host', default='localhost')
-    parser.add_argument('--master_port', type=int, default=19993)
-    parser.add_argument('--rpc_port', type=int, default=19983)
+    parser.add_argument('--master_port', type=int, default=19995)
+    parser.add_argument('--rpc_port', type=int, default=19985)
     parser.add_argument('--max_batch_size', type=int, default=8)
     parser.add_argument('--pipe_size', type=int, default=1)
     parser.add_argument('--queue_size', type=int, default=4)
-    parser.add_argument('--checkpoint', default='/data2/zxy/4_energon_glm')
+    parser.add_argument('--checkpoint', default='/data2/zxy/qkv_4_energon_glm')
     parser.add_argument('--cache_size', type=int, default=0)
     parser.add_argument('--cache_list_size', type=int, default=1)
     args = parser.parse_args()
@@ -94,8 +87,9 @@ if __name__ == '__main__':
                            pipe_size=args.pipe_size,
                            queue_size=args.queue_size,
                            **model_kwargs)
-    # pdb.set_trace()
     # 直接调用模型生成文本
-    data = GenerationTaskReq(max_tokens=200, prompt="北京大学")
+    # prompt="今天天气大概25度，有点小雨，吹着风，我想去户外散步，应该穿什么样的衣服裤子鞋子搭配。"
+    prompt="北京大学"
+    data = GenerationTaskReq(max_tokens=200,prompt=prompt)
     result=asyncio.run(generate(data))
-    logger.info(result)
+    print(result)

@@ -1,12 +1,15 @@
 import requests
 import json
 import os,sys
-os.environ["CUDA_VISIBLE_DEVICES"]='2,3,4'
-
+os.environ["CUDA_VISIBLE_DEVICES"]='1,2,3,4'
+from tqdm import tqdm
 from transformers import GPT2Model , AutoModel , AutoTokenizer
 from transformers import pipeline, set_seed
 from transformers import GPT2Tokenizer, GPT2Model
 from transformers.testing_utils import require_torch, slow, torch_device
+import numpy as np
+import random
+import torch
 
 def test_gpt():
     path='/data2/share/gpt2-medium'
@@ -16,7 +19,7 @@ def test_gpt():
         print(name,';',parm.size())
 
 
-    text = "Replace me by any text you'd like."
+    text = "北京大学"
     encoded_input = tokenizer(text, return_tensors='pt')
     output = model(**encoded_input)
 
@@ -39,24 +42,7 @@ def test_glmmodel():
     response, history = model.chat(tokenizer, "物理是什么", history=[])
     print(response)
 
-def test_api():
-    url = "http://localhost:7071/generation"  # 修改为你的服务器地址
-    data = {
-        "max_tokens": 200,
-        "prompt": "What is the longest river on the earth ?",
-    }
-    # data = [
-    #     {
-    #         "max_tokens": 200,
-    #         "prompt": "What is the longest river on the earth ?",
-    #     },
-    #     {
-    #         "max_tokens": 200,
-    #         "prompt": "What is the highest mountain on the earth ?",
-    #     },
-    # ]
-    response = requests.post(url, json=data)
-    print(response.json())
+
 
 def get_model_and_tokenizer():
     model = AutoModel.from_pretrained("/data/share/chatglm-6b", trust_remote_code=True).half()
@@ -66,47 +52,46 @@ def get_model_and_tokenizer():
     return model, tokenizer
 
 def set_random_seed(seed):
-    import random
-
     random.seed(seed)
-
-    # pytorch RNGs
-    import torch
-
     torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-
-    # numpy RNG
-    import numpy as np
-
     np.random.seed(seed)
 
 def glm_generate():
     model, tokenizer = get_model_and_tokenizer()
     sentences = [
-        # "美国",
-        "北京大学",
-        # "我非常喜欢做程序员这个工作"
+        "今天天气大概25度，有点小雨，吹着风，我想去户外散步，应该穿什么样的衣服裤子鞋子搭配。",
     ]
     set_random_seed(42)
     inputs = tokenizer(sentences, return_tensors="pt", padding=True)
     inputs = inputs.to(torch_device)
 
-    outputs = model.generate(
-        **inputs,
-        do_sample=True,
-        max_length=200,
-        num_beams=4
-    )
+    for i in tqdm(range(100)):
+        outputs = model.generate(
+            **inputs,
+            do_sample=True,
+            max_length=200,
+            num_beams=4
+        )
 
-    batch_out_sentence = tokenizer.batch_decode(outputs, skip_special_tokens=True)
-    print(batch_out_sentence)
+        batch_out_sentence = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+        print(batch_out_sentence)
 
+def test_api():
+    url = "http://localhost:7071/generation" # 修改为你的服务器地址
+    data = {
+        "max_tokens": 200,
+        "prompt": "今天天气大概25度，有点小雨，吹着风，我想去户外散步，应该穿什么样的衣服裤子鞋子搭配。",
+        "do_sample":False,
+    }
+    for i in tqdm(range(100)):
+        response = requests.post(url, json=data)
+        print(response.json())
 
 if __name__=='__main__':
     # test_gpt()
     # test_glmmodel()
-    # test_api()
-    glm_generate()
+    test_api()
+    # glm_generate()

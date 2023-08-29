@@ -1,6 +1,7 @@
 import os,sys
-os.environ["CUDA_VISIBLE_DEVICES"]='0,5'
-sys.path.append('../../')#往上导两级目录
+os.environ["CUDA_VISIBLE_DEVICES"]='4,7'
+
+
 import argparse
 import logging
 import random
@@ -27,52 +28,18 @@ class GenerationTaskReq(BaseModel):
 app = FastAPI()
 
 @app.post("/")
-# @app.get('/')
 def read_root():
     return {"请访问generation"}
 
-"""
-# @app.get('/generation')
-@app.post('/generation')
-async def generate(data: GenerationTaskReq, request: Request):
-    logger.info('已经进入glm_fastapi.py程序中的generate函数')
-    logger.info(f'{request.client.host}:{request.client.port} - "{request.method} {request.url.path}" - {data}')
-    key = (data.prompt, data.max_tokens)
-    try:
-        if cache is None:
-            raise MissCacheError()
-        outputs = cache.get(key)
-        output = random.choice(outputs)
-        logger.info('Cache hit')
-    except MissCacheError:
-        inputs = tokenizer(data.prompt, truncation=True, max_length=512)
-        inputs['max_tokens'] = data.max_tokens
-        inputs['top_k'] = data.top_k
-        inputs['top_p'] = data.top_p
-        inputs['temperature'] = data.temperature
-        try:
-            uid = id(data)
-            engine.submit(uid, inputs)
-            output = await engine.wait(uid)
-            output = tokenizer.decode(output, skip_special_tokens=True)
-            if cache is not None:
-                cache.add(key, output)
-        except QueueFullError as e:
-            raise HTTPException(status_code=406, detail=e.args[0])
-    return {'text': output}
-"""
 
 @app.post('/generation')
 async def generate(data: GenerationTaskReq, request: Request):
-    logger.info('已经进入glm_fastapi.py程序中的generate函数')
-    logger.info(f'{request.client.host}:{request.client.port} - "{request.method} {request.url.path}" - {data}')
     key = (data.prompt, data.max_tokens)
     try:
         if cache is None:
             raise MissCacheError()
         outputs = cache.get(key)
         output = random.choice(outputs)
-        logger.info('Cache hit')
     except MissCacheError:
         inputs = tokenizer(data.prompt, truncation=True, max_length=512)
         inputs['max_tokens'] = data.max_tokens
@@ -121,8 +88,8 @@ FIXED_CACHE_KEYS = [
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('model', choices=['glm-6b','opt-125m'])
-    parser.add_argument('--tp', type=int, default=1)
+    parser.add_argument('--model', choices=['glm-6b','opt-125m'],default='glm-6b')
+    parser.add_argument('--tp', type=int, default=2)
     parser.add_argument('--master_host', default='localhost')
     parser.add_argument('--master_port', type=int, default=19990)
     parser.add_argument('--rpc_port', type=int, default=19980)
@@ -131,7 +98,7 @@ if __name__ == '__main__':
     parser.add_argument('--queue_size', type=int, default=0)
     parser.add_argument('--http_host', default='0.0.0.0')
     parser.add_argument('--http_port', type=int, default=7071)
-    parser.add_argument('--checkpoint', default=None)
+    parser.add_argument('--checkpoint', default='/data2/zxy/qkv_4_energon_glm')
     parser.add_argument('--cache_size', type=int, default=0)
     parser.add_argument('--cache_list_size', type=int, default=1)
     args = parser.parse_args()
@@ -142,15 +109,11 @@ if __name__ == '__main__':
 
     logger = logging.getLogger(__name__)
 
-    # if args.model=="glm-6b":
     tokenizer = AutoTokenizer.from_pretrained("/data/share/chatglm-6b/", trust_remote_code=True)
+    # if args.cache_size > 0:
+    #     cache = ListCache(args.cache_size, args.cache_list_size, fixed_keys=FIXED_CACHE_KEYS)
     # else:
-        # tokenizer = GPT2Tokenizer.from_pretrained('facebook/opt-30b')
-        
-    if args.cache_size > 0:
-        cache = ListCache(args.cache_size, args.cache_list_size, fixed_keys=FIXED_CACHE_KEYS)
-    else:
-        cache = None
+    cache = None
     engine = launch_engine(args.tp, 1, args.master_host, args.master_port, args.rpc_port, get_model_fn(args.model),
                            batch_manager=BatchManagerForGeneration(max_batch_size=args.max_batch_size, pad_token_id=tokenizer.pad_token_id),
                            pipe_size=args.pipe_size,

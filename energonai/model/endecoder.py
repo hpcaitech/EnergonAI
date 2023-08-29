@@ -58,15 +58,16 @@ class GLMBlock1D(nn.Module):
         self.num_layers=num_layers
 
         # h_4h,4h_h
-        self.mlp = glm_MLP1D(hidden_size=hidden_size,
-                        inner_hidden_size=inner_hidden_size,
-                        bias=bias,
-                         dtype=dtype,
-                         empty_init=empty_init,
-                         
-                         mlp_ratio=mlp_ratio,
-                         activation=activation,
-                         disable_past_cache=disable_past_cache)
+        self.mlp = glm_MLP1D(
+            hidden_size=hidden_size,
+            inner_hidden_size=inner_hidden_size,
+            bias=bias,
+            dtype=dtype,
+            empty_init=empty_init,
+            mlp_ratio=mlp_ratio,
+            activation=activation,
+            disable_past_cache=disable_past_cache
+            )
 
     def forward(self, 
                 hidden_states:torch.Tensor,
@@ -123,28 +124,6 @@ class GLMBlock1D(nn.Module):
 
         return outputs  # hidden_states, present, attentions
 
-        # if not self.apply_post_layernorm:
-        #     residual = hidden_states
-        # hidden_states = self.norm1(hidden_states)
-
-        # if self.apply_post_layernorm:
-        #     residual = hidden_states
-        # hidden_states = residual + self.attn(hidden_states=hidden_states,
-        #                                      attention_mask=attention_mask,
-        #                                      first_cache=first_cache,
-        #                                      position_ids)
-
-        # if not self.apply_post_layernorm:
-        #     residual = hidden_states
-
-        # hidden_states = self.norm2(hidden_states)
-
-        # if self.apply_post_layernorm:
-        #     residual = hidden_states
-        # hidden_states = residual + self.mlp(hidden_states=hidden_states,
-        #                                     first_cache=first_cache)
-
-        # return hidden_states
 
 class Block1D(nn.Module):
     def __init__(self,

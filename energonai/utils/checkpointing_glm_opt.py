@@ -53,17 +53,15 @@ def judge_t(key_):
 def module_name_mapping(ori_name: str):
     # logger.info(ori_name)
     if ori_name == 'transformer.word_embeddings.weight':
-        return "embed.word_embeddings.weight"
+        return "transformer.embed.word_embeddings.weight"
     # elif ori_name == 'decoder.embed_positions.weight':
     #     return "embed.position_embeddings.weight"
     elif "decoder.layer_norm" in ori_name:
         # logger.info("$"*100)
         logger.info(ori_name)
-        return ori_name.replace('decoder.layer_norm', 'final_layernorm.module')
-    elif "transformer.final_layernorm" in ori_name:  # hugging face style
-        # logger.info("&"*100)
-        logger.info(ori_name)
-        return ori_name.replace('transformer.final_layernorm', 'norm.module')
+        return ori_name.replace('decoder.layer_norm', 'transformer.final_layernorm.module')
+    # elif "transformer.final_layernorm" in ori_name:  # hugging face style
+        # return ori_name.replace('transformer.final_layernorm', 'norm.module')
     # elif ".attn.bias" in ori_name:
     #     return ""
     else:
@@ -75,7 +73,7 @@ def module_name_mapping(ori_name: str):
         
 def id_map(matched):
     value = matched.group('value')
-    return "blocks.{}.".format(value)
+    return "transformer.blocks.{}.".format(value)
 
 
 def processing_GLM(source_state_dict: OrderedDict):

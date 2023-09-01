@@ -1,14 +1,11 @@
 import os,sys
-os.environ["CUDA_VISIBLE_DEVICES"]='4,7'
-
-
+os.environ["CUDA_VISIBLE_DEVICES"]='0,1,2,7'
 import argparse
 import logging
 import random
 from typing import Optional
 import uvicorn
 from energonai import QueueFullError, launch_engine
-# print('import success')
 from energonai.model import glm_6b , opt_125M
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -89,7 +86,7 @@ FIXED_CACHE_KEYS = [
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', choices=['glm-6b','opt-125m'],default='glm-6b')
-    parser.add_argument('--tp', type=int, default=2)
+    parser.add_argument('--tp', type=int, default=4)
     parser.add_argument('--master_host', default='localhost')
     parser.add_argument('--master_port', type=int, default=19990)
     parser.add_argument('--rpc_port', type=int, default=19980)

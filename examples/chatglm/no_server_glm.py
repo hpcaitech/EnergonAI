@@ -1,7 +1,5 @@
 import os,sys
 os.environ["CUDA_VISIBLE_DEVICES"]='0,1,5,6'
-# os.chdir(sys.path[0])
-# sys.path.append("../../")
 import argparse
 import logging
 import random
@@ -23,11 +21,7 @@ class GenerationTaskReq:
         self.temperature = temperature
         
 
-def get_model_fn(model_name: str):
-    model_map = {
-        'glm-6b': glm_6b,
-    }
-    return model_map[model_name]
+
 
 async def generate(data: GenerationTaskReq):
     key = (data.prompt, data.max_tokens)
@@ -54,6 +48,13 @@ async def generate(data: GenerationTaskReq):
         except QueueFullError as e:
             raise Exception(e.args[0])
     return {'text': output}
+
+def get_model_fn(model_name: str):
+    model_map = {
+        'glm-6b': glm_6b,
+    }
+    return model_map[model_name]
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -90,6 +91,6 @@ if __name__ == '__main__':
     # 直接调用模型生成文本
     # prompt="今天天气大概25度，有点小雨，吹着风，我想去户外散步，应该穿什么样的衣服裤子鞋子搭配。"
     prompt="北京大学"
-    data = GenerationTaskReq(max_tokens=200,prompt=prompt)
+    data = GenerationTaskReq(prompt=prompt,max_tokens=200)
     result=asyncio.run(generate(data))
     print(result)

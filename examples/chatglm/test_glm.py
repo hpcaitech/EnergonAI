@@ -88,7 +88,7 @@ def test_api():
     }
     for i in tqdm(range(100)):
         response = requests.post(url, json=data)
-        print(response.json())
+        print(response.json()['text'])
 
 if __name__=='__main__':
     # test_gpt()

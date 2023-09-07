@@ -31,14 +31,13 @@ async def generate(data: GenerationTaskReq):
         outputs = cache.get(key)
         output = random.choice(outputs)
     except MissCacheError:
-        # 检测下tokenizer是否会处理多个数据，还是只能处理一个数据
         inputs = tokenizer(data.prompt, truncation=True, max_length=512)
         inputs['max_tokens'] = data.max_tokens
         # inputs['do_sample'] = data.do_sample
         inputs['top_k'] = data.top_k
         inputs['top_p'] = data.top_p
         inputs['temperature'] = data.temperature
-        # 将一个inputs写入一个大列表中，然后输入给模型
+
         try:
             uid = id(data)
             engine.submit(uid, inputs)
@@ -62,8 +61,8 @@ if __name__ == '__main__':
     parser.add_argument('--model', choices=['glm-6b','opt-125m'],default='glm-6b')
     parser.add_argument('--tp', type=int, default=2)
     parser.add_argument('--master_host', default='localhost')
-    parser.add_argument('--master_port', type=int, default=19996)
-    parser.add_argument('--rpc_port', type=int, default=19986)
+    parser.add_argument('--master_port', type=int, default=19995)
+    parser.add_argument('--rpc_port', type=int, default=19985)
     parser.add_argument('--max_batch_size', type=int, default=8)
     parser.add_argument('--pipe_size', type=int, default=1)
     parser.add_argument('--queue_size', type=int, default=4)

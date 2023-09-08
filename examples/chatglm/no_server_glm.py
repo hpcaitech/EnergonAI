@@ -1,5 +1,5 @@
-import os,sys
-os.environ["CUDA_VISIBLE_DEVICES"]='0,1,5,6'
+import os
+os.environ["CUDA_VISIBLE_DEVICES"]='4,5'
 import argparse
 import logging
 import random
@@ -13,15 +13,13 @@ import asyncio
 import pdb
 
 class GenerationTaskReq:
-    def __init__(self, max_tokens: int, prompt: str, top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):
+    def __init__(self, max_tokens: int, prompt: str, do_sample:bool=False,top_k: Optional[int] = None, top_p: Optional[float] = None, temperature: Optional[float] = None):
         self.max_tokens = max_tokens
         self.prompt = prompt
+        self.do_sample = do_sample
         self.top_k = top_k
         self.top_p = top_p
         self.temperature = temperature
-        
-
-
 
 async def generate(data: GenerationTaskReq):
     key = (data.prompt, data.max_tokens)
@@ -31,14 +29,16 @@ async def generate(data: GenerationTaskReq):
         outputs = cache.get(key)
         output = random.choice(outputs)
     except MissCacheError:
-        # 检测下tokenizer是否会处理多个数据，还是只能处理一个数据
-        inputs = tokenizer(data.prompt, truncation=True, max_length=512)
+        if isinstance(data.prompt,list):
+            pad_max_length = max(len(i) for i in data.prompt)    
+            inputs = tokenizer(data.prompt, truncation=True, max_length=pad_max_length , padding='max_length')
+        else:
+            inputs = tokenizer(data.prompt, truncation=True, max_length=512)
         inputs['max_tokens'] = data.max_tokens
-        # inputs['do_sample'] = data.do_sample
+        inputs['do_sample'] = data.do_sample
         inputs['top_k'] = data.top_k
         inputs['top_p'] = data.top_p
         inputs['temperature'] = data.temperature
-        # 将一个inputs写入一个大列表中，然后输入给模型
         try:
             uid = id(data)
             engine.submit(uid, inputs)
@@ -91,7 +91,8 @@ if __name__ == '__main__':
                            **model_kwargs)
     # 直接调用模型生成文本
     # prompt="今天天气大概25度，有点小雨，吹着风，我想去户外散步，应该穿什么样的衣服裤子鞋子搭配。"
-    prompt="北京大学"
+    # prompt=['北京大学','北京航空航天大学']
+    prompt='北京大学'
     data = GenerationTaskReq(prompt=prompt,max_tokens=200)
     result=asyncio.run(generate(data))
     print(result)

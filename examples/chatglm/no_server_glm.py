@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]='4,5'
+os.environ["CUDA_VISIBLE_DEVICES"]='3,7'
 import argparse
 import logging
 import random
@@ -30,7 +30,7 @@ async def generate(data: GenerationTaskReq):
         output = random.choice(outputs)
     except MissCacheError:
         if isinstance(data.prompt,list):
-            pad_max_length = max(len(i) for i in data.prompt)    
+            pad_max_length = max(len(i) for i in data.prompt)    # 这里是按照汉字的个数，来补充token数，这是不对的，如果是英语，则会产生截断的效果
             inputs = tokenizer(data.prompt, truncation=True, max_length=pad_max_length , padding='max_length')
         else:
             inputs = tokenizer(data.prompt, truncation=True, max_length=512)
@@ -62,8 +62,8 @@ if __name__ == '__main__':
     parser.add_argument('--model', choices=['glm-6b','opt-125m'],default='glm-6b')
     parser.add_argument('--tp', type=int, default=2)
     parser.add_argument('--master_host', default='localhost')
-    parser.add_argument('--master_port', type=int, default=19996)
-    parser.add_argument('--rpc_port', type=int, default=19986)
+    parser.add_argument('--master_port', type=int, default=19997)
+    parser.add_argument('--rpc_port', type=int, default=19987)
     parser.add_argument('--max_batch_size', type=int, default=8)
     parser.add_argument('--pipe_size', type=int, default=1)
     parser.add_argument('--queue_size', type=int, default=4)
@@ -91,8 +91,8 @@ if __name__ == '__main__':
                            **model_kwargs)
     # 直接调用模型生成文本
     # prompt="今天天气大概25度，有点小雨，吹着风，我想去户外散步，应该穿什么样的衣服裤子鞋子搭配。"
-    # prompt=['北京大学','北京航空航天大学']
-    prompt='北京大学'
+    prompt=['北京大学','北京航空航天大学']# 现在只能拿到一个输入的输出，不对，还得拿到第二个
+    # prompt='北京大学'
     data = GenerationTaskReq(prompt=prompt,max_tokens=200)
     result=asyncio.run(generate(data))
     print(result)

@@ -8,7 +8,7 @@ It supports tensor parallelism, batching and caching.
 
 Run ChatGLM-6B:
 ```shell
-python examples/chatglm/ChatGLM_fastapi.py glm-6b --checkpoint /data2/zxy/4_energon_glm --master_port 19991 --rpc_port 19981 --tp 2 --queue_size 12
+python examples/chatglm/ChatGLM_fastapi.py glm-6b --checkpoint /data2/zxy/qkv_4_energon_glm --master_port 19991 --rpc_port 19981 --tp 2 --queue_size 12
 ```
 ```shell
 python examples/chatglm/test_glm_api.py
@@ -75,3 +75,7 @@ gcc/gxx 版本>7.2
 cuda>= 11.7
 
 pytorch>=1.13.1
+
+# developer introduce
+中图科信 http://www.cnpeak.com/
+产品 https://note.kxsz.net/

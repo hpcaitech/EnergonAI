@@ -5,6 +5,11 @@ from typing import Dict
 from threading import Lock
 from typing import Any
 from .utils import use_lock
+import logging
+
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger('pipe')
+logger.setLevel(level=logging.WARNING)
 
 
 def rpc_queue_can_put(q: trpc.RRef) -> bool:
@@ -33,6 +38,7 @@ class Pipe:
                 assert name not in self._queues, f'pipe {name} already exists on {self.rpc_info.name}'
                 self.remote_queue = self.get_remote_queue(max_size)
                 self._queues[name] = self.remote_queue
+                time.sleep(3)
 
     @classmethod
     def rpc_create_local_queue(cls, name: str, max_size: int) -> Queue:
@@ -63,13 +69,16 @@ class Pipe:
         self.prepare_local_queue()
         if self.local_queue is not None:
             try:
-                return self.local_queue.get_nowait()
+                item=self.local_queue.get_nowait()
+                if item:
+                    logger.debug(f'item:{item}')
+                return item
             except Empty:
                 raise RuntimeError('pipe is empty')
         raise RuntimeError('local queue is not created')
 
     def send(self, data: Any) -> None:
         assert self.src == self.rpc_info.name
-        while not trpc.rpc_sync(self.dest, rpc_queue_can_put, args=(self.remote_queue, )):
+        while not trpc.rpc_sync(self.dest, rpc_queue_can_put, args=(self.remote_queue, )):# 如果不能向self.remote_queue插入值，则睡眠
             time.sleep(0.1)
         trpc.rpc_sync(self.dest, rpc_queue_put, args=(self.remote_queue, data))

@@ -3,13 +3,11 @@ import random
 import time
 from typing import Callable, Optional
 import sys
-# sys.path.append('/data/zhangxueyuan/framexi/EnergonAI/energonai/model')
-# sys.path.append('../')
 
 from .downstream import LMHead1D
 from .embedding import Embedding1D,glm_Embedding1D
 from .endecoder import Block1D,GLMBlock1D
-
+import re
 from transformers.utils import (
     add_code_sample_docstrings,
     add_start_docstrings,
@@ -929,7 +927,6 @@ class glm_PipelineModel(ChatGLMPreTrainedModel):
                 top_k: Optional[int] = None, 
                 top_p: Optional[float] = None, 
                 temperature: Optional[float] = None,
-
                 labels: Optional[torch.Tensor] = None,
                 output_hidden_states: Optional[bool] = None,
                 ):
@@ -1082,12 +1079,13 @@ class glm_PipelineModel(ChatGLMPreTrainedModel):
             # stop when each sentence is finished, or if we exceed the maximum length
             if unfinished_sequences.max() == 0 or stopping_criteria(input_ids, scores):
                 break
-            res.append(input_ids)
-            print(f'当前res的长度{len(res)}')
-            print(input_ids)
-            if len(res) > 300:
-                break
-        return res
+            # res.append(input_ids)
+            # print(f'当前res的长度{len(res)}')
+            # print(input_ids)
+            # if len(input_ids) > 300:
+                # break
+        # return res
+        return input_ids
     
     @torch.no_grad()
     def stream_chat(self,
@@ -1095,7 +1093,7 @@ class glm_PipelineModel(ChatGLMPreTrainedModel):
                     hidden_stats=None,
                     input_ids=None,
                     history: List[Tuple[str, str]] = None, 
-                    max_length: int = 2048,
+                    max_tokens: int = 2048,
                     do_sample=True, 
                     top_p=0.7, 
                     temperature=0.95, 
@@ -1107,12 +1105,12 @@ class glm_PipelineModel(ChatGLMPreTrainedModel):
         if logits_processor is None:
             logits_processor = LogitsProcessorList()
         logits_processor.append(InvalidScoreLogitsProcessor())
-        gen_kwargs = {"max_length": max_length, "do_sample": do_sample, "top_p": top_p,
+        gen_kwargs = {"max_length": max_tokens, "do_sample": do_sample, "top_p": top_p,
                       "temperature": temperature, "logits_processor": logits_processor, **kwargs}
         inputs = input_ids.to(self.device)
         inputs={"input_ids":inputs}
         outputs = self.stream_generate(**inputs, **gen_kwargs)
-        outputs = outputs[-1]
+        # outputs = outputs[-1]
         response = self.process_response(outputs)
         return response
 

@@ -86,7 +86,7 @@ def test_api():
         "prompt": "今天天气大概25度，有点小雨，吹着风，我想去户外散步，应该穿什么样的衣服裤子鞋子搭配。",
         "do_sample":False,
     }
-    for i in tqdm(range(100)):
+    for i in tqdm(range(10)):
         response = requests.post(url, json=data)
         print(response.json()['text'])
 

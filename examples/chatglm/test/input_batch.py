@@ -39,19 +39,37 @@ class BatchManagerForGeneration(BatchManager):
             # if isinstance(outputs[k], list):
             #     outputs[k] = np.array(outputs[k])
             # outputs[k] = torch.from_numpy(outputs[k])
-        # logger.info(f"type(outputs:{type(outputs)}")
+        logger.info(f"type(outputs:{type(outputs)}")
         return outputs, max_len
 
     @staticmethod
     def _make_batch_key(entry: SubmitEntry) -> tuple:
         data = entry.data
         return (data['top_k'], data['top_p'], data['temperature'])
+    
+
+    def pro_batch(self,batch,out_batch):
+        for i in range(len(batch[0]['input_ids'])):
+            # tmp={}
+            out_batch['input_ids'].append(batch[0]['input_ids'][i])
+            out_batch['attention_mask'].append(batch[0]['attention_mask'][i])
+            out_batch['position_ids'].append(batch[0]['position_ids'][i])
+            # tmp['max_tokens']=batch[0]['max_tokens']
+            # tmp['do_sample']=batch[0]['do_sample']
+            # tmp['top_k']=batch[0]['top_k']
+            # tmp['top_p']=batch[0]['top_p']
+            # tmp['temperature']=batch[0]['temperature']
+            # out_batch.append(tmp)
+        return out_batch
 
     def make_batch(self, q: Deque[SubmitEntry]) -> Tuple[TaskEntry, dict]:
         entry = q.popleft()
         uids = [entry.uid]
         batch = [entry.data]
-        while len(batch) < self.max_batch_size:
+        # out_batch=[]
+        out_batch = {'input_ids': [], 'attention_mask': [],'position_ids':[]}
+        out_batch= self.pro_batch(batch,out_batch)
+        while len(out_batch) < self.max_batch_size:
             if len(q) == 0:
                 break
             if self._make_batch_key(entry) != self._make_batch_key(q[0]):
@@ -59,17 +77,24 @@ class BatchManagerForGeneration(BatchManager):
             if q[0].data['max_tokens'] > entry.data['max_tokens']:
                 break
             e = q.popleft()
-            batch.append(e.data)
+            out_batch=self.pro_batch(e,out_batch)
             uids.append(e.uid)
-        inputs, max_len = self._left_padding(batch)
+        # inputs, max_len = self._left_padding(out_batch)
+        for k in out_batch:
+            if isinstance(out_batch[k],list):
+                out_batch[k]=np.stack(out_batch[k])
+            out_batch[k] = torch.tensor(out_batch[k])
+
+        max_len=max(len(i) for i in batch[0]['input_ids'])# 这块算的是token的最长值
         trunc_lens = []
         for data in batch:
             trunc_lens.append(max_len + data['max_tokens'])
-        inputs['top_k'] = entry.data['top_k']
-        inputs['top_p'] = entry.data['top_p']
-        inputs['temperature'] = entry.data['temperature']
-        inputs['max_tokens'] = max_len + entry.data['max_tokens']
-        return TaskEntry(tuple(uids), inputs), {'trunc_lens': trunc_lens}
+        out_batch['top_k'] = entry.data['top_k']
+        out_batch['top_p'] = entry.data['top_p']
+        out_batch['temperature'] = entry.data['temperature']
+        out_batch['max_tokens'] = max_len + entry.data['max_tokens']
+        # TODO inputs,在后续是1*4的，必须把这个解决掉，让其成为2*4的张量
+        return TaskEntry(tuple(uids), out_batch), {'trunc_lens': trunc_lens}
 
     def split_batch(self, task_entry: TaskEntry, trunc_lens: List[int] = []) -> List[Tuple[Hashable, Any]]:
         retval = []
